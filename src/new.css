@@ -14,7 +14,8 @@
   --track: #e3e7ee;
   --brand: #47c3d1;
   --brand-deep: #009aa2;
-  --brand-soft: rgba(0, 154, 162, 0.12);
+  --brand-soft: rgba(71, 195, 209, 0.1);
+  --brand-bg: #e2f5f7;
   --danger: #dc3d43;
   --danger-soft: rgba(220, 61, 67, 0.1);
   --on-accent: #ffffff;
@@ -41,7 +42,8 @@
   --track: #25282f;
   --brand: #47c3d1;
   --brand-deep: #47c3d1;
-  --brand-soft: rgba(51, 204, 204, 0.14);
+  --brand-soft: rgba(71, 195, 209, 0.1);
+  --brand-bg: #244147;
   --danger: #f2555a;
   --danger-soft: rgba(242, 85, 90, 0.14);
   --on-accent: #0f1115;
@@ -200,14 +202,16 @@ button {
 .side-seg .labels button {
   flex: 1;
   height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   font-size: 13px;
   color: var(--text-weak);
-  text-align: center;
 }
 
 .side-seg .labels button[aria-pressed="true"] {
   color: var(--text-primary);
-  font-weight: 600;
 }
 
 .side-seg .track {
@@ -857,16 +861,36 @@ button {
   width: 16px;
   height: 16px;
   border-radius: 9999px;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.gs-thumb::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: var(--ring-hover);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.gs-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   background: var(--thumb);
   border: 1px solid var(--text-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  outline: none;
-  transition: box-shadow 0.15s ease;
 }
 
-.gs-thumb:hover,
-.gs-thumb:focus-visible {
-  box-shadow: 0 0 0 4px var(--ring-hover);
+.gs-thumb:hover::before,
+.gs-thumb:focus-visible::before,
+.gs-root:hover .gs-thumb::before {
+  opacity: 1;
 }
 
 .g-val {
@@ -899,7 +923,7 @@ button {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 10px 12px;
+  padding: 10px 12px 6px;
   flex: 1;
   min-width: 0;
   flex-shrink: 0;
@@ -943,11 +967,11 @@ button {
 .dev-props-card {
   flex: none;
   width: auto;
-  min-width: 208px;
+  min-width: 240px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 10px 12px;
+  padding: 10px 30px 6px;
   box-shadow: var(--card-shadow);
   display: flex;
   flex-direction: column;
@@ -1191,4 +1215,97 @@ button {
 @keyframes vx-pop {
   from { opacity: 0; transform: translate(-50%, -48%); }
   to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* ── 视图切换（语义视图 / 参数视图） ─────────────────────────── */
+
+.seg.view-seg {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.view-seg .seg-thumb {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: 0;
+  width: 50%;
+  border-radius: 9999px;
+  background: var(--brand-bg);
+  border: 1px solid var(--brand);
+  box-shadow: var(--card-shadow);
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.view-seg .seg-thumb.right {
+  left: calc(50%);
+}
+
+.view-seg button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+  background: transparent;
+}
+
+.view-seg button svg {
+  transition: color 0.25s ease;
+}
+
+.view-seg button:hover {
+  color: var(--text-primary);
+}
+
+.view-seg button[aria-pressed="true"] {
+  background: transparent;
+  color: var(--brand);
+}
+
+.view-seg button[aria-pressed="true"] svg {
+  color: var(--brand);
+}
+
+.view-seg[data-dir="right"] button[aria-pressed="true"] svg {
+  animation: vx-icon-tilt-right 0.65s ease;
+}
+
+.view-seg[data-dir="left"] button[aria-pressed="true"] svg {
+  animation: vx-icon-tilt-left 0.65s ease;
+}
+
+.view-seg button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@keyframes vx-icon-tilt-right {
+  0% { transform: translateX(0) rotate(0); }
+  38% { transform: translateX(2px) rotate(8deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+@keyframes vx-icon-tilt-left {
+  0% { transform: translateX(0) rotate(0); }
+  38% { transform: translateX(-2px) rotate(-8deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+.sem-label {
+  font-size: 11px;
+  color: var(--text-weak);
+  flex: none;
 }

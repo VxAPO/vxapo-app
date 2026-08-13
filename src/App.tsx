@@ -6,7 +6,7 @@ import { listDevices, readConfig, writeConfig } from "./lib/api";
 import type { Block, Device, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { buildToml, parseConfigWithTail } from "./lib/toml";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
-import { Copy, Minus, Plus, Square, X } from "lucide-react";
+import { Copy, Minus, Plus, SlidersHorizontal, Square, Tags, X } from "lucide-react";
 import GainSlider from "./components/GainSlider";
 import SettingsDialog from "./components/SettingsDialog";
 import VxSelect from "./components/VxSelect";
@@ -31,6 +31,39 @@ function friendlyError(e: unknown): string {
   const msg = String(e);
   if (/os error 5/i.test(msg)) return "权限不足，无法读写配置（请以管理员身份运行一次以修复权限）";
   return msg;
+}
+
+const PERCEPTUAL_RANGES: [number, number, string][] = [
+  [20, 40, "极低频下潜感"],
+  [40, 80, "低频冲击感"],
+  [80, 160, "中低频温暖感"],
+  [160, 300, "中低频浑浊感"],
+  [300, 500, "中频鼻音感"],
+  [500, 800, "中频坚实感"],
+  [800, 1300, "中频临场感"],
+  [1300, 2600, "中高频咬字感"],
+  [2600, 3600, "高频齿音感"],
+  [3600, 5100, "高频穿透感"],
+  [5100, 8000, "极高频锐利感"],
+  [8000, 12000, "极高频空气感"],
+  [12000, 16000, "极高频光泽感"],
+  [16000, 20000, "极高频延伸感"],
+];
+
+function perceptualLabel(fc: number): string {
+  for (const [lo, hi, label] of PERCEPTUAL_RANGES) {
+    if (fc >= lo && fc < hi) return label;
+  }
+  return fc >= 20000 ? "极高频延伸感" : "—";
+}
+
+function semanticName(block: Block): string {
+  const n = block.name?.trim() ?? "";
+  const isDefault = !n || n === "未命名" || /立体声\s*EQ/i.test(n);
+  if (isDefault) {
+    return block.bands[0] ? perceptualLabel(block.bands[0].fc) : n || "未命名";
+  }
+  return n;
 }
 
 function logX(freq: number, w: number): number {
@@ -93,6 +126,7 @@ export default function App() {
   const [channelOn, setChannelOn] = useState(false);
   const [curveChannel, setCurveChannel] = useState("左声道");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [segDir, setSegDir] = useState<"left" | "right">("right");
   const [loadErr, setLoadErr] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [curveW, setCurveW] = useState(640);
@@ -276,16 +310,16 @@ export default function App() {
   const renderNameCard = (block: Block, idx: number) => (
     <div className="name-card" key={idx}>
       <button className="close-x" type="button" aria-label="删除" onClick={() => removeBlock(idx)}>✕</button>
-      <span className="n-name">{block.name || "未命名"}</span>
-      <span className="n-sub">{block.bands[0] ? `${block.bands[0].fc}Hz` : "—"}</span>
-      <div className="fader-row">
+      <span className="n-name">{semanticName(block)}</span>
+      <div className="fader-row semantic">
+        <span className="sem-label">弱</span>
         <GainSlider
-          min={-12}
-          max={12}
+          min={-6}
+          max={6}
           value={block.bands[0]?.gain_db ?? 0}
           onValueChange={(v) => patchBand(idx, 0, { gain_db: v })}
         />
-        <span className="g-val">{((block.bands[0]?.gain_db ?? 0) >= 0 ? "+" : "")}{(block.bands[0]?.gain_db ?? 0).toFixed(1)}</span>
+        <span className="sem-label">强</span>
       </div>
     </div>
   );
@@ -333,6 +367,11 @@ export default function App() {
     try { void getCurrentWindow().close(); } catch { /* web fallback */ }
   };
 
+  const switchView = (v: ViewMode) => {
+    setSegDir(v === "advanced" ? "right" : "left");
+    setView(v);
+  };
+
   useEffect(() => {
     let dispose: (() => void) | undefined;
     const init = async () => {
@@ -357,10 +396,18 @@ export default function App() {
         <button className="pill" type="button">导入</button>
         <button className="pill" type="button">导出</button>
         <span className="spacer" data-tauri-drag-region />
-        <div className="seg" role="group" aria-label="视图切换">
-          <button type="button" disabled={channelOn} aria-pressed={view === "preset"} onClick={() => setView("preset")}>预设</button>
-          <button type="button" aria-pressed={view === "advanced"} onClick={() => setView("advanced")}>高级</button>
+        <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label="视图切换">
+          <span className={`seg-thumb ${view === "advanced" ? "right" : ""}`} />
+          <button type="button" disabled={channelOn} aria-pressed={view === "preset"} onClick={() => switchView("preset")}>
+            <Tags size={13} />
+            语义视图
+          </button>
+          <button type="button" aria-pressed={view === "advanced"} onClick={() => switchView("advanced")}>
+            <SlidersHorizontal size={13} />
+            参数视图
+          </button>
         </div>
+        <span className="spacer" data-tauri-drag-region />
         <button className="pill winbtn" type="button" aria-label="最小化" onClick={minimizeWindow}>
           <Minus size={16} />
         </button>
@@ -492,20 +539,18 @@ export default function App() {
                         <button className="close-x" type="button" aria-label="删除" onClick={() => removeBlock(item.idx)}>✕</button>
                         <div className="group-head">
                           <span className="ord">{String(item.idx + 1).padStart(2, "0")}</span>
-                          <span className="g-name">{item.block.name || "未命名"}</span>
+                          <span className="g-name">{semanticName(item.block)}</span>
                           <span className="grow" />
                         </div>
-                        <div className="fader-row">
+                        <div className="fader-row semantic">
+                          <span className="sem-label">弱</span>
                           <GainSlider
-                            min={-12}
-                            max={12}
+                            min={-6}
+                            max={6}
                             value={item.block.bands[0]?.gain_db ?? 0}
                             onValueChange={(v) => patchBand(item.idx, 0, { gain_db: v })}
                           />
-                          <span className="g-val">
-                            {((item.block.bands[0]?.gain_db ?? 0) >= 0 ? "+" : "")}
-                            {(item.block.bands[0]?.gain_db ?? 0).toFixed(1)}
-                          </span>
+                          <span className="sem-label">强</span>
                         </div>
                       </div>
                     ) : (
@@ -596,17 +641,15 @@ export default function App() {
               <div className="curve-wrap" ref={curveRef}>
                 <div className="curve-head">
                   <span className="t">频响曲线</span>
-                  {view === "advanced" && (
-                    <VxSelect
-                      value={curveChannel}
-                      options={[
-                        { value: "左声道", label: "左声道" },
-                        { value: "右声道", label: "右声道" },
-                      ]}
-                      onValueChange={setCurveChannel}
-                      ariaLabel="声道"
-                    />
-                  )}
+                  <VxSelect
+                    value={curveChannel}
+                    options={[
+                      { value: "左声道", label: "左声道" },
+                      { value: "右声道", label: "右声道" },
+                    ]}
+                    onValueChange={setCurveChannel}
+                    ariaLabel="声道"
+                  />
                 </div>
                 <svg viewBox={`0 0 ${curveW} 220`} width="100%" height="220" preserveAspectRatio="none" role="img" aria-label="频响曲线">
                   {yGrid.map(({ db, y }) => (
