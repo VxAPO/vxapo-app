@@ -6,7 +6,9 @@ import { listDevices, readConfig, writeConfig } from "./lib/api";
 import type { Block, Device, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { buildToml, parseConfigWithTail } from "./lib/toml";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
+import { Copy, Minus, Plus, Square, X } from "lucide-react";
 import GainSlider from "./components/GainSlider";
+import SettingsDialog from "./components/SettingsDialog";
 import VxSelect from "./components/VxSelect";
 import VxSwitch from "./components/VxSwitch";
 
@@ -17,7 +19,6 @@ const LIBRARY: PresetLibraryEntry[] = [
 ];
 
 type ThemeMode = "light" | "dark" | "system";
-const THEME_LABEL: Record<ThemeMode, string> = { light: "浅色", dark: "深色", system: "跟随系统" };
 
 function isInstalled(d: Device): boolean {
   return (
@@ -38,7 +39,7 @@ function logX(freq: number, w: number): number {
 }
 
 function dbY(db: number): number {
-  return 62 - (db / 22) * 140;
+  return 62 - (db / 22) * 180;
 }
 
 function peakingDb(freq: number, fc: number, gainDb: number, q: number, fs: number): number {
@@ -86,12 +87,12 @@ export default function App() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [view, setView] = useState<ViewMode>("preset");
   const [side, setSide] = useState<SideSection>("preset");
-  const [saved, setSaved] = useState(true);
+  const [isMax, setIsMax] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>("system");
-  const [tuning, setTuning] = useState(true);
   const [tuningMap, setTuningMap] = useState<Record<string, boolean>>({});
   const [channelOn, setChannelOn] = useState(false);
   const [curveChannel, setCurveChannel] = useState("左声道");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [loadErr, setLoadErr] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [curveW, setCurveW] = useState(640);
@@ -185,20 +186,18 @@ export default function App() {
   // 自动保存（300ms 去抖，原子写由 Rust 侧负责）
   useEffect(() => {
     if (!selectedGuid || !loaded || !dirtyRef.current) return;
-    setSaved(false);
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
-      const effective = tuning && (tuningMap[selectedGuid] ?? true);
+      const effective = tuningMap[selectedGuid] ?? true;
       const content = buildToml(blocks, effective) + tailRef.current;
       writeConfig(selectedGuid, content)
         .then(() => {
-          setSaved(true);
           dirtyRef.current = false;
         })
         .catch((e: unknown) => setLoadErr(friendlyError(e)));
     }, 300);
     return () => window.clearTimeout(saveTimer.current);
-  }, [blocks, tuning, tuningMap, selectedGuid, loaded]);
+  }, [blocks, tuningMap, selectedGuid, loaded]);
 
   const applyPreset = (p: PresetLibraryEntry) => {
     dirtyRef.current = true;
@@ -296,53 +295,65 @@ export default function App() {
     [blocks, selected?.sample_rate, curveW],
   );
 
+  const peakGain = useMemo(() => {
+    let m = 0;
+    for (const b of blocks) {
+      if (!b.enabled) continue;
+      for (const band of b.bands) m = Math.max(m, band.gain_db);
+    }
+    return m;
+  }, [blocks]);
+
+  const totalBands = useMemo(() => blocks.reduce((n, b) => n + b.bands.length, 0), [blocks]);
+
   const xGrid = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].map((f) => logX(f, curveW));
   const xLabels = ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"];
   const yGrid = [6, 4, 2, 0, -2, -4, -6, -8, -10, -12, -14, -16].map((db) => ({ db, y: dbY(db) }));
+  const plotTop = dbY(6);
+  const plotBottom = dbY(-16);
 
-  const deviceTuningOn = (guid: string) => tuning && (tuningMap[guid] ?? true);
+  const deviceTuningOn = (guid: string) => tuningMap[guid] ?? true;
   const toggleDeviceTuning = (guid: string) => {
     const next = !deviceTuningOn(guid);
     dirtyRef.current = true;
     setTuningMap((prev) => ({ ...prev, [guid]: next }));
-    if (next && !tuning) setTuning(true);
   };
 
   const minimizeWindow = () => {
     try { void getCurrentWindow().minimize(); } catch { /* web fallback */ }
   };
-  const toggleMaximizeWindow = () => {
-    try { void getCurrentWindow().toggleMaximize(); } catch { /* web fallback */ }
+  const toggleMaximizeWindow = async () => {
+    try {
+      const w = getCurrentWindow();
+      await w.toggleMaximize();
+      setIsMax(await w.isMaximized());
+    } catch { /* web fallback */ }
   };
   const closeWindow = () => {
     try { void getCurrentWindow().close(); } catch { /* web fallback */ }
   };
 
-  const fmtDevInfo = () => {
-    if (!selected) return "未选择设备";
-    const ch = selected.channels != null ? `${selected.channels}ch` : "—";
-    const sr = selected.sample_rate != null ? `${selected.sample_rate}Hz` : "—";
-    const bd = selected.bit_depth != null ? `${selected.bit_depth}bit` : "—";
-    return `${ch} · ${sr} · ${bd}`;
-  };
+  useEffect(() => {
+    let dispose: (() => void) | undefined;
+    const init = async () => {
+      try {
+        const w = getCurrentWindow();
+        setIsMax(await w.isMaximized());
+        const unlisten = await w.onResized(() => {
+          void w.isMaximized().then(setIsMax);
+        });
+        dispose = unlisten;
+      } catch { /* web fallback */ }
+    };
+    void init();
+    return () => dispose?.();
+  }, []);
 
   return (
     <div className="app-shell-new">
       <div className="topbar" data-tauri-drag-region>
         <img className="logo" src={logoUrl} alt="VxAPO" draggable={false} />
-        <button className="pill" type="button">设置</button>
-        <button className="pill saved-dot" type="button" title={saved ? "已保存" : "未保存"} onClick={() => {
-          if (selectedGuid) {
-            const effective = tuning && (tuningMap[selectedGuid] ?? true);
-            const content = buildToml(blocks, effective) + tailRef.current;
-            writeConfig(selectedGuid, content)
-              .then(() => {
-                setSaved(true);
-                dirtyRef.current = false;
-              })
-              .catch((e: unknown) => setLoadErr(friendlyError(e)));
-          }
-        }}>保存</button>
+        <button className="pill" type="button" onClick={() => setSettingsOpen(true)}>设置</button>
         <button className="pill" type="button">导入</button>
         <button className="pill" type="button">导出</button>
         <span className="spacer" data-tauri-drag-region />
@@ -350,9 +361,15 @@ export default function App() {
           <button type="button" disabled={channelOn} aria-pressed={view === "preset"} onClick={() => setView("preset")}>预设</button>
           <button type="button" aria-pressed={view === "advanced"} onClick={() => setView("advanced")}>高级</button>
         </div>
-        <button className="pill winbtn" type="button" aria-label="最小化" onClick={minimizeWindow}>─</button>
-        <button className="pill winbtn" type="button" aria-label="最大化" onClick={toggleMaximizeWindow}>□</button>
-        <button className="pill winbtn close" type="button" aria-label="关闭" onClick={closeWindow}>✕</button>
+        <button className="pill winbtn" type="button" aria-label="最小化" onClick={minimizeWindow}>
+          <Minus size={16} />
+        </button>
+        <button className="pill winbtn" type="button" aria-label={isMax ? "还原" : "最大化"} onClick={() => void toggleMaximizeWindow()}>
+          {isMax ? <Copy size={14} /> : <Square size={13} />}
+        </button>
+        <button className="pill winbtn close" type="button" aria-label="关闭" onClick={closeWindow}>
+          <X size={16} />
+        </button>
       </div>
 
       <div className="main">
@@ -394,31 +411,49 @@ export default function App() {
 
           {side === "advanced" && (
             <div className="adv-list">
-              <div className="adv-item"><span>滤波器</span><span className="sub">Peak 可用</span></div>
-              <div className="adv-item"><span style={{ paddingLeft: 16 }}>Peak</span><button className="circ-plus" type="button" aria-label="添加 Peak" onClick={addBand}>+</button></div>
-              <div className="adv-item disabled"><span style={{ paddingLeft: 16 }}>高架 / 低架 / 低通 / 高通</span><span className="sub">未实现</span></div>
-              <div className="adv-item"><span>效果器</span><span className="sub">Wide · Aural · Reverb · Maximizer · Loudness</span></div>
-              <div className="adv-item" onClick={() => setChannelOn((v) => !v)}>
-                <span>通道选择器</span><button className={`circ-plus ${channelOn ? "on" : ""}`} type="button" aria-label="通道选择器">+</button>
-              </div>
-              <div className="adv-item"><span>通道</span></div>
-              <div className="adv-item"><span style={{ paddingLeft: 16 }}>左声道</span><button className="circ-plus" type="button" aria-label="添加左声道">+</button></div>
-              <div className="adv-item"><span style={{ paddingLeft: 16 }}>右声道</span><button className="circ-plus" type="button" aria-label="添加右声道">+</button></div>
+              <div className="adv-cat">滤波器</div>
+              <button className="adv-pill" type="button" onClick={addBand}>
+                <Plus size={14} className="adv-plus" />
+                <span>峰值滤波器</span>
+              </button>
+              <button className="adv-pill disabled" type="button" disabled>
+                <Plus size={14} className="adv-plus" />
+                <span>高架滤波器</span>
+              </button>
+              <button className="adv-pill disabled" type="button" disabled>
+                <Plus size={14} className="adv-plus" />
+                <span>低架滤波器</span>
+              </button>
+              <button className="adv-pill disabled" type="button" disabled>
+                <Plus size={14} className="adv-plus" />
+                <span>低通滤波器</span>
+              </button>
+              <button className="adv-pill disabled" type="button" disabled>
+                <Plus size={14} className="adv-plus" />
+                <span>高通滤波器</span>
+              </button>
+              <div className="adv-cat">效果器</div>
+              {["Wide", "Aural", "Reverb", "Maximizer", "Loudness"].map((name) => (
+                <button className="adv-pill disabled" type="button" disabled key={name}>
+                  <Plus size={14} className="adv-plus" />
+                  <span>{name}</span>
+                </button>
+              ))}
+              <div className="adv-cat">通道</div>
+              <button
+                className={`adv-pill ${channelOn ? "active" : ""}`}
+                type="button"
+                onClick={() => {
+                  dirtyRef.current = true;
+                  setChannelOn((v) => !v);
+                }}
+              >
+                <Plus size={14} className="adv-plus" />
+                <span>通道选择器</span>
+              </button>
             </div>
           )}
 
-          <div className="side-status">
-            <button className="pill" type="button">简体中文</button>
-            <button className="pill" type="button" onClick={() => setTheme((t) => (t === "light" ? "dark" : t === "dark" ? "system" : "light"))}>{THEME_LABEL[theme]}</button>
-            <button
-              className="pill"
-              type="button"
-              onClick={() => {
-                dirtyRef.current = true;
-                setTuning((v) => !v);
-              }}
-            >调音：{tuning ? "开" : "关"}</button>
-          </div>
         </aside>
 
         <main className="content">
@@ -511,14 +546,33 @@ export default function App() {
                           <span className="ord sm">{String(bi + 1).padStart(2, "0")}</span>
                           <span className="b-type">PEAK</span>
                           <span className="grow" />
-                          <VxSwitch checked={b.enabled} onCheckedChange={(v) => patchBlock(bi, { enabled: v })} label="启用" />
+                          <VxSwitch checked={b.enabled} onCheckedChange={(v) => patchBlock(bi, { enabled: v })} />
                         </div>
-                        <div className="b-row"><label>Fc</label><input type="number" value={band.fc} onChange={(e) => patchBand(bi, 0, { fc: Number(e.target.value) })} /></div>
-                        <div className="b-row"><label>Q</label><input type="number" step={0.01} value={band.q} onChange={(e) => patchBand(bi, 0, { q: Number(e.target.value) })} /></div>
-                        <div className="b-row">
-                          <label>Gain</label>
-                          <GainSlider min={-30} max={30} value={band.gain_db} onValueChange={(v) => patchBand(bi, 0, { gain_db: v })} />
-                          <span className="g-val">{band.gain_db >= 0 ? "+" : ""}{band.gain_db.toFixed(1)}</span>
+                        <div className="fcq-row">
+                          <div className="fcq-cell">
+                            <span className="field-label">Fc</span>
+                            <input type="number" className="num" value={band.fc} onChange={(e) => patchBand(bi, 0, { fc: Number(e.target.value) })} />
+                          </div>
+                          <div className="fcq-cell">
+                            <span className="field-label">Q</span>
+                            <input type="number" step={0.01} className="num" value={band.q} onChange={(e) => patchBand(bi, 0, { q: Number(e.target.value) })} />
+                          </div>
+                        </div>
+                        <div className="gain-cell">
+                          <span className="field-label">Gain</span>
+                          <div className="gain-line">
+                            <GainSlider min={-30} max={30} value={band.gain_db} onValueChange={(v) => patchBand(bi, 0, { gain_db: v })} />
+                            <input
+                              type="number"
+                              className="gain-input"
+                              min={-30}
+                              max={30}
+                              step={0.1}
+                              value={band.gain_db}
+                              aria-label="Gain 数值"
+                              onChange={(e) => patchBand(bi, 0, { gain_db: Number(e.target.value) })}
+                            />
+                          </div>
                         </div>
                       </div>
                     );
@@ -527,50 +581,68 @@ export default function App() {
               </>
             )}
 
-            <div className="curve-wrap" ref={curveRef}>
-              <div className="curve-head">
-                <span className="t">频响曲线</span>
-                {view === "advanced" && (
-                  <VxSelect
-                    value={curveChannel}
-                    options={[
-                      { value: "左声道", label: "左声道" },
-                      { value: "右声道", label: "右声道" },
-                    ]}
-                    onValueChange={setCurveChannel}
-                    ariaLabel="声道"
-                  />
-                )}
-                <span className="dev-info">{fmtDevInfo()}</span>
+            <div className="bottom-row">
+              <div className="dev-props-card">
+                <div className="dev-props-title">设备属性</div>
+                <div className="dev-prop"><span>设备名</span><b className="dev-name">{selected?.name ?? "—"}</b></div>
+                <div className="dev-prop"><span>类型</span><b>{selected?.kind === "capture" ? "捕获设备" : selected?.kind === "playback" ? "播放设备" : "—"}</b></div>
+                <div className="dev-prop"><span>通道数</span><b>{selected?.channels ?? "—"}</b></div>
+                <div className="dev-prop"><span>采样率</span><b>{selected?.sample_rate != null ? `${selected.sample_rate} Hz` : "—"}</b></div>
+                <div className="dev-prop"><span>位深</span><b>{selected?.bit_depth != null ? `${selected.bit_depth} bit` : "—"}</b></div>
+                <div className="dev-prop"><span>音量</span><b>{selected?.volume != null ? `${Math.round(selected.volume * 100)}%` : "—"}</b></div>
+                <div className="dev-prop"><span>峰值增益</span><b>{peakGain > 0 ? "+" : ""}{peakGain.toFixed(1)} dB</b></div>
+                <div className="dev-prop"><span>段数</span><b>{totalBands}</b></div>
               </div>
-              <svg viewBox={`0 0 ${curveW} 190`} width="100%" height="190" preserveAspectRatio="none" role="img" aria-label="频响曲线">
-                {yGrid.map(({ db, y }) => (
-                  <line key={`y${db}`} x1="40" y1={y} x2={curveW - 40} y2={y} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
-                ))}
-                {xGrid.map((x, i) => (
-                  <line key={`x${i}`} x1={x} y1="24" x2={x} y2="164" stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
-                ))}
-                <line x1="40" y1="24" x2="40" y2="164" stroke="var(--border-strong)" strokeWidth="1.5" />
-                <line x1="40" y1="164" x2={curveW - 40} y2="164" stroke="var(--border-strong)" strokeWidth="1.5" />
-                <path
-                  d={curveD}
-                  fill="none"
-                  stroke="var(--brand-deep)"
-                  strokeWidth="2"
-                />
-                <g fill="var(--text-secondary)" fontSize="10">
-                  {xLabels.map((f, i) => (
-                    <text key={f} x={xGrid[i]} y="178" textAnchor="middle">{f}</text>
-                  ))}
+              <div className="curve-wrap" ref={curveRef}>
+                <div className="curve-head">
+                  <span className="t">频响曲线</span>
+                  {view === "advanced" && (
+                    <VxSelect
+                      value={curveChannel}
+                      options={[
+                        { value: "左声道", label: "左声道" },
+                        { value: "右声道", label: "右声道" },
+                      ]}
+                      onValueChange={setCurveChannel}
+                      ariaLabel="声道"
+                    />
+                  )}
+                </div>
+                <svg viewBox={`0 0 ${curveW} 220`} width="100%" height="220" preserveAspectRatio="none" role="img" aria-label="频响曲线">
                   {yGrid.map(({ db, y }) => (
-                    <text key={`l${db}`} x="34" y={y + 3} textAnchor="end">{db >= 0 ? `+${db}` : `${db}`}</text>
+                    <line key={`y${db}`} x1="40" y1={y} x2={curveW - 40} y2={y} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
                   ))}
-                </g>
-              </svg>
+                  {xGrid.map((x, i) => (
+                    <line key={`x${i}`} x1={x} y1={plotTop} x2={x} y2={plotBottom} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
+                  ))}
+                  <line x1="40" y1={plotTop} x2="40" y2={plotBottom} stroke="var(--border-strong)" strokeWidth="1.5" />
+                  <line x1="40" y1={plotBottom} x2={curveW - 40} y2={plotBottom} stroke="var(--border-strong)" strokeWidth="1.5" />
+                  <path
+                    d={curveD}
+                    fill="none"
+                    stroke="var(--brand-deep)"
+                    strokeWidth="2"
+                  />
+                  <g fill="var(--text-secondary)" fontSize="10">
+                    {xLabels.map((f, i) => (
+                      <text key={f} x={xGrid[i]} y={plotBottom + 12} textAnchor="middle">{f}</text>
+                    ))}
+                    {yGrid.map(({ db, y }) => (
+                      <text key={`l${db}`} x="34" y={y + 3} textAnchor="end">{db >= 0 ? `+${db}` : `${db}`}</text>
+                    ))}
+                  </g>
+                </svg>
+              </div>
             </div>
           </div>
         </main>
       </div>
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        theme={theme}
+        onThemeChange={setTheme}
+      />
     </div>
   );
 }

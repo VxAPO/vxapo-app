@@ -27,6 +27,8 @@ export interface Device {
   sample_rate?: number | null;
   channels?: number | null;
   bit_depth?: number | null;
+  kind?: "playback" | "capture" | null;
+  volume?: number | null;
   eapo?: string;
   lost_slot?: string;
 }
