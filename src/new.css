@@ -1,16 +1,16 @@
 /* VxAPO App — 新壳样式（UI 设计规范 02/03/04） */
 
 :root[data-theme="light"] {
-  --frame: #edeff3;
-  --content: #ffffff;
-  --card: #ffffff;
-  --surface-inset: #f4f6f9;
+  --frame: #f0f3f6;
+  --content: #f7f9fc;
+  --card: #f7f9fc;
+  --surface-inset: #f0f3f6;
   --text-primary: #0a0d12;
   --text-secondary: #3d4552;
   --text-weak: #69707c;
   --border: #d9dee7;
   --border-strong: #b3bbc8;
-  --hover: #eff1f5;
+  --hover: #e3e8ef;
   --track: #e3e7ee;
   --brand: #33cccc;
   --brand-deep: #009aa2;
@@ -32,7 +32,7 @@
   --text-weak: #737a84;
   --border: rgba(255, 255, 255, 0.12);
   --border-strong: rgba(255, 255, 255, 0.24);
-  --hover: #1e2126;
+  --hover: #272b33;
   --track: #25282f;
   --brand: #33cccc;
   --brand-deep: #33cccc;
@@ -73,10 +73,10 @@ button {
 }
 
 .logo {
-  width: 22px;
-  height: 22px;
-  margin-left: 8px;
-  margin-right: 8px;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  margin-right: 4px;
   display: block;
   user-select: none;
 }

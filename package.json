@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:win": "tauri build && node_modules\\rcedit\\bin\\rcedit-x64.exe src-tauri\\target\\release\\vxapo-app.exe --set-icon src-tauri\\icons\\icon.ico",
+    "icon:fix": "node_modules\\rcedit\\bin\\rcedit-x64.exe src-tauri\\target\\debug\\vxapo-app.exe --set-icon src-tauri\\icons\\icon.ico"
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.3.7",
@@ -19,7 +21,8 @@
     "framer-motion": "^13.0.0",
     "lucide-react": "^1.28.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -28,6 +31,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "rcedit": "^5.0.2",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
