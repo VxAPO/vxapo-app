@@ -62,9 +62,10 @@ for (const [name, size] of pngSizes) {
   console.log("wrote", name);
 }
 
-// ICO：≤64 用 DIB，128/256 用 PNG；64 放最前（资源编译链路可能只取首图，
-// 首图用 64 保证各缩放档都是大图缩小；构建后再用 rcedit 全量替换）
-const icoSizes = [64, 32, 16, 24, 48, 128, 256];
+// ICO：≤64 用 DIB，128/256 用 PNG；256 放最前（tauri-codegen 的 new_ico 只取
+// 第一张做运行时窗口图标，首图越大，任务栏/角标/Alt+Tab 全是“大图缩小”最清晰；
+// 构建后再用 rcedit 全量替换 exe 资源）
+const icoSizes = [256, 64, 32, 16, 24, 48, 128];
 const blobs = [];
 for (const s of icoSizes) {
   blobs.push(s <= 64 ? await toDib(s) : await downscale(s));
