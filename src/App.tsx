@@ -1,20 +1,32 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 import "./new.css";
-import { listDevices, readConfig, writeConfig } from "./lib/api";
+import { listDevices, readConfig, uninstallDevice, writeConfig } from "./lib/api";
 import type { Block, Device, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { buildToml, parseConfigWithTail } from "./lib/toml";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import { Copy, Minus, Plus, SlidersHorizontal, Square, Tags, X } from "lucide-react";
+import { arrayMove } from "@dnd-kit/sortable";
+import { motion } from "framer-motion";
 import GainSlider from "./components/GainSlider";
+import CurvePlot, { peakingDb } from "./components/CurvePlot";
 import SettingsDialog from "./components/SettingsDialog";
+import UninstallDialog from "./components/UninstallDialog";
 import VxSelect from "./components/VxSelect";
-import VxSwitch from "./components/VxSwitch";
+import DragCard from "./components/DragCard";
 
 const LIBRARY: PresetLibraryEntry[] = [
-  { id: "fps-step", group: "FPS 预设", name: "脚步声增强", desc: "突出脚步与位移细节，听声辨位更清楚", bands: [{ fc: 250, gain_db: 4, q: 1.2 }] },
-  { id: "fps-gun", group: "FPS 预设", name: "枪声增强", desc: "强化枪声辨识度与提示音穿透力", bands: [{ fc: 3200, gain_db: 3, q: 2 }] },
+  {
+    id: "fps",
+    group: "FPS 预设",
+    name: "脚步 · 枪声增强",
+    desc: "突出脚步与枪声辨识，听声辨位更清楚",
+    bands: [
+      { fc: 250, gain_db: 4, q: 1.2, name: "脚步声增强" },
+      { fc: 3200, gain_db: 3, q: 2, name: "枪声增强" },
+    ],
+  },
   { id: "cinema", group: "深夜影院", name: "低频下沉", desc: "提升氛围感，低音更沉更稳", bands: [{ fc: 80, gain_db: 3, q: 0.9 }] },
 ];
 
@@ -66,52 +78,30 @@ function semanticName(block: Block): string {
   return n;
 }
 
-function logX(freq: number, w: number): number {
-  const t = (Math.log10(Math.max(20, Math.min(20000, freq))) - Math.log10(20)) / 3;
-  return 40 + t * (w - 80);
+function nextGroupName(base: string, groups: Set<string>): string {
+  if (!groups.has(base)) return base;
+  let n = 2;
+  while (groups.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
 }
 
-function dbY(db: number): number {
-  return 62 - (db / 22) * 180;
+function ensureBlockIds(blocks: Block[]): Block[] {
+  return blocks.map((b) => (b.id ? b : { ...b, id: crypto.randomUUID() }));
 }
 
-function peakingDb(freq: number, fc: number, gainDb: number, q: number, fs: number): number {
-  const f = Math.max(10, Math.min(fs * 0.49, freq));
-  const center = Math.max(10, Math.min(fs * 0.49, fc));
-  const qq = Math.max(0.1, Math.min(20, q));
-  const a = Math.pow(10, gainDb / 40);
-  const w0 = (2 * Math.PI * center) / fs;
-  const cw = Math.cos(w0);
-  const sw = Math.sin(w0);
-  const alpha = sw / (2 * qq);
-  const b0 = 1 + alpha * a;
-  const b1 = -2 * cw;
-  const b2 = 1 - alpha * a;
-  const a0 = 1 + alpha / a;
-  const a1 = -2 * cw;
-  const a2 = 1 - alpha / a;
-  const w = (2 * Math.PI * f) / fs;
-  const c = Math.cos(w);
-  const s = Math.sin(w);
-  const c2 = Math.cos(2 * w);
-  const s2 = Math.sin(2 * w);
-  const num = Math.hypot(b0 + b1 * c + b2 * c2, b1 * s + b2 * s2);
-  const den = Math.hypot(a0 + a1 * c + a2 * c2, a1 * s + a2 * s2);
-  return 20 * Math.log10(num / den);
-}
-
-function freqPath(blocks: Block[], fs: number, w: number): string {
-  const pts: string[] = [];
-  for (let i = 0; i <= 240; i++) {
-    const f = 20 * Math.pow(1000, i / 240);
-    let db = 0;
-    for (const b of blocks) {
-      if (!b.enabled) continue;
-      for (const band of b.bands) db += peakingDb(f, band.fc, band.gain_db, band.q, fs);
+function buildSemanticUnits(blocks: Block[]): { key: string; blocks: Block[] }[] {
+  const units: { key: string; blocks: Block[] }[] = [];
+  const emitted = new Set<string>();
+  blocks.forEach((b) => {
+    if (!b.group) {
+      units.push({ key: `s-${b.id}`, blocks: [b] });
+      return;
     }
-    pts.push(`${logX(f, w).toFixed(1)} ${dbY(Math.max(-16, Math.min(6, db))).toFixed(1)}`);
-  }
-  return `M${pts.join(" L")}`;
+    if (emitted.has(b.group)) return;
+    emitted.add(b.group);
+    units.push({ key: `g-${b.group}`, blocks: blocks.filter((x) => x.group === b.group) });
+  });
+  return units;
 }
 
 export default function App() {
@@ -127,16 +117,53 @@ export default function App() {
   const [curveChannel, setCurveChannel] = useState("左声道");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [segDir, setSegDir] = useState<"left" | "right">("right");
+  const [uninstallTarget, setUninstallTarget] = useState<Device | null>(null);
+  const [uninstalling, setUninstalling] = useState(false);
+  const [notice, setNotice] = useState("");
   const [loadErr, setLoadErr] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [curveW, setCurveW] = useState(640);
   const saveTimer = useRef<number | undefined>(undefined);
+  const noticeTimer = useRef<number | undefined>(undefined);
   const dirtyRef = useRef(false);
   const curveRef = useRef<HTMLDivElement | null>(null);
   const tailRef = useRef("");
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [dragSize, setDragSize] = useState<{ width: number; height: number } | null>(null);
+  const [overlayNum, setOverlayNum] = useState(0);
+  const [, setTick] = useState(0);
+  const [fly, setFly] = useState<{
+    id: number;
+    key: string;
+    content: ReactNode;
+    from: { left: number; top: number; width: number; height: number };
+    to: { left: number; top: number; width: number; height: number };
+  } | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const flyIdRef = useRef(0);
+  const dragRef = useRef<{
+    key: string;
+    slots: { key: string; rect: DOMRect }[];
+    base: Map<string, number>;
+    virtual: Map<string, number>;
+    entered: number;
+    html?: string;
+  } | null>(null);
+  const entryTimerRef = useRef<number | undefined>(undefined);
+  const pendingSlotRef = useRef<number | null>(null);
+  const dragTokenRef = useRef(0);
+
 
   const selected = devices.find((d) => d.guid === selectedGuid) ?? null;
   const installedDevices = useMemo(() => devices.filter(isInstalled), [devices]);
+
+  // 兜底：任何 blocks 变化后给缺失稳定 id 的块补 id（拖拽依赖稳定键）
+  useEffect(() => {
+    setBlocks((prev) => {
+      if (prev.every((b) => b.id)) return prev;
+      return ensureBlockIds(prev);
+    });
+  }, [blocks]);
 
   useEffect(() => {
     let alive = true;
@@ -168,7 +195,7 @@ export default function App() {
       .then((text) => {
         try {
           const parsed = parseConfigWithTail(text);
-          setBlocks(parsed.blocks);
+          setBlocks(ensureBlockIds(parsed.blocks));
           tailRef.current = parsed.tail;
           setTuningMap((prev) => ({ ...prev, [selectedGuid]: parsed.enabled }));
         } catch {
@@ -208,9 +235,10 @@ export default function App() {
           const parsed = parseConfigWithTail(text);
           tailRef.current = parsed.tail;
           setTuningMap((prev) => ({ ...prev, [selectedGuid]: parsed.enabled }));
-          setBlocks((prev) =>
-            JSON.stringify(prev) === JSON.stringify(parsed.blocks) ? prev : parsed.blocks,
-          );
+          setBlocks((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(parsed.blocks)) return prev;
+            return ensureBlockIds(parsed.blocks);
+          });
         })
         .catch(() => {});
     }, 2000);
@@ -233,22 +261,54 @@ export default function App() {
     return () => window.clearTimeout(saveTimer.current);
   }, [blocks, tuningMap, selectedGuid, loaded]);
 
+  const showNotice = (msg: string) => {
+    setNotice(msg);
+    window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(""), 2500);
+  };
+
   const applyPreset = (p: PresetLibraryEntry) => {
+    if (totalBands + p.bands.length > 31) {
+      showNotice(`最多 31 段，当前 ${totalBands} 段，添加 ${p.bands.length} 段将超限`);
+      return;
+    }
     dirtyRef.current = true;
-    setBlocks((prev) => [
-      ...prev,
-      { group: p.group, name: p.name, enabled: true, bands: p.bands.map((b) => ({ ...b })) },
-    ]);
+    setBlocks((prev) => {
+      const groups = new Set(prev.map((b) => b.group).filter((g): g is string => !!g));
+      const group = nextGroupName(p.group, groups);
+      return [
+        ...prev,
+        ...p.bands.map((b) => ({
+          id: crypto.randomUUID(),
+          group,
+          name: b.name ?? p.name,
+          enabled: true,
+          bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q }],
+        })),
+      ];
+    });
   };
 
   const addBand = () => {
+    if (totalBands >= 31) {
+      showNotice("最多 31 段，已达到上限");
+      return;
+    }
     dirtyRef.current = true;
-    setBlocks((prev) => [...prev, { enabled: true, bands: [{ fc: 1000, gain_db: 0, q: 1 }] }]);
+    setBlocks((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), enabled: true, bands: [{ fc: 1000, gain_db: 0, q: 1 }] },
+    ]);
   };
 
   const removeBlock = (idx: number) => {
     dirtyRef.current = true;
     setBlocks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const removeGroup = (label: string) => {
+    dirtyRef.current = true;
+    setBlocks((prev) => prev.filter((b) => b.group !== label));
   };
 
   const patchBlock = (idx: number, patch: Partial<Block>) => {
@@ -307,10 +367,34 @@ export default function App() {
     return out;
   }, [blocks, groups]);
 
-  const renderNameCard = (block: Block, idx: number) => (
+  const sortItems = useMemo(
+    () =>
+      renderOrder.map((item) =>
+        item.kind === "standalone"
+          ? {
+              key: `s-${item.block.id ?? item.idx}`,
+              kind: "standalone" as const,
+              block: item.block,
+              idx: item.idx,
+            }
+          : { key: `g-${item.g.label}`, kind: "group" as const, g: item.g, ord: item.ord },
+      ),
+    [renderOrder],
+  );
+
+  const renderBandCard = (block: Block, idx: number, ord?: string) => (
     <div className="name-card" key={idx}>
-      <button className="close-x" type="button" aria-label="删除" onClick={() => removeBlock(idx)}>✕</button>
-      <span className="n-name">{semanticName(block)}</span>
+      <div className="n-head">
+        {ord && <span className="ord sm">{ord}</span>}
+        <span className="n-name">{semanticName(block)}</span>
+        <input
+          type="number"
+          className="num fc-num"
+          value={block.bands[0]?.fc ?? 1000}
+          aria-label="频率"
+          onChange={(e) => patchBand(idx, 0, { fc: Number(e.target.value) })}
+        />
+      </div>
       <div className="fader-row semantic">
         <span className="sem-label">弱</span>
         <GainSlider
@@ -324,27 +408,155 @@ export default function App() {
     </div>
   );
 
-  const curveD = useMemo(
-    () => freqPath(blocks, selected?.sample_rate ?? 48000, curveW),
-    [blocks, selected?.sample_rate, curveW],
-  );
+  type SortItem = (typeof sortItems)[number];
+
+  const renderSemanticContent = (item: SortItem, num?: number) => {
+    if (item.kind === "standalone") {
+      const dragNum = dragRef.current ? dragRef.current.virtual.get(item.key) ?? null : null;
+      return (
+        <>
+          <button className="close-x" type="button" aria-label="删除" onClick={() => removeBlock(item.idx)}>
+            <X size={12} strokeWidth={2.5} />
+          </button>
+          <div className="group-head">
+            <span className="ord">
+              {String(num ?? (dragNum != null ? dragNum + 1 : item.idx + 1)).padStart(2, "0")}
+            </span>
+            <span className="g-name">{semanticName(item.block)}</span>
+            <span className="grow" />
+            <input
+              type="number"
+              className="num fc-num"
+              value={item.block.bands[0]?.fc ?? 1000}
+              aria-label="频率"
+              onChange={(e) => patchBand(item.idx, 0, { fc: Number(e.target.value) })}
+            />
+          </div>
+          <div className="fader-row semantic">
+            <span className="sem-label">弱</span>
+            <GainSlider
+              min={-6}
+              max={6}
+              value={item.block.bands[0]?.gain_db ?? 0}
+              onValueChange={(v) => patchBand(item.idx, 0, { gain_db: v })}
+            />
+            <span className="sem-label">强</span>
+          </div>
+        </>
+      );
+    }
+    const dragNum = dragRef.current ? dragRef.current.virtual.get(item.key) ?? null : null;
+    const start = num ?? (dragNum != null ? dragNum + 1 : item.g.items[0].idx + 1);
+    const end =
+      num != null
+        ? num + item.g.items.length - 1
+        : dragNum != null
+          ? dragNum + item.g.items.length
+          : item.g.items[item.g.items.length - 1].idx + 1;
+    return (
+      <>
+        <button
+          className="close-x"
+          type="button"
+          aria-label="删除整组"
+          onClick={() => removeGroup(item.g.label)}
+        >
+          <X size={12} strokeWidth={2.5} />
+        </button>
+        <div className="group-head">
+          <span className="ord">
+            {String(start).padStart(2, "0")}
+            {end > start ? ` & ${String(end).padStart(2, "0")}` : ""}
+          </span>
+          <span className="g-name">{item.g.label}</span>
+          <span className="grow" />
+        </div>
+        <div
+          className="name-cards"
+          style={{ gridTemplateColumns: `repeat(${item.g.items.length}, minmax(0, 1fr))` }}
+        >
+          {item.g.items.map(({ block, idx }) => renderBandCard(block, idx))}
+        </div>
+      </>
+    );
+  };
+
+  const renderBandContent = (b: Block, bi: number, num?: number) => {
+    const band = b.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 };
+    const dragNum = dragRef.current && b.id ? dragRef.current.virtual.get(b.id) ?? null : null;
+    return (
+      <>
+        <button className="close-x" type="button" aria-label="删除" onClick={() => removeBlock(bi)}>
+          <X size={12} strokeWidth={2.5} />
+        </button>
+        <div className="b-head">
+          <button
+            className={`enable-dot ${b.enabled ? "on" : ""}`}
+            type="button"
+            aria-pressed={b.enabled}
+            aria-label={b.enabled ? "停用该段" : "启用该段"}
+            title={b.enabled ? "点击停用该段" : "点击启用该段"}
+            onClick={() => patchBlock(bi, { enabled: !b.enabled })}
+          >
+            {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
+          </button>
+          <span className="b-type">PEAK</span>
+          <span className="grow" />
+        </div>
+        <div className="fcq-row">
+          <div className="fcq-cell">
+            <span className="field-label">Fc</span>
+            <input type="number" className="num" value={band.fc} onChange={(e) => patchBand(bi, 0, { fc: Number(e.target.value) })} />
+          </div>
+          <div className="fcq-cell">
+            <span className="field-label">Q</span>
+            <input type="number" step={0.01} className="num" value={band.q} onChange={(e) => patchBand(bi, 0, { q: Number(e.target.value) })} />
+          </div>
+        </div>
+        <div className="gain-cell">
+          <span className="field-label">Gain</span>
+          <div className="gain-line">
+            <GainSlider
+              min={-30}
+              max={30}
+              value={band.gain_db}
+              disabled={!b.enabled}
+              onValueChange={(v) => patchBand(bi, 0, { gain_db: v })}
+            />
+            <input
+              type="number"
+              className="gain-input"
+              min={-30}
+              max={30}
+              step={0.1}
+              value={band.gain_db}
+              aria-label="Gain 数值"
+              onChange={(e) => patchBand(bi, 0, { gain_db: Number(e.target.value) })}
+            />
+          </div>
+        </div>
+      </>
+    );
+  };
 
   const peakGain = useMemo(() => {
     let m = 0;
-    for (const b of blocks) {
-      if (!b.enabled) continue;
-      for (const band of b.bands) m = Math.max(m, band.gain_db);
+    const fs = selected?.sample_rate ?? 48000;
+    for (let i = 0; i <= 480; i++) {
+      const f = 20 * Math.pow(1000, i / 480);
+      let db = 0;
+      for (const b of blocks) {
+        if (!b.enabled) continue;
+        for (const band of b.bands) db += peakingDb(f, band.fc, band.gain_db, band.q, fs);
+      }
+      if (db > m) m = db;
     }
     return m;
-  }, [blocks]);
+  }, [blocks, selected?.sample_rate]);
+
+  const yTop = Math.max(6, Math.min(30, Math.ceil((peakGain + 1) / 2) * 2));
 
   const totalBands = useMemo(() => blocks.reduce((n, b) => n + b.bands.length, 0), [blocks]);
-
-  const xGrid = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].map((f) => logX(f, curveW));
-  const xLabels = ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"];
-  const yGrid = [6, 4, 2, 0, -2, -4, -6, -8, -10, -12, -14, -16].map((db) => ({ db, y: dbY(db) }));
-  const plotTop = dbY(6);
-  const plotBottom = dbY(-16);
 
   const deviceTuningOn = (guid: string) => tuningMap[guid] ?? true;
   const toggleDeviceTuning = (guid: string) => {
@@ -367,10 +579,249 @@ export default function App() {
     try { void getCurrentWindow().close(); } catch { /* web fallback */ }
   };
 
+  const cancelDrag = () => {
+    window.clearTimeout(entryTimerRef.current);
+    pendingSlotRef.current = null;
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+    dragRef.current = null;
+    setActiveKey(null);
+    setDragSize(null);
+    setFly(null);
+    document.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+      el.style.transition = "none";
+      el.style.transform = "none";
+    });
+    setTick((t) => t + 1);
+  };
+
   const switchView = (v: ViewMode) => {
+    cancelDrag();
     setSegDir(v === "advanced" ? "right" : "left");
     setView(v);
   };
+
+  const confirmUninstall = async () => {
+    if (!uninstallTarget) return;
+    setUninstalling(true);
+    try {
+      await uninstallDevice(uninstallTarget.guid);
+      setUninstallTarget(null);
+    } catch (e: unknown) {
+      setLoadErr(friendlyError(e));
+    } finally {
+      setUninstalling(false);
+    }
+  };
+
+  const overlayContentForKey = (key: string, num: number): ReactNode => {
+    const item = sortItems.find((x) => x.key === key);
+    if (item) return renderSemanticContent(item, num);
+    const bi = blocks.findIndex((b) => b.id === key);
+    const b = bi >= 0 ? blocks[bi] : undefined;
+    return b ? renderBandContent(b, bi, num) : null;
+  };
+
+  const overlayClassForKey = (key: string): string => {
+    const item = sortItems.find((x) => x.key === key);
+    if (item) return item.kind === "standalone" ? "group-card standalone" : "group-card";
+    const b = blocks.find((x) => x.id === key);
+    return b ? `band-card${b.enabled ? " enabled" : " disabled"}` : "group-card";
+  };
+
+  const renderOverlay = (key: string, num: number): ReactNode => {
+    const content = overlayContentForKey(key, num);
+    if (content == null) {
+      const html = dragRef.current?.html;
+      if (html) return <div dangerouslySetInnerHTML={{ __html: html }} />;
+      return null;
+    }
+    return (
+      <>
+        <div className="drag-bar">
+          <span className="drag-bar-line" />
+        </div>
+        {content}
+      </>
+    );
+  };
+
+  const positionOverlay = (x: number, y: number) => {
+    const el = overlayRef.current;
+    if (!el) return;
+    el.style.left = `${x - el.offsetWidth / 2}px`;
+    el.style.top = `${y - el.offsetHeight / 2}px`;
+  };
+
+  const startDrag = (key: string, x: number, y: number) => {
+    dragTokenRef.current += 1;
+    window.clearTimeout(entryTimerRef.current);
+    pendingSlotRef.current = null;
+    setFly(null);
+    document.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+      el.style.transition = "none";
+      el.style.transform = "none";
+    });
+    const els = Array.from(document.querySelectorAll<HTMLElement>("[data-dnd-id]"));
+    const slots = els.map((el) => ({ key: el.dataset.dndId!, rect: el.getBoundingClientRect() }));
+    const order = slots.map((s) => s.key);
+    const base = new Map(order.map((k, i) => [k, i]));
+    const origin = slots.find((s) => s.key === key);
+    if (!origin) return;
+    const originEl = document.querySelector<HTMLElement>(`[data-dnd-id="${key}"]`);
+    dragRef.current = {
+      key,
+      slots,
+      base,
+      virtual: new Map(base),
+      entered: base.get(key)!,
+      html: originEl?.innerHTML,
+    };
+    setActiveKey(key);
+    setOverlayNum(base.get(key)! + 1);
+    setDragSize({ width: origin.rect.width, height: origin.rect.height });
+    requestAnimationFrame(() => positionOverlay(x, y));
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  };
+
+  const onPointerMove = (e: PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    positionOverlay(e.clientX, e.clientY);
+    const idx = d.slots.findIndex(
+      (s) =>
+        s.rect.left <= e.clientX &&
+        e.clientX <= s.rect.right &&
+        s.rect.top <= e.clientY &&
+        e.clientY <= s.rect.bottom,
+    );
+    if (idx === d.entered) return;
+    if (pendingSlotRef.current === idx) return; // 消抖计时中
+    window.clearTimeout(entryTimerRef.current);
+    pendingSlotRef.current = idx;
+    entryTimerRef.current = window.setTimeout(() => {
+      pendingSlotRef.current = null;
+      applyLayout(idx);
+    }, 180);
+  };
+
+  const applyLayout = (idx: number) => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.entered = idx;
+    setOverlayNum(idx >= 0 ? idx + 1 : d.slots.length);
+    const order = [...d.virtual.entries()].sort((a, b) => a[1] - b[1]).map(([k]) => k);
+    const others = order.filter((k) => k !== d.key);
+    let target: Map<string, number>;
+    let ghostSlot: number;
+    if (idx < 0) {
+      // 补位：不在槽位上，其他卡压回 01，幽灵占最后槽位
+      target = new Map(others.map((k, i) => [k, i]));
+      ghostSlot = d.slots.length - 1;
+    } else {
+      // 避让：被拖卡占 idx，其余卡一起让位
+      others.splice(Math.min(idx, others.length), 0, d.key);
+      target = new Map(others.map((k, i) => [k, i]));
+      ghostSlot = idx;
+    }
+    const duration = idx < 0 ? 200 : 280;
+    const trans = `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+    for (const [k, v] of d.virtual) {
+      if (k === d.key) continue;
+      const t = target.get(k);
+      if (t == null || t === v) continue;
+      const baseIdx = d.base.get(k);
+      if (baseIdx == null) continue;
+      const baseRect = d.slots[baseIdx].rect;
+      const toRect = d.slots[t].rect;
+      const el = document.querySelector<HTMLElement>(`[data-dnd-id="${k}"]`);
+      if (el) {
+        el.style.transition = trans;
+        el.style.transform = `translate(${toRect.left - baseRect.left}px, ${toRect.top - baseRect.top}px)`;
+      }
+    }
+    const ghost = document.querySelector<HTMLElement>(".drag-ghost");
+    const ghostBase = d.base.get(d.key);
+    if (ghost && ghostBase != null) {
+      const baseRect = d.slots[ghostBase].rect;
+      const toRect = d.slots[ghostSlot].rect;
+      ghost.style.transition = trans;
+      ghost.style.transform = `translate(${toRect.left - baseRect.left}px, ${toRect.top - baseRect.top}px)`;
+    }
+    d.virtual = target;
+    setTick((t) => t + 1);
+  };
+
+  const commitDragOrder = (d: NonNullable<typeof dragRef.current>, target: number) => {
+    dirtyRef.current = true;
+    const key = d.key;
+    if (key.startsWith("s-") || key.startsWith("g-")) {
+      setBlocks((prev) => {
+        const units = buildSemanticUnits(prev);
+        const oi = units.findIndex((u) => u.key === key);
+        if (oi < 0 || oi === target) return prev;
+        return arrayMove(units, oi, target).flatMap((u) => u.blocks);
+      });
+    } else {
+      setBlocks((prev) => {
+        const oi = prev.findIndex((b) => b.id === key);
+        if (oi < 0 || oi === target) return prev;
+        return arrayMove(prev, oi, target);
+      });
+    }
+  };
+
+  const finalizeDrop = (
+    d: NonNullable<typeof dragRef.current>,
+    from: DOMRect | undefined,
+    content: ReactNode,
+  ) => {
+    const finalSlot = d.entered >= 0 ? d.entered : d.base.get(d.key)!;
+    commitDragOrder(d, finalSlot);
+    document.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+      el.style.transition = "none";
+      el.style.transform = "none";
+    });
+    setTick((t) => t + 1);
+    if (from) {
+      const box = (r: DOMRect) => ({ left: r.left, top: r.top, width: r.width, height: r.height });
+      const ghostEl = document.querySelector<HTMLElement>(".drag-ghost");
+      const to = ghostEl?.getBoundingClientRect() ?? d.slots[finalSlot].rect;
+      setActiveKey(null);
+      setDragSize(null);
+      dragRef.current = null;
+      setFly({
+        id: ++flyIdRef.current,
+        key: d.key,
+        content,
+        from: box(from),
+        to: box(to),
+      });
+      return;
+    }
+    setActiveKey(null);
+    setDragSize(null);
+    dragRef.current = null;
+  };
+
+  const onPointerUp = () => {
+    const d = dragRef.current;
+    window.clearTimeout(entryTimerRef.current);
+    pendingSlotRef.current = null;
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+    if (!d) return;
+    const from = overlayRef.current?.getBoundingClientRect();
+    const num = d.entered >= 0 ? d.entered + 1 : d.slots.length;
+    const content = renderOverlay(d.key, num);
+    finalizeDrop(d, from, content);
+  };
+
+  const activeContent = activeKey ? renderOverlay(activeKey, overlayNum) : null;
 
   useEffect(() => {
     let dispose: (() => void) | undefined;
@@ -520,11 +971,23 @@ export default function App() {
                     <button className="tab-btn" type="button" onClick={() => setSelectedGuid(d.guid)}>
                       {d.name}
                     </button>
+                    <button
+                      className="tab-close"
+                      type="button"
+                      aria-label={`卸载 ${d.name}`}
+                      onClick={() => setUninstallTarget(d)}
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
                   </div>
                 </Fragment>
               ))}
             </div>
-            <button className="tab-add" type="button" aria-label="新设备安装">+</button>
+            <button className="tab-add" type="button" aria-label="新设备安装">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="butt" />
+              </svg>
+            </button>
           </div>
 
           <div className="device-body">
@@ -532,42 +995,34 @@ export default function App() {
             {!loadErr && view === "preset" && (
               <>
                 {blocks.length === 0 && <div className="hint-row show">从预设栏添加调音</div>}
-                <div className="cards device-cards">
-                  {renderOrder.map((item) =>
-                    item.kind === "standalone" ? (
-                      <div className="group-card standalone" key={item.idx}>
-                        <button className="close-x" type="button" aria-label="删除" onClick={() => removeBlock(item.idx)}>✕</button>
-                        <div className="group-head">
-                          <span className="ord">{String(item.idx + 1).padStart(2, "0")}</span>
-                          <span className="g-name">{semanticName(item.block)}</span>
-                          <span className="grow" />
-                        </div>
-                        <div className="fader-row semantic">
-                          <span className="sem-label">弱</span>
-                          <GainSlider
-                            min={-6}
-                            max={6}
-                            value={item.block.bands[0]?.gain_db ?? 0}
-                            onValueChange={(v) => patchBand(item.idx, 0, { gain_db: v })}
+                  <div className="cards device-cards">
+                    {sortItems.map((item, i) => (
+                      <Fragment key={item.key}>
+                        <DragCard
+                          id={item.key}
+                          className={item.kind === "standalone" ? "group-card standalone" : "group-card"}
+                          style={item.kind === "group" ? { gridColumn: `span ${item.g.items.length}` } : undefined}
+                          hidden={activeKey === item.key || fly?.key === item.key}
+                          onDragStart={startDrag}
+                        >
+                          {renderSemanticContent(item)}
+                        </DragCard>
+                        {activeKey === item.key && dragSize && (
+                          <div
+                            className="drag-ghost"
+                            style={{
+                              gridColumn:
+                                item.kind === "group"
+                                  ? `${i + 1} / span ${item.g.items.length}`
+                                  : undefined,
+                              gridColumnStart: item.kind === "standalone" ? i + 1 : undefined,
+                              minHeight: dragSize.height,
+                            }}
                           />
-                          <span className="sem-label">强</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="group-card" key={item.g.label}>
-                        <div className="group-head">
-                          <span className="ord">{String(item.ord).padStart(2, "0")}</span>
-                          <span className="g-name">{item.g.label}</span>
-                          <span className="grow" />
-                          <span className="pill-sm">{item.g.items.length} 卡</span>
-                        </div>
-                        <div className="name-cards">
-                          {item.g.items.map(({ block, idx }) => renderNameCard(block, idx))}
-                        </div>
-                      </div>
-                    ),
-                  )}
-                </div>
+                        )}
+                      </Fragment>
+                    ))}
+                  </div>
               </>
             )}
 
@@ -581,48 +1036,26 @@ export default function App() {
                     <button className="ch-mgmt" type="button">管理</button>
                   </div>
                 )}
-                <div className="cards device-cards">
-                  {blocks.map((b, bi) => {
-                    const band = b.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 };
-                    return (
-                      <div className="band-card" key={bi}>
-                        <button className="close-x" type="button" aria-label="删除" onClick={() => removeBlock(bi)}>✕</button>
-                        <div className="b-head">
-                          <span className="ord sm">{String(bi + 1).padStart(2, "0")}</span>
-                          <span className="b-type">PEAK</span>
-                          <span className="grow" />
-                          <VxSwitch checked={b.enabled} onCheckedChange={(v) => patchBlock(bi, { enabled: v })} />
-                        </div>
-                        <div className="fcq-row">
-                          <div className="fcq-cell">
-                            <span className="field-label">Fc</span>
-                            <input type="number" className="num" value={band.fc} onChange={(e) => patchBand(bi, 0, { fc: Number(e.target.value) })} />
-                          </div>
-                          <div className="fcq-cell">
-                            <span className="field-label">Q</span>
-                            <input type="number" step={0.01} className="num" value={band.q} onChange={(e) => patchBand(bi, 0, { q: Number(e.target.value) })} />
-                          </div>
-                        </div>
-                        <div className="gain-cell">
-                          <span className="field-label">Gain</span>
-                          <div className="gain-line">
-                            <GainSlider min={-30} max={30} value={band.gain_db} onValueChange={(v) => patchBand(bi, 0, { gain_db: v })} />
-                            <input
-                              type="number"
-                              className="gain-input"
-                              min={-30}
-                              max={30}
-                              step={0.1}
-                              value={band.gain_db}
-                              aria-label="Gain 数值"
-                              onChange={(e) => patchBand(bi, 0, { gain_db: Number(e.target.value) })}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                  <div className="cards device-cards">
+                    {blocks.map((b, bi) => (
+                      <Fragment key={b.id ?? bi}>
+                        <DragCard
+                          id={b.id ?? String(bi)}
+                          className={`band-card${b.enabled ? " enabled" : " disabled"}`}
+                          hidden={activeKey === (b.id ?? String(bi)) || fly?.key === (b.id ?? String(bi))}
+                          onDragStart={startDrag}
+                        >
+                          {renderBandContent(b, bi)}
+                        </DragCard>
+                        {activeKey === (b.id ?? String(bi)) && dragSize && (
+                          <div
+                            className="drag-ghost"
+                            style={{ gridColumnStart: bi + 1, minHeight: dragSize.height }}
+                          />
+                        )}
+                      </Fragment>
+                    ))}
+                  </div>
               </>
             )}
 
@@ -651,30 +1084,12 @@ export default function App() {
                     ariaLabel="声道"
                   />
                 </div>
-                <svg viewBox={`0 0 ${curveW} 220`} width="100%" height="220" preserveAspectRatio="none" role="img" aria-label="频响曲线">
-                  {yGrid.map(({ db, y }) => (
-                    <line key={`y${db}`} x1="40" y1={y} x2={curveW - 40} y2={y} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
-                  ))}
-                  {xGrid.map((x, i) => (
-                    <line key={`x${i}`} x1={x} y1={plotTop} x2={x} y2={plotBottom} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
-                  ))}
-                  <line x1="40" y1={plotTop} x2="40" y2={plotBottom} stroke="var(--border-strong)" strokeWidth="1.5" />
-                  <line x1="40" y1={plotBottom} x2={curveW - 40} y2={plotBottom} stroke="var(--border-strong)" strokeWidth="1.5" />
-                  <path
-                    d={curveD}
-                    fill="none"
-                    stroke="var(--brand-deep)"
-                    strokeWidth="2"
-                  />
-                  <g fill="var(--text-secondary)" fontSize="10">
-                    {xLabels.map((f, i) => (
-                      <text key={f} x={xGrid[i]} y={plotBottom + 12} textAnchor="middle">{f}</text>
-                    ))}
-                    {yGrid.map(({ db, y }) => (
-                      <text key={`l${db}`} x="34" y={y + 3} textAnchor="end">{db >= 0 ? `+${db}` : `${db}`}</text>
-                    ))}
-                  </g>
-                </svg>
+                <CurvePlot
+                  blocks={blocks}
+                  fs={selected?.sample_rate ?? 48000}
+                  curveW={curveW}
+                  yTop={yTop}
+                />
               </div>
             </div>
           </div>
@@ -686,6 +1101,56 @@ export default function App() {
         theme={theme}
         onThemeChange={setTheme}
       />
+      <UninstallDialog
+        device={uninstallTarget}
+        open={uninstallTarget !== null}
+        busy={uninstalling}
+        onOpenChange={(open) => {
+          if (!open) setUninstallTarget(null);
+        }}
+        onConfirm={() => void confirmUninstall()}
+      />
+      {activeKey && (
+        <div
+          ref={overlayRef}
+          className={`drag-fly overlay-fixed ${overlayClassForKey(activeKey)}`}
+          style={dragSize ? { width: dragSize.width, height: dragSize.height } : undefined}
+        >
+          {activeContent}
+        </div>
+      )}
+      {fly && (
+        <motion.div
+          className={`drag-fly fly-anim ${overlayClassForKey(fly.key)}`}
+          initial={{
+            left: fly.from.left,
+            top: fly.from.top,
+            width: fly.from.width,
+            height: fly.from.height,
+            opacity: 1,
+            boxShadow: "0 10px 28px rgba(0, 0, 0, 0.18)",
+          }}
+          animate={{
+            left: fly.to.left,
+            top: fly.to.top,
+            width: fly.to.width,
+            height: fly.to.height,
+            opacity: 1,
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
+          }}
+          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          onAnimationComplete={() =>
+            setFly((prev) => (prev && prev.id === fly.id ? null : prev))
+          }
+        >
+          {fly.content}
+        </motion.div>
+      )}
+      {notice && (
+        <div className="vx-toast" role="status">
+          {notice}
+        </div>
+      )}
     </div>
   );
 }

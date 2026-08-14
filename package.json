@@ -12,6 +12,9 @@
     "icon:fix": "node_modules\\rcedit\\bin\\rcedit-x64.exe src-tauri\\target\\debug\\vxapo-app.exe --set-icon src-tauri\\icons\\icon.ico"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-select": "^2.3.7",
     "@radix-ui/react-slider": "^1.4.7",

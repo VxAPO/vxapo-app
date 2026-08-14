@@ -5,6 +5,7 @@ interface GainSliderProps {
   min?: number;
   max?: number;
   step?: number;
+  disabled?: boolean;
   onValueChange: (value: number) => void;
   ariaLabel?: string;
 }
@@ -14,12 +15,14 @@ export default function GainSlider({
   min = -12,
   max = 12,
   step = 0.1,
+  disabled = false,
   onValueChange,
   ariaLabel = "Gain",
 }: GainSliderProps) {
   return (
     <Slider.Root
-      className="gs-root"
+      className={`gs-root${disabled ? " disabled" : ""}`}
+      disabled={disabled}
       min={min}
       max={max}
       step={step}

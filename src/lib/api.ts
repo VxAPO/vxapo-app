@@ -20,3 +20,8 @@ export async function listDevices(): Promise<Device[]> {
   const raw = await invoke<string>("list_devices");
   return JSON.parse(raw) as Device[];
 }
+
+export async function uninstallDevice(guid: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("uninstall_device", { guid });
+}

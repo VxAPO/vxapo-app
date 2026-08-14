@@ -44,11 +44,50 @@ fn list_devices() -> Result<String, String> {
     }
 }
 
+/// 卸载设备：以 `runas` 提权调 `vxapo-cli uninstall -d <guid> --json`（UAC 由系统弹窗）。
+#[tauri::command]
+fn uninstall_device(guid: String) -> Result<String, String> {
+    let cli = cli_path();
+    let tag = guid.replace(['{', '}'], "");
+    let tmp_out = std::env::temp_dir().join(format!("vxapo_uninstall_{tag}.json"));
+    let tmp_err = std::env::temp_dir().join(format!("vxapo_uninstall_{tag}.err.txt"));
+    let _ = std::fs::remove_file(&tmp_out);
+    let _ = std::fs::remove_file(&tmp_err);
+    let script = format!(
+        "Start-Process -FilePath '{}' -ArgumentList 'uninstall','-d','{}','--json' -Verb RunAs -Wait -RedirectStandardOutput '{}' -RedirectStandardError '{}'",
+        cli.replace('\'', "''"),
+        guid,
+        tmp_out.display().to_string().replace('\'', "''"),
+        tmp_err.display().to_string().replace('\'', "''"),
+    );
+    let status = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .status()
+        .map_err(|e| format!("提权启动失败：{e}"))?;
+    let out = std::fs::read_to_string(&tmp_out).unwrap_or_default();
+    let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
+    if status.success() && !out.trim().is_empty() {
+        Ok(out.trim().to_string())
+    } else {
+        let msg = err.trim();
+        Err(if msg.is_empty() {
+            "卸载失败".to_string()
+        } else {
+            msg.to_string()
+        })
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![write_config, read_config, list_devices])
+        .invoke_handler(tauri::generate_handler![
+            write_config,
+            read_config,
+            list_devices,
+            uninstall_device
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

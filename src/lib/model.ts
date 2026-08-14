@@ -11,6 +11,8 @@ export interface Band {
 
 /** 一个块 = 一个 [[effects]] type="peq"；name/group 仅供 APP（driver 忽略）。 */
 export interface Block {
+  /** 客户端稳定 id（不写入 TOML），拖拽/分组用。 */
+  id?: string;
   group?: string;
   name?: string;
   enabled: boolean;
@@ -38,5 +40,5 @@ export interface PresetLibraryEntry {
   group: string;
   name: string;
   desc: string;
-  bands: Band[];
+  bands: (Band & { name?: string })[];
 }
