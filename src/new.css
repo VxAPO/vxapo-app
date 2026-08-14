@@ -1455,6 +1455,19 @@ input[type="number"]::-webkit-outer-spin-button {
   border-radius: 16px;
 }
 
+/* 拖拽中的原卡片就地变成占位槽：内容隐藏、虚线描边，
+   由卡片自己留在网格流内占位，避免出现第二张卡把占位挤掉 */
+.drag-card.is-dragging {
+  background: var(--surface-inset);
+  border-color: var(--border-strong);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.drag-card.is-dragging > * {
+  visibility: hidden;
+}
+
 .drag-fly {
   position: relative;
   width: fit-content;

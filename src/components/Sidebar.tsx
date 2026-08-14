@@ -1,0 +1,103 @@
+import { Plus } from "lucide-react";
+import type { PresetLibraryEntry, SideSection } from "../lib/model";
+
+interface SidebarProps {
+  side: SideSection;
+  onSideChange: (s: SideSection) => void;
+  library: PresetLibraryEntry[];
+  onApplyPreset: (p: PresetLibraryEntry) => void;
+  onAddBand: () => void;
+  channelOn: boolean;
+  onToggleChannel: () => void;
+}
+
+export default function Sidebar({
+  side,
+  onSideChange,
+  library,
+  onApplyPreset,
+  onAddBand,
+  channelOn,
+  onToggleChannel,
+}: SidebarProps) {
+  return (
+    <aside className="sidebar">
+      <div className="side-seg">
+        <div className="labels">
+          {(["preset", "custom", "advanced"] as SideSection[]).map((s) => (
+            <button key={s} type="button" aria-pressed={side === s} onClick={() => onSideChange(s)}>
+              {s === "preset" ? "预设" : s === "custom" ? "自定义" : "高级"}
+            </button>
+          ))}
+        </div>
+        <div className="track" />
+        <div className="ind" style={{ left: `${(side === "preset" ? 0 : side === "custom" ? 1 : 2) * 33.33}%`, width: "33.33%" }} />
+      </div>
+
+      {side === "preset" && (
+        <div className="cards">
+          {library.map((p) => (
+            <div className="preset-card" key={p.id}>
+              <p className="p-name">{p.group} · {p.name}</p>
+              <p className="p-desc">{p.desc}</p>
+              <div className="row">
+                <span className="sub">{p.bands.length} 段</span>
+                <button className="add" type="button" onClick={() => onApplyPreset(p)}>添加</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {side === "custom" && (
+        <div className="cards">
+          <div className="preset-card">
+            <p className="p-desc">暂无自定义预设，在高级视图中将 peaking 拖拽成组后可保存</p>
+          </div>
+        </div>
+      )}
+
+      {side === "advanced" && (
+        <div className="adv-list">
+          <div className="adv-cat">滤波器</div>
+          <button className="adv-pill" type="button" onClick={onAddBand}>
+            <Plus size={14} className="adv-plus" />
+            <span>峰值滤波器</span>
+          </button>
+          <button className="adv-pill disabled" type="button" disabled>
+            <Plus size={14} className="adv-plus" />
+            <span>高架滤波器</span>
+          </button>
+          <button className="adv-pill disabled" type="button" disabled>
+            <Plus size={14} className="adv-plus" />
+            <span>低架滤波器</span>
+          </button>
+          <button className="adv-pill disabled" type="button" disabled>
+            <Plus size={14} className="adv-plus" />
+            <span>低通滤波器</span>
+          </button>
+          <button className="adv-pill disabled" type="button" disabled>
+            <Plus size={14} className="adv-plus" />
+            <span>高通滤波器</span>
+          </button>
+          <div className="adv-cat">效果器</div>
+          {["Wide", "Aural", "Reverb", "Maximizer", "Loudness"].map((name) => (
+            <button className="adv-pill disabled" type="button" disabled key={name}>
+              <Plus size={14} className="adv-plus" />
+              <span>{name}</span>
+            </button>
+          ))}
+          <div className="adv-cat">通道</div>
+          <button
+            className={`adv-pill ${channelOn ? "active" : ""}`}
+            type="button"
+            onClick={onToggleChannel}
+          >
+            <Plus size={14} className="adv-plus" />
+            <span>通道选择器</span>
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+}

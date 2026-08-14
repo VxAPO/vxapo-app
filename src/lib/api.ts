@@ -25,3 +25,16 @@ export async function uninstallDevice(guid: string): Promise<void> {
   if (!isTauri) return;
   await invoke("uninstall_device", { guid });
 }
+
+export function isInstalled(d: Device): boolean {
+  return (
+    !!d.installed_version ||
+    Object.values(d.slots).some((v) => typeof v === "string" && v.toLowerCase().includes("vxapo"))
+  );
+}
+
+export function friendlyError(e: unknown): string {
+  const msg = String(e);
+  if (/os error 5/i.test(msg)) return "权限不足，无法读写配置（请以管理员身份运行一次以修复权限）";
+  return msg;
+}

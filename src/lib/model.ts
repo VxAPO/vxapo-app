@@ -42,3 +42,5 @@ export interface PresetLibraryEntry {
   desc: string;
   bands: (Band & { name?: string })[];
 }
+
+export type ThemeMode = "light" | "dark" | "system";
