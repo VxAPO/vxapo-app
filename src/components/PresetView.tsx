@@ -1,10 +1,11 @@
 import { Fragment } from "react";
-import type { BandPatch, SortItem } from "../lib/blocks";
+import type { Block } from "../lib/model";
+import type { BandPatch } from "../lib/blocks";
 import DragCard from "./DragCard";
 import SemanticUnitCard from "./SemanticUnitCard";
 
 interface PresetViewProps {
-  items: SortItem[];
+  blocks: Block[];
   blocksEmpty: boolean;
   activeKey: string | null;
   flyKey: string | null;
@@ -15,8 +16,9 @@ interface PresetViewProps {
   onPatchBand: (blockIdx: number, bandIdx: number, patch: BandPatch) => void;
 }
 
+/** 语义视图：每个 block 一张标准卡，单卡拖拽；组内卡只保留组标识 */
 export default function PresetView({
-  items,
+  blocks,
   blocksEmpty,
   activeKey,
   flyKey,
@@ -30,24 +32,30 @@ export default function PresetView({
     <>
       {blocksEmpty && <div className="hint-row show">从预设栏添加调音</div>}
       <div className="cards device-cards">
-        {items.map((item) => (
-          <Fragment key={item.key}>
-            <DragCard
-              id={item.key}
-              className={`${item.kind === "standalone" ? "group-card standalone" : "group-card"}${activeKey === item.key || flyKey === item.key ? " is-dragging" : ""}`}
-              style={item.kind === "group" ? { gridColumn: `span ${item.g.items.length}` } : undefined}
-              onDragStart={onDragStart}
-            >
-              <SemanticUnitCard
-                item={item}
-                dragNum={virtualIndexOf(item.key)}
-                onRemoveBlock={onRemoveBlock}
-                onRemoveGroup={onRemoveGroup}
-                onPatchBand={onPatchBand}
-              />
-            </DragCard>
-          </Fragment>
-        ))}
+        {blocks.map((b, bi) => {
+          const elementKey = b.id ?? String(bi);
+          const isGroup = !!b.group;
+          const active = activeKey === elementKey || flyKey === elementKey;
+          return (
+            <Fragment key={elementKey}>
+              <DragCard
+                id={elementKey}
+                className={`group-card standalone${active ? " is-dragging" : ""}${isGroup ? " sem-group" : ""}`}
+                onDragStart={onDragStart}
+              >
+                <SemanticUnitCard
+                  block={b}
+                  index={bi}
+                  groupLabel={isGroup ? b.group : undefined}
+                  dragNum={virtualIndexOf(elementKey)}
+                  onRemoveBlock={onRemoveBlock}
+                  onRemoveGroup={onRemoveGroup}
+                  onPatchBand={onPatchBand}
+                />
+              </DragCard>
+            </Fragment>
+          );
+        })}
       </div>
     </>
   );

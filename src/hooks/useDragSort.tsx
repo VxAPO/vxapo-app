@@ -8,7 +8,7 @@ import { buildSemanticUnits } from "../lib/blocks";
 const ENTER_DEBOUNCE_MS = 500;
 const LAYOUT_ANIM_MS = 400;
 const LAYOUT_ANIM_OUTSIDE_MS = 320;
-/** 松手时若布局动画未结束，多等这段缓冲再落定，避免动画被硬切 */
+/** 松手时若布局动画未结束，多等这段缓冲再落地，避免动画被硬切 */
 const ANIM_SETTLE_BUFFER_MS = 80;
 /** 距离所有槽位超过该值才算真正离开卡片区 */
 const OUTSIDE_DIST = 48;
@@ -120,8 +120,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
   };
 
   const slotIndexAt = (x: number, y: number, slots: Slot[]): number => {
-    // 指针横向落在某列内：优先选垂直最近的槽位（行间距按最近行处理，
-    // 抓取点在卡片顶部也不会被上一行抢走）
+    // 指针横向落在某列内：优先选垂直最近的槽位（行间距按最近行处理）
     let best = -1;
     let bestDy = Infinity;
     for (let i = 0; i < slots.length; i++) {
@@ -134,7 +133,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
       }
     }
     if (best >= 0) return best;
-    // 列间距或卡片区外：取综合最近槽位，阈值内吸附
+    // 列间缝隙或卡片区外：取综合最近槽位，阈值内吸附
     let bestIdx = -1;
     let bestDist = Infinity;
     slots.forEach((s, i) => {
@@ -185,7 +184,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
         el.style.transform = `translate(${toRect.left - baseRect.left}px, ${toRect.top - baseRect.top}px)`;
       }
     }
-    // 被拖卡本身就地占位：在网格流内移动它，避免出现第二张卡挤占槽位
+    // 被拖卡自身就地占位：在网格流内移动它，避免出现第二张卡抢占槽位
     const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
     const draggedBase = d.base.get(d.key);
     if (draggedEl && draggedBase != null) {
@@ -226,45 +225,45 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     settlingRef.current = false;
     // 与预览一致：在槽位上按槽位落点，槽位外追加到末尾
     const finalSlot = d.entered >= 0 ? d.entered : d.slots.length - 1;
+    // 落点固定取目标槽位坐标，避免动画中松手时飞行动画落到错误位置
+    const to = d.slots[finalSlot].rect;
+    resetCardStyles();
     // 清掉位移与 DOM 重排必须同帧提交：中间若被浏览器插一帧，
     // 避让中的卡片会先弹回原位再跳到新位，表现为“闪一下/抽搐”。
     flushSync(() => {
       commitDragOrder(d, finalSlot);
-    // 落点固定取目标槽位坐标，避免动画中途松手时飞行动画落到错误位置
-    const to = d.slots[finalSlot].rect;
-    resetCardStyles();
-    setTick((t) => t + 1);
-    if (from) {
-      const box = (r: DOMRect) => ({ left: r.left, top: r.top, width: r.width, height: r.height });
-      // 显式锁定原卡片内容隐藏，避免任何渲染时序让它在飞行动画中“闪现”
-      const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
-      if (draggedEl) draggedEl.setAttribute("data-fly-hidden", "1");
-      setActiveKey(null);
-      setDragSize(null);
-      dragRef.current = null;
-      window.clearTimeout(flySafetyRef.current);
-      // 落地动画完成时机不依赖 framer 的回调（其 WAAPI 阴影动画不会被等待），
-      // 用固定计时器保证：620ms 动画 + 100ms 无阴影停顿后，再揭示原卡片。
-      flySafetyRef.current = window.setTimeout(() => {
-        setFly((prev) => {
-          if (prev) {
-            revealDraggedCards();
-            flyRef.current = null;
-          }
-          return null;
-        });
-      }, FLY_TOTAL_MS);
-      const nextFly = {
-        id: ++flyIdRef.current,
-        key: d.key,
-        content,
-        from: box(from),
-        to: box(to),
-      };
-      setFly(nextFly);
-      flyRef.current = nextFly;
-      return;
-    }
+      setTick((t) => t + 1);
+      if (from) {
+        const box = (r: DOMRect) => ({ left: r.left, top: r.top, width: r.width, height: r.height });
+        // 显式锁定原卡片内容隐藏，避免任何渲染时序让它在飞行动画中闪现
+        const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
+        if (draggedEl) draggedEl.setAttribute("data-fly-hidden", "1");
+        setActiveKey(null);
+        setDragSize(null);
+        dragRef.current = null;
+        window.clearTimeout(flySafetyRef.current);
+        // 落地动画完成时机不依赖 framer 的回调（其 WAAPI 阴影动画不会被等待），
+        // 用固定计时器保证：动画 + 无阴影停顿结束后，再揭示原卡片。
+        flySafetyRef.current = window.setTimeout(() => {
+          setFly((prev) => {
+            if (prev) {
+              revealDraggedCards();
+              flyRef.current = null;
+            }
+            return null;
+          });
+        }, FLY_TOTAL_MS);
+        const nextFly = {
+          id: ++flyIdRef.current,
+          key: d.key,
+          content,
+          from: box(from),
+          to: box(to),
+        };
+        setFly(nextFly);
+        flyRef.current = nextFly;
+        return;
+      }
       setActiveKey(null);
       setDragSize(null);
       dragRef.current = null;
@@ -382,7 +381,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
       const from = overlayRef.current?.getBoundingClientRect();
       const num = d.entered >= 0 ? d.entered + 1 : d.slots.length;
       const content = renderOverlay(d.key, num);
-      // 若布局动画仍在进行，等它走完再落定，占位先停到最终槽位
+      // 若布局动画仍在进行，等它走完再落地，占位先停到最终槽位
       const remaining = Math.max(0, animEndRef.current - performance.now());
       if (remaining > 0) {
         const settleToken = token;

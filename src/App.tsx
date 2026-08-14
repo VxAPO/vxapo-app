@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import "./App.css";
 import "./new.css";
 import type { SideSection, ViewMode } from "./lib/model";
-import { buildRenderOrder, buildSortItems, groupBlocks } from "./lib/blocks";
 import { LIBRARY } from "./data/library";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
@@ -70,10 +69,6 @@ export default function App() {
   const [installOpen, setInstallOpen] = useState(false);
   const [curveChannel, setCurveChannel] = useState("左声道");
 
-  const groups = useMemo(() => groupBlocks(blocks), [blocks]);
-  const renderOrder = useMemo(() => buildRenderOrder(blocks, groups), [blocks, groups]);
-  const sortItems = useMemo(() => buildSortItems(renderOrder), [renderOrder]);
-
   const peakGain = useMemo(() => {
     let m = 0;
     const fs = selected?.sample_rate ?? 48000;
@@ -93,11 +88,15 @@ export default function App() {
 
   const overlayContent = useCallback(
     (key: string, num: number): ReactNode => {
-      const item = sortItems.find((x) => x.key === key);
-      if (item) {
+      const bi = blocks.findIndex((b) => b.id === key);
+      const b = bi >= 0 ? blocks[bi] : undefined;
+      if (!b) return null;
+      if (view === "preset") {
         return (
           <SemanticUnitCard
-            item={item}
+            block={b}
+            index={bi}
+            groupLabel={b.group}
             dragNum={null}
             num={num}
             onRemoveBlock={removeBlock}
@@ -106,9 +105,7 @@ export default function App() {
           />
         );
       }
-      const bi = blocks.findIndex((b) => b.id === key);
-      const b = bi >= 0 ? blocks[bi] : undefined;
-      return b ? (
+      return (
         <BandParamCard
           block={b}
           index={bi}
@@ -118,18 +115,19 @@ export default function App() {
           onPatchBlock={patchBlock}
           onPatchBand={patchBand}
         />
-      ) : null;
+      );
     },
-    [sortItems, blocks, removeBlock, removeGroup, patchBlock, patchBand],
+    [blocks, view, removeBlock, removeGroup, patchBlock, patchBand],
   );
 
   const dragApi = useDragSort({ setBlocks, markDirty, overlayContent });
 
   const overlayClassForKey = (key: string): string => {
-    const item = sortItems.find((x) => x.key === key);
-    if (item) return item.kind === "standalone" ? "group-card standalone" : "group-card";
     const b = blocks.find((x) => x.id === key);
-    return b ? `band-card${b.enabled ? " enabled" : " disabled"}` : "group-card";
+    if (!b) return "group-card";
+    return view === "preset"
+      ? "group-card standalone"
+      : `band-card${b.enabled ? " enabled" : " disabled"}`;
   };
 
   const switchView = (v: ViewMode) => {
@@ -183,7 +181,7 @@ export default function App() {
             {loadErr && <div className="hint-row show err">{loadErr}</div>}
             {!loadErr && view === "preset" && (
               <PresetView
-                items={sortItems}
+                blocks={blocks}
                 blocksEmpty={blocks.length === 0}
                 activeKey={dragApi.activeKey}
                 flyKey={dragApi.fly?.key ?? null}
