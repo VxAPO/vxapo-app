@@ -1,5 +1,12 @@
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// 不创建控制台窗口，避免 CLI/提权过程闪窗。
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// vxapo-cli 路径：env VXAPO_CLI 优先，缺省开发机固定路径。
 fn cli_path() -> String {
@@ -44,38 +51,166 @@ fn list_devices() -> Result<String, String> {
     }
 }
 
-/// 卸载设备：以 `runas` 提权调 `vxapo-cli uninstall -d <guid> --json`（UAC 由系统弹窗）。
+/// 以提权方式运行 CLI 子命令并捕获 stdout/stderr。
+/// 外层只做 RunAs（不带重定向，避免参数集冲突），
+/// 由被提权进程自己把输出写入临时文件。
+fn run_cli_elevated(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
+    let tmp_out = std::env::temp_dir().join(format!("vxapo_{tag}.json"));
+    let tmp_err = std::env::temp_dir().join(format!("vxapo_{tag}.err.txt"));
+    let tmp_ps1 = std::env::temp_dir().join(format!("vxapo_{tag}.ps1"));
+    let outer_err = std::env::temp_dir().join(format!("vxapo_{tag}.outer.txt"));
+    let log_file = std::env::temp_dir().join(format!("vxapo_{tag}.log"));
+    let tmp_done = std::env::temp_dir().join(format!("vxapo_{tag}.done"));
+    for p in [&tmp_out, &tmp_err, &tmp_ps1, &outer_err, &log_file, &tmp_done] {
+        let _ = std::fs::remove_file(p);
+    }
+    let log = |m: &str| {
+        let _ = std::fs::write(&log_file, format!("{}\n", m));
+    };
+    let cleanup = || {
+        let _ = std::fs::remove_file(&tmp_ps1);
+        let _ = std::fs::remove_file(&outer_err);
+        let _ = std::fs::remove_file(&tmp_done);
+    };
+    log("start");
+
+    let quoted: Vec<String> = args
+        .iter()
+        .map(|a| format!("'{}'", a.replace('\'', "''")))
+        .collect();
+    let inner = format!(
+        "& '{}' {} 1> '{}' 2> '{}'; $code = $LASTEXITCODE; [System.IO.File]::WriteAllText('{}', \"$code\"); exit $code",
+        cli.replace('\'', "''"),
+        quoted.join(" "),
+        tmp_out.display().to_string().replace('\'', "''"),
+        tmp_err.display().to_string().replace('\'', "''"),
+        tmp_done.display().to_string().replace('\'', "''"),
+    );
+    std::fs::write(&tmp_ps1, inner).map_err(|e| format!("写入提权脚本失败：{e}"))?;
+    log("ps1-written");
+
+    let ps1_path = tmp_ps1.display().to_string().replace('\'', "''");
+    let script = format!(
+        r#"Remove-Item Env:Path -ErrorAction SilentlyContinue; Remove-Item Env:PATH -ErrorAction SilentlyContinue; $env:Path = 'C:\Windows\System32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0'; Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','{}' -Verb RunAs"#,
+        ps1_path,
+    );
+    let outer_err_file = std::fs::File::create(&outer_err).map_err(|e| e.to_string())?;
+    log("outer-file-created");
+    // 外层只负责拉起提权进程，不带 -Wait：启动后立即退出，避免挂起
+    let spawn_result = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .stderr(Stdio::from(outer_err_file))
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
+    if let Err(e) = spawn_result {
+        log(&format!("spawn-error: {e}"));
+        cleanup();
+        return Err(format!("提权启动失败：{e}"));
+    }
+    log("spawned");
+
+    // 以提权脚本自己写的完成标记为准：CLI 退出后立即写 done（退出码），
+    // 不依赖读 CLI 输出文件（其子进程可能独占锁住导致读不到）。
+    // 不依赖外层进程退出，避免 -Wait 早退/挂起导致误判。
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    log("polling");
+    loop {
+        let done = std::fs::read_to_string(&tmp_done).unwrap_or_default();
+        // 兼容 UTF-8 BOM / 换行
+        let done_raw = done.trim().trim_start_matches('\u{feff}').trim();
+        if !done_raw.is_empty() {
+            let code: i32 = done_raw.parse().unwrap_or(1);
+            let out = std::fs::read_to_string(&tmp_out).unwrap_or_default();
+            // 退出码为 0，或输出里明确 ok:true（CLI 子进程锁文件时也能判定）→ 成功
+            if code == 0 || out.contains("\"ok\":true") {
+                log("done-ok");
+                cleanup();
+                let _ = std::fs::remove_file(&log_file);
+                return Ok(out.trim().to_string());
+            }
+            let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
+            let msg = err.trim();
+            log(&format!("done-fail:{code} raw:[{done_raw}] out-has-ok:{}", out.contains("\"ok\":true")));
+            cleanup();
+            return Err(if msg.is_empty() {
+                "操作失败".to_string()
+            } else {
+                msg.to_string()
+            });
+        }
+        let out = std::fs::read_to_string(&tmp_out).unwrap_or_default();
+        if out.contains("\"ok\":true") {
+            log("ok");
+            cleanup();
+            let _ = std::fs::remove_file(&log_file);
+            return Ok(out.trim().to_string());
+        }
+        let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
+        if !err.trim().is_empty() {
+            let msg = err.trim();
+            log(&format!("err: {msg}"));
+            cleanup();
+            return Err(if msg.is_empty() {
+                "操作失败".to_string()
+            } else {
+                msg.to_string()
+            });
+        }
+        // 提权被拦：外层 powershell 会把错误写进 outer_err，快速失败
+        let oerr = std::fs::read_to_string(&outer_err).unwrap_or_default();
+        if !oerr.trim().is_empty() {
+            log(&format!("outer-err: {}", oerr.trim()));
+            cleanup();
+            return Err(oerr.trim().to_string());
+        }
+        if std::time::Instant::now() >= deadline {
+            log("timeout");
+            cleanup();
+            return Err("操作超时".to_string());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+}
+
+/// 优先直接运行 CLI（应用本身有权限时不弹任何提权窗口）；
+/// 只有提示“需要管理员权限”时才走隐藏的提权包装。
+fn run_cli(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
+    let output = Command::new(cli)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("CLI 启动失败：{e}"))?;
+    let out = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if output.status.success() {
+        return Ok(out);
+    }
+    let msg = if err.is_empty() { out } else { err };
+    if msg.contains("需要管理员权限") {
+        return run_cli_elevated(cli, args, tag);
+    }
+    Err(if msg.is_empty() {
+        "CLI 执行失败".to_string()
+    } else {
+        msg
+    })
+}
+
+/// 卸载设备：以 `runas` 提权调 `vxapo-cli uninstall -d <guid> --json`。
 #[tauri::command]
 fn uninstall_device(guid: String) -> Result<String, String> {
     let cli = cli_path();
-    let tag = guid.replace(['{', '}'], "");
-    let tmp_out = std::env::temp_dir().join(format!("vxapo_uninstall_{tag}.json"));
-    let tmp_err = std::env::temp_dir().join(format!("vxapo_uninstall_{tag}.err.txt"));
-    let _ = std::fs::remove_file(&tmp_out);
-    let _ = std::fs::remove_file(&tmp_err);
-    let script = format!(
-        "Start-Process -FilePath '{}' -ArgumentList 'uninstall','-d','{}','--json' -Verb RunAs -Wait -RedirectStandardOutput '{}' -RedirectStandardError '{}'",
-        cli.replace('\'', "''"),
-        guid,
-        tmp_out.display().to_string().replace('\'', "''"),
-        tmp_err.display().to_string().replace('\'', "''"),
-    );
-    let status = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .status()
-        .map_err(|e| format!("提权启动失败：{e}"))?;
-    let out = std::fs::read_to_string(&tmp_out).unwrap_or_default();
-    let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
-    if status.success() && !out.trim().is_empty() {
-        Ok(out.trim().to_string())
-    } else {
-        let msg = err.trim();
-        Err(if msg.is_empty() {
-            "卸载失败".to_string()
-        } else {
-            msg.to_string()
-        })
-    }
+    let tag = format!("uninstall_{}", guid.replace(['{', '}'], ""));
+    run_cli(&cli, &["uninstall", "-d", &guid, "--json"], &tag)
+}
+
+/// 安装设备：以 `runas` 提权调 `vxapo-cli install -d <guid> --json`
+/// （自动探测安装模式）。
+#[tauri::command]
+fn install_device(guid: String) -> Result<String, String> {
+    let cli = cli_path();
+    let tag = format!("install_{}", guid.replace(['{', '}'], ""));
+    run_cli(&cli, &["install", "-d", &guid, "--json"], &tag)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -86,7 +221,8 @@ pub fn run() {
             write_config,
             read_config,
             list_devices,
-            uninstall_device
+            uninstall_device,
+            install_device
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

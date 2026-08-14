@@ -26,6 +26,11 @@ export async function uninstallDevice(guid: string): Promise<void> {
   await invoke("uninstall_device", { guid });
 }
 
+export async function installDevice(guid: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("install_device", { guid });
+}
+
 export function isInstalled(d: Device): boolean {
   return (
     !!d.installed_version ||

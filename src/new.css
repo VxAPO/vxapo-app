@@ -417,7 +417,7 @@ button {
   z-index: 3;
 }
 
-.tab-btn {
+.tab-item .tab-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -430,7 +430,7 @@ button {
   border-radius: 8px 8px 0 0;
 }
 
-.tab-btn:hover {
+.tab-item .tab-btn:hover {
   background: var(--hover);
   color: var(--text-secondary);
 }
@@ -456,14 +456,6 @@ button {
 
 .tab-item.active .tab-btn:hover {
   background: var(--content);
-}
-
-.tab-sep {
-  width: 1px;
-  height: 16px;
-  align-self: flex-end;
-  margin: 0 8px 8px;
-  background: var(--border);
 }
 
 .tab-dot {
@@ -1521,6 +1513,21 @@ input[type="number"]::-webkit-outer-spin-button {
   background: var(--text-secondary);
 }
 
+/* 落地：飞行副本的灰条从 hover 色过渡回常规灰 */
+.drag-fly.fly-anim .drag-bar-line {
+  background: var(--border-strong);
+  animation: drag-bar-land 0.45s ease-out forwards;
+}
+
+@keyframes drag-bar-land {
+  from {
+    background: var(--text-secondary);
+  }
+  to {
+    background: var(--border-strong);
+  }
+}
+
 .group-card .drag-bar {
   margin-top: -8px;
 }
@@ -1528,17 +1535,51 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* ── 卸载确认弹窗 ─────────────────────────────────────────── */
 
+.uninstall-body {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.uninstall-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
+}
+
+.uninstall-main {
+  min-width: 0;
+}
+
 .uninstall-text {
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.uninstall-device-name {
+  font-weight: 700;
+}
+
+.uninstall-note {
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-secondary);
-  margin: 0 0 16px;
+  margin: 4px 0 0;
 }
 
 .uninstall-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  align-items: center;
 }
 
 .danger-btn {
@@ -1554,6 +1595,115 @@ input[type="number"]::-webkit-outer-spin-button {
 .danger-btn:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+/* ── 安装设备弹窗 ─────────────────────────────────────────── */
+
+.install-dialog {
+  width: min(520px, calc(100vw - 48px));
+}
+
+.install-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.install-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.install-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-inset);
+}
+
+.install-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.install-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.install-item-sub {
+  font-size: 11px;
+  color: var(--text-weak);
+}
+
+.install-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 200, 83, 0.12);
+  color: #00c853;
+}
+
+.install-btn:hover {
+  background: rgba(0, 200, 83, 0.2);
+}
+
+.install-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.install-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 0;
+  color: var(--text-weak);
+  font-size: 13px;
+}
+
+.install-empty p {
+  margin: 0;
+}
+
+.install-hint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-weak);
+  margin: 0;
+}
+
+.vx-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 6px;
+  animation: vx-spin 0.7s linear infinite;
+}
+
+@keyframes vx-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Toast 提示 ───────────────────────────────────────────── */

@@ -17,6 +17,7 @@ import CurvePanel from "./components/CurvePanel";
 import DevicePropsCard from "./components/DevicePropsCard";
 import DeviceTabs from "./components/DeviceTabs";
 import DragLayer from "./components/DragLayer";
+import InstallDialog from "./components/InstallDialog";
 import PresetView from "./components/PresetView";
 import SemanticUnitCard from "./components/SemanticUnitCard";
 import SettingsDialog from "./components/SettingsDialog";
@@ -34,12 +35,14 @@ export default function App() {
     selectedGuid,
     setSelectedGuid,
     selected,
+    devices,
+    refresh,
     installedDevices,
     uninstallTarget,
     setUninstallTarget,
     uninstalling,
     confirmUninstall,
-  } = useDevices(onError);
+  } = useDevices(onError, (name) => notify(`已卸载 ${name}`));
 
   const {
     blocks,
@@ -64,6 +67,7 @@ export default function App() {
   const [segDir, setSegDir] = useState<"left" | "right">("right");
   const [channelOn, setChannelOn] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
   const [curveChannel, setCurveChannel] = useState("左声道");
 
   const groups = useMemo(() => groupBlocks(blocks), [blocks]);
@@ -172,6 +176,7 @@ export default function App() {
             onSelect={setSelectedGuid}
             onToggleTuning={toggleDeviceTuning}
             onUninstall={setUninstallTarget}
+            onAdd={() => setInstallOpen(true)}
           />
 
           <div className="device-body">
@@ -223,6 +228,14 @@ export default function App() {
         onOpenChange={setSettingsOpen}
         theme={theme}
         onThemeChange={setTheme}
+      />
+      <InstallDialog
+        open={installOpen}
+        onOpenChange={setInstallOpen}
+        devices={devices}
+        onError={onError}
+        onRefresh={refresh}
+        onInstalled={(name) => notify(`已安装 ${name}`)}
       />
       <UninstallDialog
         device={uninstallTarget}
