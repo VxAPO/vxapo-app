@@ -7,6 +7,10 @@ import { buildSemanticUnits } from "../lib/blocks";
 const ENTER_DEBOUNCE_MS = 500;
 const LAYOUT_ANIM_MS = 400;
 const LAYOUT_ANIM_OUTSIDE_MS = 320;
+/** 松手时若布局动画未结束，多等这段缓冲再落定，避免动画被硬切 */
+const ANIM_SETTLE_BUFFER_MS = 80;
+/** 距离所有槽位超过该值才算真正离开卡片区 */
+const OUTSIDE_DIST = 48;
 
 export interface FlyState {
   id: number;
@@ -58,6 +62,8 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
   const flyIdRef = useRef(0);
   const dragRef = useRef<DragSession | null>(null);
   const entryTimerRef = useRef<number | undefined>(undefined);
+  const settleTimerRef = useRef<number | undefined>(undefined);
+  const animEndRef = useRef(0);
   const pendingSlotRef = useRef<number | null>(null);
   const dragTokenRef = useRef(0);
   const listenersRef = useRef<DragListeners | null>(null);
@@ -67,7 +73,8 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
 
   const resetCardStyles = () => {
     document.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
-      el.style.transition = "none";
+      // 清掉拖拽期间的内联过渡，恢复 CSS 的 hover 阴影淡入
+      el.style.transition = "";
       el.style.transform = "none";
     });
   };
@@ -84,6 +91,8 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
   const clearDragTimers = () => {
     window.clearTimeout(entryTimerRef.current);
     entryTimerRef.current = undefined;
+    window.clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = undefined;
     pendingSlotRef.current = null;
   };
 
@@ -95,14 +104,35 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     el.style.top = `${y - d.offsetY}px`;
   };
 
-  const slotIndexAt = (x: number, y: number, slots: Slot[]): number =>
-    slots.findIndex(
-      (s) =>
-        s.rect.left <= x &&
-        x <= s.rect.right &&
-        s.rect.top <= y &&
-        y <= s.rect.bottom,
-    );
+  const slotIndexAt = (x: number, y: number, slots: Slot[]): number => {
+    // 指针横向落在某列内：优先选垂直最近的槽位（行间距按最近行处理，
+    // 抓取点在卡片顶部也不会被上一行抢走）
+    let best = -1;
+    let bestDy = Infinity;
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (x < s.rect.left || x > s.rect.right) continue;
+      const dy = y < s.rect.top ? s.rect.top - y : y > s.rect.bottom ? y - s.rect.bottom : 0;
+      if (dy < bestDy) {
+        bestDy = dy;
+        best = i;
+      }
+    }
+    if (best >= 0) return best;
+    // 列间距或卡片区外：取综合最近槽位，阈值内吸附
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    slots.forEach((s, i) => {
+      const dx = x < s.rect.left ? s.rect.left - x : x > s.rect.right ? x - s.rect.right : 0;
+      const dy = y < s.rect.top ? s.rect.top - y : y > s.rect.bottom ? y - s.rect.bottom : 0;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    });
+    return bestDist <= OUTSIDE_DIST * OUTSIDE_DIST ? bestIdx : -1;
+  };
 
   const applyLayout = (idx: number) => {
     const d = dragRef.current;
@@ -150,6 +180,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
       draggedEl.style.transform = `translate(${toRect.left - baseRect.left}px, ${toRect.top - baseRect.top}px)`;
     }
     d.virtual = target;
+    animEndRef.current = performance.now() + LAYOUT_ANIM_MS + ANIM_SETTLE_BUFFER_MS;
     setTick((t) => t + 1);
   };
 
@@ -180,8 +211,8 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     // 与预览一致：在槽位上按槽位落点，槽位外追加到末尾
     const finalSlot = d.entered >= 0 ? d.entered : d.slots.length - 1;
     commitDragOrder(d, finalSlot);
-    const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
-    const to = draggedEl?.getBoundingClientRect() ?? d.slots[finalSlot].rect;
+    // 落点固定取目标槽位坐标，避免动画中途松手时飞行动画落到错误位置
+    const to = d.slots[finalSlot].rect;
     resetCardStyles();
     setTick((t) => t + 1);
     if (from) {
@@ -309,7 +340,18 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
       const from = overlayRef.current?.getBoundingClientRect();
       const num = d.entered >= 0 ? d.entered + 1 : d.slots.length;
       const content = renderOverlay(d.key, num);
-      finalizeDrop(d, from, content);
+      // 若布局动画仍在进行，等它走完再落定，占位先停到最终槽位
+      const remaining = Math.max(0, animEndRef.current - performance.now());
+      if (remaining > 0) {
+        const settleToken = token;
+        settleTimerRef.current = window.setTimeout(() => {
+          settleTimerRef.current = undefined;
+          if (dragTokenRef.current !== settleToken || dragRef.current !== d) return;
+          finalizeDrop(d, from, content);
+        }, remaining);
+      } else {
+        finalizeDrop(d, from, content);
+      }
     };
 
     const onCancel = () => {

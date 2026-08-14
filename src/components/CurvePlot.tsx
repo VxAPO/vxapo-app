@@ -1,5 +1,25 @@
-import { useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { Block } from "../lib/model";
+
+/** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
+const FOLLOW_FACTOR = 0.1;
+/** 基准点切换时的平移动画时长：满速跨过轴线，结束后无缝回到慢跟随 */
+const FLIP_TRANSLATE_MS = 160;
+
+const DPR = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+/** 按设备像素取整，避免小数位移动画导致文字发虚 */
+const snapPx = (v: number) => Math.round(v * DPR) / DPR;
+
+interface TipGeom {
+  wrap: DOMRect;
+  svg: DOMRect;
+  tipW: number;
+  tipH: number;
+}
+
+function easeOutCubic(x: number): number {
+  return 1 - Math.pow(1 - x, 3);
+}
 
 function logX(freq: number, w: number): number {
   const t = (Math.log10(Math.max(20, Math.min(20000, freq))) - Math.log10(20)) / 3;
@@ -78,6 +98,24 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
   const [hoverPt, setHoverPt] = useState<HoverPt | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
+  const tipTargetRef = useRef<{ x: number; y: number } | null>(null);
+  const tipPosRef = useRef<{ x: number; y: number } | null>(null);
+  const tipRafRef = useRef<number | undefined>(undefined);
+  const tipAnchorRef = useRef("");
+  const flipRef = useRef<{ start: number; from: { x: number; y: number } } | null>(null);
+  const geomRef = useRef<TipGeom | null>(null);
+
+  const measureGeom = (): TipGeom | null => {
+    const wrap = svgRef.current?.parentElement?.getBoundingClientRect();
+    const svg = svgRef.current?.getBoundingClientRect();
+    if (!wrap || !svg) return null;
+    return {
+      wrap,
+      svg,
+      tipW: tipRef.current?.offsetWidth ?? 96,
+      tipH: tipRef.current?.offsetHeight ?? 40,
+    };
+  };
 
   const yStep = yTop + 16 > 26 ? 4 : 2;
   const yGrid = useMemo(() => {
@@ -126,11 +164,10 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
 
   const tipPos = (() => {
     if (!hoverPt) return null;
-    const wrap = svgRef.current?.parentElement?.getBoundingClientRect();
-    const svg = svgRef.current?.getBoundingClientRect();
-    if (!wrap || !svg) return null;
-    const tipW = tipRef.current?.offsetWidth ?? 96;
-    const tipH = tipRef.current?.offsetHeight ?? 40;
+    const g = geomRef.current ?? measureGeom();
+    if (!g) return null;
+    geomRef.current = g;
+    const { wrap, svg, tipW, tipH } = g;
     const sx = svg.left - wrap.left;
     const sy = svg.top - wrap.top;
     const scaleX = svg.width / curveW;
@@ -145,10 +182,98 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
     if (above && top < 6) top = cy + 8;
     if (!above && top + tipH > wrap.height - 6) top = cy - 8 - tipH;
     let left = cx;
+    const hSide: "left" | "center" | "right" =
+      left + tipW > plotRight ? "right" : left < plotLeft ? "left" : "center";
     if (left + tipW > plotRight) left = cx - tipW;
     left = Math.max(plotLeft, Math.min(left, plotRight - tipW));
-    return { top, left };
+    return { top, left, above, hSide };
   })();
+
+  // 悬浮窗跟随动画：指数趋近，比鼠标慢半拍、先快后慢；
+  // 基准点（上/下、左/右）切换时播一段满速 ease 平移，跨过轴线后回到慢跟随
+  useLayoutEffect(() => {
+    const el = tipRef.current;
+    if (!hoverPt || !tipPos) {
+      geomRef.current = null;
+      tipTargetRef.current = null;
+      if (tipRafRef.current != null) {
+        cancelAnimationFrame(tipRafRef.current);
+        tipRafRef.current = undefined;
+      }
+      return;
+    }
+    const target = { x: snapPx(tipPos.left), y: snapPx(tipPos.top) };
+    tipTargetRef.current = target;
+    const anchor = `${tipPos.above ? "above" : "below"}-${tipPos.hSide}`;
+    if (anchor !== tipAnchorRef.current) {
+      const prev = tipAnchorRef.current;
+      tipAnchorRef.current = anchor;
+      if (prev) {
+        flipRef.current = {
+          start: performance.now(),
+          from: tipPosRef.current ?? target,
+        };
+      }
+    }
+    if (!tipPosRef.current && el) {
+      geomRef.current = measureGeom();
+      tipPosRef.current = target;
+      el.style.transform = `translate(${target.x}px, ${target.y}px)`;
+    }
+    if (tipRafRef.current != null) return;
+    const step = () => {
+      const node = tipRef.current;
+      const t = tipTargetRef.current;
+      if (!node || !t) {
+        tipRafRef.current = undefined;
+        return;
+      }
+      const now = performance.now();
+      const flip = flipRef.current;
+      if (flip) {
+        const p = Math.min(1, (now - flip.start) / FLIP_TRANSLATE_MS);
+        const k = easeOutCubic(p);
+        const posX = snapPx(flip.from.x + (t.x - flip.from.x) * k);
+        const posY = snapPx(flip.from.y + (t.y - flip.from.y) * k);
+        tipPosRef.current = { x: posX, y: posY };
+        node.style.transform = `translate(${posX}px, ${posY}px)`;
+        if (p >= 1) {
+          flipRef.current = null;
+          tipPosRef.current = { x: snapPx(t.x), y: snapPx(t.y) };
+          node.style.transform = `translate(${snapPx(t.x)}px, ${snapPx(t.y)}px)`;
+          tipRafRef.current = undefined;
+          return;
+        }
+        tipRafRef.current = requestAnimationFrame(step);
+        return;
+      }
+      const cur = tipPosRef.current ?? t;
+      const nx = snapPx(cur.x + (t.x - cur.x) * FOLLOW_FACTOR);
+      const ny = snapPx(cur.y + (t.y - cur.y) * FOLLOW_FACTOR);
+      tipPosRef.current = { x: nx, y: ny };
+      node.style.transform = `translate(${nx}px, ${ny}px)`;
+      if (Math.abs(t.x - nx) < 0.4 && Math.abs(t.y - ny) < 0.4) {
+        tipPosRef.current = { x: snapPx(t.x), y: snapPx(t.y) };
+        node.style.transform = `translate(${snapPx(t.x)}px, ${snapPx(t.y)}px)`;
+        tipRafRef.current = undefined;
+        return;
+      }
+      tipRafRef.current = requestAnimationFrame(step);
+    };
+    tipRafRef.current = requestAnimationFrame(step);
+  }, [hoverPt, tipPos]);
+
+  useEffect(
+    () => () => {
+      if (tipRafRef.current != null) cancelAnimationFrame(tipRafRef.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    // 图表尺寸变化后重新测量，避免继续用旧几何
+    geomRef.current = null;
+  }, [curveW]);
 
   return (
     <>
@@ -225,9 +350,13 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
         </g>
       </svg>
       {hoverPt && tipPos && (
-        <div className="curve-tip" ref={tipRef} style={{ left: tipPos.left, top: tipPos.top }}>
-          <span>{fmtFreq(hoverPt.f)}</span>
-          <span className="tip-gain">{fmtDb(hoverPt.db)}</span>
+        <div className="curve-tip" ref={tipRef}>
+          <div className="curve-tip-body">
+            <div className="curve-tip-text">
+              <span>{fmtFreq(hoverPt.f)}</span>
+              <span className="tip-gain">{fmtDb(hoverPt.db)}</span>
+            </div>
+          </div>
         </div>
       )}
     </>
