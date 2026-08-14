@@ -31,6 +31,11 @@ export async function installDevice(guid: string): Promise<void> {
   await invoke("install_device", { guid });
 }
 
+export async function readProgress(tag: string): Promise<string> {
+  if (!isTauri) return "";
+  return invoke<string>("read_progress", { tag });
+}
+
 export function isInstalled(d: Device): boolean {
   return (
     !!d.installed_version ||

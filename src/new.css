@@ -1466,7 +1466,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .drag-fly {
   position: relative;
   width: fit-content;
-  min-width: 200px;
+  min-width: 0;
 }
 
 .drag-fly.overlay-fixed {
@@ -1476,13 +1476,28 @@ input[type="number"]::-webkit-outer-spin-button {
   z-index: 75;
   pointer-events: none;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  animation: drag-shadow-lift 0.18s ease-out;
+}
+
+/* 抓取时阴影从 hover 状态平滑扩大到拖拽强阴影 */
+@keyframes drag-shadow-lift {
+  from {
+    box-shadow: var(--hover-shadow);
+  }
+  to {
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  }
 }
 
 .drag-fly.fly-anim {
   position: fixed;
   z-index: 80;
-  overflow: hidden;
   pointer-events: none;
+}
+
+/* 落地动画期间原卡片内容的硬性隐藏兜底：不受 is-dragging 类时序影响 */
+[data-fly-hidden="1"] > * {
+  visibility: hidden !important;
 }
 
 .drag-bar {
@@ -1698,6 +1713,23 @@ input[type="number"]::-webkit-outer-spin-button {
   vertical-align: -2px;
   margin-right: 6px;
   animation: vx-spin 0.7s linear infinite;
+}
+
+/* 安装/卸载实时进度 */
+.op-progress {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 @keyframes vx-spin {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { flushSync } from "react-dom";
 import { arrayMove } from "@dnd-kit/sortable";
 import type { Block } from "../lib/model";
 import { buildSemanticUnits } from "../lib/blocks";
@@ -11,6 +12,8 @@ const LAYOUT_ANIM_OUTSIDE_MS = 320;
 const ANIM_SETTLE_BUFFER_MS = 80;
 /** 距离所有槽位超过该值才算真正离开卡片区 */
 const OUTSIDE_DIST = 48;
+/** 落地动画总时长：0.3s 动画 + 0.1s 无阴影停顿 + 缓冲 */
+const FLY_TOTAL_MS = 430;
 
 export interface FlyState {
   id: number;
@@ -59,17 +62,27 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
   const [fly, setFly] = useState<FlyState | null>(null);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const flyRef = useRef<FlyState | null>(null);
   const flyIdRef = useRef(0);
   const dragRef = useRef<DragSession | null>(null);
   const entryTimerRef = useRef<number | undefined>(undefined);
   const settleTimerRef = useRef<number | undefined>(undefined);
   const animEndRef = useRef(0);
   const pendingSlotRef = useRef<number | null>(null);
+  const settlingRef = useRef(false);
   const dragTokenRef = useRef(0);
   const listenersRef = useRef<DragListeners | null>(null);
   const pointerDownRef = useRef(false);
+  const flySafetyRef = useRef<number | undefined>(undefined);
   const overlayContentRef = useRef(overlayContent);
   overlayContentRef.current = overlayContent;
+
+  const revealDraggedCards = () => {
+    // 兜底：无论 is-dragging 类是否被状态更新打断，落地动画期间原卡片内容都必须保持隐藏
+    document
+      .querySelectorAll<HTMLElement>("[data-fly-hidden]")
+      .forEach((el) => el.removeAttribute("data-fly-hidden"));
+  };
 
   const resetCardStyles = () => {
     document.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
@@ -77,6 +90,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
       el.style.transition = "";
       el.style.transform = "none";
     });
+    revealDraggedCards();
   };
 
   const removeListeners = () => {
@@ -100,8 +114,9 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     const el = overlayRef.current;
     const d = dragRef.current;
     if (!el || !d) return;
-    el.style.left = `${x - d.offsetX}px`;
-    el.style.top = `${y - d.offsetY}px`;
+    // 取整到像素网格，悬浮副本的文字渲染与网格卡片保持一致
+    el.style.left = `${Math.round(x - d.offsetX)}px`;
+    el.style.top = `${Math.round(y - d.offsetY)}px`;
   };
 
   const slotIndexAt = (x: number, y: number, slots: Slot[]): number => {
@@ -208,30 +223,52 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     from: DOMRect | undefined,
     content: ReactNode,
   ) => {
+    settlingRef.current = false;
     // 与预览一致：在槽位上按槽位落点，槽位外追加到末尾
     const finalSlot = d.entered >= 0 ? d.entered : d.slots.length - 1;
-    commitDragOrder(d, finalSlot);
+    // 清掉位移与 DOM 重排必须同帧提交：中间若被浏览器插一帧，
+    // 避让中的卡片会先弹回原位再跳到新位，表现为“闪一下/抽搐”。
+    flushSync(() => {
+      commitDragOrder(d, finalSlot);
     // 落点固定取目标槽位坐标，避免动画中途松手时飞行动画落到错误位置
     const to = d.slots[finalSlot].rect;
     resetCardStyles();
     setTick((t) => t + 1);
     if (from) {
       const box = (r: DOMRect) => ({ left: r.left, top: r.top, width: r.width, height: r.height });
+      // 显式锁定原卡片内容隐藏，避免任何渲染时序让它在飞行动画中“闪现”
+      const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
+      if (draggedEl) draggedEl.setAttribute("data-fly-hidden", "1");
       setActiveKey(null);
       setDragSize(null);
       dragRef.current = null;
-      setFly({
+      window.clearTimeout(flySafetyRef.current);
+      // 落地动画完成时机不依赖 framer 的回调（其 WAAPI 阴影动画不会被等待），
+      // 用固定计时器保证：620ms 动画 + 100ms 无阴影停顿后，再揭示原卡片。
+      flySafetyRef.current = window.setTimeout(() => {
+        setFly((prev) => {
+          if (prev) {
+            revealDraggedCards();
+            flyRef.current = null;
+          }
+          return null;
+        });
+      }, FLY_TOTAL_MS);
+      const nextFly = {
         id: ++flyIdRef.current,
         key: d.key,
         content,
         from: box(from),
         to: box(to),
-      });
+      };
+      setFly(nextFly);
+      flyRef.current = nextFly;
       return;
     }
-    setActiveKey(null);
-    setDragSize(null);
-    dragRef.current = null;
+      setActiveKey(null);
+      setDragSize(null);
+      dragRef.current = null;
+    });
   };
 
   const renderOverlay = (key: string, num: number): ReactNode => {
@@ -253,9 +290,12 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
 
   const startDrag = (key: string, x: number, y: number) => {
     const token = ++dragTokenRef.current;
+    settlingRef.current = false;
     removeListeners();
     clearDragTimers();
+    window.clearTimeout(flySafetyRef.current);
     setFly(null);
+    flyRef.current = null;
     resetCardStyles();
     pointerDownRef.current = true;
 
@@ -337,6 +377,8 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
       // 松手瞬间按当前指针位置结算，防止快速拖拽时防抖未触发导致落点滞后
       const idx = slotIndexAt(e.clientX, e.clientY, d.slots);
       if (idx !== d.entered && !(idx < 0 && !d.everLeft)) applyLayout(idx);
+      // 松手到落地之间冻结徽标数字：让卡片先移动到目标位，数字再随到位一起更新
+      settlingRef.current = true;
       const from = overlayRef.current?.getBoundingClientRect();
       const num = d.entered >= 0 ? d.entered + 1 : d.slots.length;
       const content = renderOverlay(d.key, num);
@@ -357,6 +399,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     const onCancel = () => {
       if (dragTokenRef.current !== token) return;
       pointerDownRef.current = false;
+      settlingRef.current = false;
       removeListeners();
       clearDragTimers();
       resetCardStyles();
@@ -364,6 +407,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
       setActiveKey(null);
       setDragSize(null);
       setFly(null);
+      flyRef.current = null;
       setTick((t) => t + 1);
     };
 
@@ -375,6 +419,8 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
 
   const cancelDrag = () => {
     pointerDownRef.current = false;
+    settlingRef.current = false;
+    window.clearTimeout(flySafetyRef.current);
     removeListeners();
     clearDragTimers();
     resetCardStyles();
@@ -382,6 +428,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     setActiveKey(null);
     setDragSize(null);
     setFly(null);
+    flyRef.current = null;
     setTick((t) => t + 1);
   };
 
@@ -391,7 +438,8 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     };
     const onBlurSafe = () => {
       // 指针仍按住时（真实拖拽中）失焦不取消，避免首次交互的焦点抖动误伤
-      if (pointerDownRef.current) return;
+      // 落地动画进行中也不取消，避免飞行副本突然消失、原卡片瞬间弹出造成闪烁
+      if (pointerDownRef.current || flyRef.current) return;
       cancelDrag();
     };
     window.addEventListener("keydown", onKey);
@@ -403,10 +451,21 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
   }, []);
 
   const virtualIndexOf = (key: string): number | null =>
-    dragRef.current ? dragRef.current.virtual.get(key) ?? null : null;
+    dragRef.current && !settlingRef.current
+      ? dragRef.current.virtual.get(key) ?? null
+      : null;
 
-  const completeFly = (id: number) =>
-    setFly((prev) => (prev && prev.id === id ? null : prev));
+  const completeFly = (id: number) => {
+    window.clearTimeout(flySafetyRef.current);
+    setFly((prev) => {
+      if (prev && prev.id === id) {
+        revealDraggedCards();
+        flyRef.current = null;
+        return null;
+      }
+      return prev;
+    });
+  };
 
   return {
     activeKey,

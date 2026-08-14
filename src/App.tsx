@@ -253,7 +253,6 @@ export default function App() {
         overlayRef={dragApi.overlayRef}
         activeContent={dragApi.activeKey ? dragApi.renderOverlay(dragApi.activeKey, dragApi.overlayNum) : null}
         classForKey={overlayClassForKey}
-        onFlyComplete={dragApi.completeFly}
       />
       {notice && <Toast message={notice} />}
     </div>

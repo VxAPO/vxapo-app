@@ -1,5 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { TriangleAlert, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { readProgress } from "../lib/api";
 import type { Device } from "../lib/model";
 
 interface UninstallDialogProps {
@@ -17,6 +19,20 @@ export default function UninstallDialog({
   onOpenChange,
   onConfirm,
 }: UninstallDialogProps) {
+  const [progress, setProgress] = useState("");
+
+  useEffect(() => {
+    if (!busy || !device) {
+      setProgress("");
+      return;
+    }
+    const tag = "uninstall_" + device.guid.replace(/[{}]/g, "");
+    const timer = window.setInterval(async () => {
+      setProgress(await readProgress(tag));
+    }, 400);
+    return () => window.clearInterval(timer);
+  }, [busy, device]);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -50,6 +66,7 @@ export default function UninstallDialog({
               {busy ? "卸载中…" : "确认卸载"}
             </button>
           </div>
+          {progress && <pre className="op-progress">{progress}</pre>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

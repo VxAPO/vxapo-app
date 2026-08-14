@@ -2,9 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent 
 import type { Block } from "../lib/model";
 
 /** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
-const FOLLOW_FACTOR = 0.1;
+const FOLLOW_FACTOR = 0.08;
 /** 基准点切换时的平移动画时长：满速跨过轴线，结束后无缝回到慢跟随 */
-const FLIP_TRANSLATE_MS = 160;
+const FLIP_TRANSLATE_MS = 280;
+/** 安全区半径：以曲线落点为圆心的圆，光标在圆内不切换基准侧 */
+const SAFE_RADIUS = 10;
 
 const DPR = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 /** 按设备像素取整，避免小数位移动画导致文字发虚 */
@@ -17,8 +19,8 @@ interface TipGeom {
   tipH: number;
 }
 
-function easeOutCubic(x: number): number {
-  return 1 - Math.pow(1 - x, 3);
+function easeOutQuart(x: number): number {
+  return 1 - Math.pow(1 - x, 4);
 }
 
 function logX(freq: number, w: number): number {
@@ -174,18 +176,63 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
     const scaleY = svg.height / 220;
     const cx = sx + hoverPt.cvx * scaleX;
     const cy = sy + hoverPt.cvy * scaleY;
-    const my = sy + hoverPt.y * scaleY;
     const plotLeft = sx + 40 * scaleX;
     const plotRight = sx + (curveW - 40) * scaleX;
-    const above = cy < my;
-    let top = above ? cy - 8 - tipH : cy + 8;
-    if (above && top < 6) top = cy + 8;
-    if (!above && top + tipH > wrap.height - 6) top = cy - 8 - tipH;
-    let left = cx;
+    // 屏幕斜率：按悬浮窗宽度对应的曲线段计算平均斜率，
+    // 不是实时差值，快慢移动行为一致（对数轴在 20k 附近特别陡）
+    const fAtX = (x: number) => {
+      const t = ((x - sx) / scaleX - 40) / (curveW - 80);
+      return 20 * Math.pow(10, t * 3);
+    };
+    const dbAt = (f: number) => {
+      const cl = Math.max(20, Math.min(20000, f));
+      let db = 0;
+      for (const b of blocks) {
+        if (!b.enabled) continue;
+        for (const band of b.bands) db += peakingDb(cl, band.fc, band.gain_db, band.q, fs);
+      }
+      return Math.max(-16, Math.min(yTop, db));
+    };
+    const segW = tipW;
+    const xA = Math.max(plotLeft, cx - segW / 2);
+    const xB = Math.min(plotRight, cx + segW / 2);
+    const yA = sy + dbY(dbAt(fAtX(xA)), yTop) * scaleY;
+    const yB = sy + dbY(dbAt(fAtX(xB)), yTop) * scaleY;
+    const slope = xB > xA ? (yB - yA) / (xB - xA) : 0;
+    const my = sy + hoverPt.y * scaleY;
+    const R = SAFE_RADIUS;
+    const distY = cy - my;
+    const inSafeZone = Math.abs(distY) <= R;
+    const prevAbove = tipAnchorRef.current
+      ? tipAnchorRef.current.startsWith("above")
+      : null;
+    let above: boolean;
+    if (prevAbove === null) {
+      above = distY < 0;
+    } else if (inSafeZone) {
+      above = prevAbove;
+    } else {
+      above = distY < 0;
+    }
+    // 垂直与水平独立补偿：
+    // 垂直边距恒为 R（斜→平 不再缩水），水平 gH = R·|m| / √(1+m²) 随斜率增加
+    const denom = Math.sqrt(1 + slope * slope);
+    const gV = R;
+    const gH = (R * Math.abs(slope)) / denom;
+    // 水平避让：两个斜率方向严格水平翻转——正斜率右移 gH，负斜率左移 gH
+    const left = Math.max(
+      plotLeft,
+      Math.min(cx + (slope >= 0 ? 1 : -1) * gH, plotRight - tipW),
+    );
+    const top = Math.max(
+      6,
+      Math.min(
+        above ? Math.min(cy, my) - gV - tipH : Math.max(cy, my) + gV,
+        wrap.height - 6 - tipH,
+      ),
+    );
     const hSide: "left" | "center" | "right" =
-      left + tipW > plotRight ? "right" : left < plotLeft ? "left" : "center";
-    if (left + tipW > plotRight) left = cx - tipW;
-    left = Math.max(plotLeft, Math.min(left, plotRight - tipW));
+      cx + tipW > plotRight ? "right" : cx < plotLeft ? "left" : "center";
     return { top, left, above, hSide };
   })();
 
@@ -232,7 +279,7 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
       const flip = flipRef.current;
       if (flip) {
         const p = Math.min(1, (now - flip.start) / FLIP_TRANSLATE_MS);
-        const k = easeOutCubic(p);
+        const k = easeOutQuart(p);
         const posX = snapPx(flip.from.x + (t.x - flip.from.x) * k);
         const posY = snapPx(flip.from.y + (t.y - flip.from.y) * k);
         tipPosRef.current = { x: posX, y: posY };

@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -53,24 +53,28 @@ fn list_devices() -> Result<String, String> {
 
 /// 以提权方式运行 CLI 子命令并捕获 stdout/stderr。
 /// 外层只做 RunAs（不带重定向，避免参数集冲突），
-/// 由被提权进程自己把输出写入临时文件。
+/// 以隐藏提权方式运行 CLI 子命令：
+/// - 进度逐行写入 progress 文件（应用实时读取展示）；
+/// - 完成标记（退出码）驱动应用判定；
+/// - 用 ShellExecute runas + 隐藏窗口拉起，不弹控制台。
 fn run_cli_elevated(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
-    let tmp_out = std::env::temp_dir().join(format!("vxapo_{tag}.json"));
+    let tmp_progress = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
     let tmp_err = std::env::temp_dir().join(format!("vxapo_{tag}.err.txt"));
     let tmp_ps1 = std::env::temp_dir().join(format!("vxapo_{tag}.ps1"));
+    let tmp_vbs = std::env::temp_dir().join(format!("vxapo_{tag}.vbs"));
     let outer_err = std::env::temp_dir().join(format!("vxapo_{tag}.outer.txt"));
     let log_file = std::env::temp_dir().join(format!("vxapo_{tag}.log"));
     let tmp_done = std::env::temp_dir().join(format!("vxapo_{tag}.done"));
-    for p in [&tmp_out, &tmp_err, &tmp_ps1, &outer_err, &log_file, &tmp_done] {
+    for p in [&tmp_progress, &tmp_err, &tmp_ps1, &tmp_vbs, &outer_err, &log_file, &tmp_done] {
         let _ = std::fs::remove_file(p);
     }
     let log = |m: &str| {
         let _ = std::fs::write(&log_file, format!("{}\n", m));
     };
     let cleanup = || {
-        let _ = std::fs::remove_file(&tmp_ps1);
-        let _ = std::fs::remove_file(&outer_err);
-        let _ = std::fs::remove_file(&tmp_done);
+        for p in [&tmp_ps1, &tmp_vbs, &outer_err, &tmp_done] {
+            let _ = std::fs::remove_file(p);
+        }
     };
     log("start");
 
@@ -82,24 +86,33 @@ fn run_cli_elevated(cli: &str, args: &[&str], tag: &str) -> Result<String, Strin
         "& '{}' {} 1> '{}' 2> '{}'; $code = $LASTEXITCODE; [System.IO.File]::WriteAllText('{}', \"$code\"); exit $code",
         cli.replace('\'', "''"),
         quoted.join(" "),
-        tmp_out.display().to_string().replace('\'', "''"),
+        tmp_progress.display().to_string().replace('\'', "''"),
         tmp_err.display().to_string().replace('\'', "''"),
         tmp_done.display().to_string().replace('\'', "''"),
     );
     std::fs::write(&tmp_ps1, inner).map_err(|e| format!("写入提权脚本失败：{e}"))?;
     log("ps1-written");
 
-    let ps1_path = tmp_ps1.display().to_string().replace('\'', "''");
-    let script = format!(
-        r#"Remove-Item Env:Path -ErrorAction SilentlyContinue; Remove-Item Env:PATH -ErrorAction SilentlyContinue; $env:Path = 'C:\Windows\System32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0'; Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','{}' -Verb RunAs"#,
-        ps1_path,
+    // VBS：ShellExecute runas + 隐藏窗口（0），彻底不弹控制台；
+    // 启动失败时把返回码写进 outer_err 供快速失败。
+    let ps1_path = tmp_ps1.display().to_string();
+    let oerr_path = outer_err.display().to_string();
+    let vbs = format!(
+        r#"On Error Resume Next
+Set s = CreateObject("Shell.Application")
+r = s.ShellExecute("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File {ps1}", "", "runas", 0)
+If r <= 32 Then
+  Set fso = CreateObject("Scripting.FileSystemObject")
+  fso.CreateTextFile("{oerr}", True).Write CStr(r)
+End If"#,
+        ps1 = ps1_path,
+        oerr = oerr_path,
     );
-    let outer_err_file = std::fs::File::create(&outer_err).map_err(|e| e.to_string())?;
-    log("outer-file-created");
-    // 外层只负责拉起提权进程，不带 -Wait：启动后立即退出，避免挂起
-    let spawn_result = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .stderr(Stdio::from(outer_err_file))
+    std::fs::write(&tmp_vbs, vbs).map_err(|e| format!("写入提权脚本失败：{e}"))?;
+    log("vbs-written");
+
+    let spawn_result = Command::new("wscript.exe")
+        .arg(&tmp_vbs)
         .creation_flags(CREATE_NO_WINDOW)
         .spawn();
     if let Err(e) = spawn_result {
@@ -109,41 +122,32 @@ fn run_cli_elevated(cli: &str, args: &[&str], tag: &str) -> Result<String, Strin
     }
     log("spawned");
 
-    // 以提权脚本自己写的完成标记为准：CLI 退出后立即写 done（退出码），
-    // 不依赖读 CLI 输出文件（其子进程可能独占锁住导致读不到）。
-    // 不依赖外层进程退出，避免 -Wait 早退/挂起导致误判。
+    // 只认完成标记：退出码 0 成功；错误文件有内容报错；90s 超时兜底。
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
     log("polling");
     loop {
         let done = std::fs::read_to_string(&tmp_done).unwrap_or_default();
-        // 兼容 UTF-8 BOM / 换行
         let done_raw = done.trim().trim_start_matches('\u{feff}').trim();
         if !done_raw.is_empty() {
             let code: i32 = done_raw.parse().unwrap_or(1);
-            let out = std::fs::read_to_string(&tmp_out).unwrap_or_default();
-            // 退出码为 0，或输出里明确 ok:true（CLI 子进程锁文件时也能判定）→ 成功
-            if code == 0 || out.contains("\"ok\":true") {
+            let progress = std::fs::read_to_string(&tmp_progress).unwrap_or_default();
+            if code == 0 {
                 log("done-ok");
                 cleanup();
                 let _ = std::fs::remove_file(&log_file);
-                return Ok(out.trim().to_string());
+                let _ = std::fs::remove_file(&tmp_progress);
+                let _ = std::fs::remove_file(&tmp_err);
+                return Ok(progress.trim().to_string());
             }
             let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
             let msg = err.trim();
-            log(&format!("done-fail:{code} raw:[{done_raw}] out-has-ok:{}", out.contains("\"ok\":true")));
+            log(&format!("done-fail:{code} raw:[{done_raw}]"));
             cleanup();
             return Err(if msg.is_empty() {
                 "操作失败".to_string()
             } else {
                 msg.to_string()
             });
-        }
-        let out = std::fs::read_to_string(&tmp_out).unwrap_or_default();
-        if out.contains("\"ok\":true") {
-            log("ok");
-            cleanup();
-            let _ = std::fs::remove_file(&log_file);
-            return Ok(out.trim().to_string());
         }
         let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
         if !err.trim().is_empty() {
@@ -156,7 +160,6 @@ fn run_cli_elevated(cli: &str, args: &[&str], tag: &str) -> Result<String, Strin
                 msg.to_string()
             });
         }
-        // 提权被拦：外层 powershell 会把错误写进 outer_err，快速失败
         let oerr = std::fs::read_to_string(&outer_err).unwrap_or_default();
         if !oerr.trim().is_empty() {
             log(&format!("outer-err: {}", oerr.trim()));
@@ -201,7 +204,7 @@ fn run_cli(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
 fn uninstall_device(guid: String) -> Result<String, String> {
     let cli = cli_path();
     let tag = format!("uninstall_{}", guid.replace(['{', '}'], ""));
-    run_cli(&cli, &["uninstall", "-d", &guid, "--json"], &tag)
+    run_cli(&cli, &["uninstall", "-d", &guid], &tag)
 }
 
 /// 安装设备：以 `runas` 提权调 `vxapo-cli install -d <guid> --json`
@@ -210,7 +213,14 @@ fn uninstall_device(guid: String) -> Result<String, String> {
 fn install_device(guid: String) -> Result<String, String> {
     let cli = cli_path();
     let tag = format!("install_{}", guid.replace(['{', '}'], ""));
-    run_cli(&cli, &["install", "-d", &guid, "--json"], &tag)
+    run_cli(&cli, &["install", "-d", &guid], &tag)
+}
+
+/// 读取安装/卸载进度文本（供 UI 实时展示）。
+#[tauri::command]
+fn read_progress(tag: String) -> String {
+    let p = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
+    std::fs::read_to_string(p).unwrap_or_default()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -222,7 +232,8 @@ pub fn run() {
             read_config,
             list_devices,
             uninstall_device,
-            install_device
+            install_device,
+            read_progress
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

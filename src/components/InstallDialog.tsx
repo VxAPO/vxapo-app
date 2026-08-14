@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Headphones, Plus, X } from "lucide-react";
-import { useState } from "react";
-import { friendlyError, installDevice, isInstalled } from "../lib/api";
+import { useEffect, useState } from "react";
+import { friendlyError, installDevice, isInstalled, readProgress } from "../lib/api";
 import type { Device } from "../lib/model";
 
 interface InstallDialogProps {
@@ -22,6 +22,19 @@ export default function InstallDialog({
   onInstalled,
 }: InstallDialogProps) {
   const [installingGuid, setInstallingGuid] = useState<string | null>(null);
+  const [progress, setProgress] = useState("");
+
+  useEffect(() => {
+    if (!installingGuid) {
+      setProgress("");
+      return;
+    }
+    const tag = "install_" + installingGuid.replace(/[{}]/g, "");
+    const timer = window.setInterval(async () => {
+      setProgress(await readProgress(tag));
+    }, 400);
+    return () => window.clearInterval(timer);
+  }, [installingGuid]);
 
   const handleInstall = async (d: Device) => {
     setInstallingGuid(d.guid);
@@ -84,6 +97,7 @@ export default function InstallDialog({
               </div>
             )}
             <p className="install-hint">安装时会弹出系统权限确认，完成后设备会出现在顶部标签页。</p>
+            {progress && <pre className="op-progress">{progress}</pre>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
