@@ -1,7 +1,8 @@
 import { Plus } from "lucide-react";
 import { X } from "lucide-react";
-import type { PresetLibraryEntry, SideSection } from "../lib/model";
+import type { EffectItem, PresetLibraryEntry, SideSection } from "../lib/model";
 import { presetAccent } from "../lib/blocks";
+import { EFFECT_DEFS } from "../lib/effects";
 
 interface SidebarProps {
   side: SideSection;
@@ -9,8 +10,10 @@ interface SidebarProps {
   library: PresetLibraryEntry[];
   customPresets: PresetLibraryEntry[];
   usedPresets: string[];
+  effects: EffectItem[];
   onApplyPreset: (p: PresetLibraryEntry) => void;
   onDeletePreset: (p: PresetLibraryEntry) => void;
+  onAddEffect: (type: string) => void;
   onAddBand: () => void;
   channelOn: boolean;
   onToggleChannel: () => void;
@@ -22,8 +25,10 @@ export default function Sidebar({
   library,
   customPresets,
   usedPresets,
+  effects,
   onApplyPreset,
   onDeletePreset,
+  onAddEffect,
   onAddBand,
   channelOn,
   onToggleChannel,
@@ -130,12 +135,21 @@ export default function Sidebar({
             <span>高通滤波器</span>
           </button>
           <div className="adv-cat">效果器</div>
-          {["Wide", "Aural", "Reverb", "Maximizer", "Loudness"].map((name) => (
-            <button className="adv-pill disabled" type="button" disabled key={name}>
-              <Plus size={14} className="adv-plus" />
-              <span>{name}</span>
-            </button>
-          ))}
+          {EFFECT_DEFS.map((e) => {
+            const added = effects.some((x) => x.type === e.type);
+            return (
+              <button
+                className={`adv-pill${added ? " disabled" : ""}`}
+                type="button"
+                disabled={added}
+                key={e.type}
+                onClick={() => onAddEffect(e.type)}
+              >
+                <Plus size={14} className="adv-plus" />
+                <span>{added ? `${e.name}（已添加）` : e.name}</span>
+              </button>
+            );
+          })}
           <div className="adv-cat">通道</div>
           <button
             className={`adv-pill ${channelOn ? "active" : ""}`}

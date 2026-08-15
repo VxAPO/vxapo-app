@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { friendlyError, readConfig, writeConfig } from "../lib/api";
-import type { Block, PresetLibraryEntry } from "../lib/model";
+import type { Block, EffectItem, PresetLibraryEntry } from "../lib/model";
 import { buildToml, parseConfigWithTail } from "../lib/toml";
+import { defaultEffectParams, effectsEqual } from "../lib/effects";
 import {
   blocksEqualShape,
   ensureBlockIds,
@@ -10,12 +11,17 @@ import {
   type BandPatch,
 } from "../lib/blocks";
 
+function normalizeEffects(list: EffectItem[]): EffectItem[] {
+  return list.map((e) => ({ ...e, params: { ...defaultEffectParams(e.type), ...(e.params ?? {}) } }));
+}
+
 export function useConfig(
   selectedGuid: string | null,
   onError: (msg: string) => void,
   notify: (msg: string) => void,
 ) {
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const [effects, setEffects] = useState<EffectItem[]>([]);
   const [tuningMap, setTuningMap] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef<number | undefined>(undefined);
@@ -38,6 +44,7 @@ export function useConfig(
         try {
           const parsed = parseConfigWithTail(text);
           setBlocks(ensureBlockIds(parsed.blocks));
+          setEffects(normalizeEffects(parsed.effects));
           tailRef.current = parsed.tail;
           setTuningMap((prev) => ({ ...prev, [selectedGuid]: parsed.enabled }));
         } catch {
@@ -66,6 +73,10 @@ export function useConfig(
           const parsed = parseConfigWithTail(text);
           tailRef.current = parsed.tail;
           setTuningMap((prev) => ({ ...prev, [selectedGuid]: parsed.enabled }));
+          setEffects((prev) => {
+            const next = normalizeEffects(parsed.effects);
+            return effectsEqual(prev, next) ? prev : next;
+          });
           setBlocks((prev) => {
             const next = parsed.blocks;
             if (prev.length === next.length && prev.every((b, i) => blocksEqualShape(b, next[i]))) {
@@ -85,7 +96,7 @@ export function useConfig(
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       const effective = tuningMap[selectedGuid] ?? true;
-      const content = buildToml(blocks, effective) + tailRef.current;
+      const content = buildToml(blocks, effective, effects) + tailRef.current;
       writeConfig(selectedGuid, content)
         .then(() => {
           dirtyRef.current = false;
@@ -93,7 +104,7 @@ export function useConfig(
         .catch((e: unknown) => onError(friendlyError(e)));
     }, 300);
     return () => window.clearTimeout(saveTimer.current);
-  }, [blocks, tuningMap, selectedGuid, loaded]);
+  }, [blocks, effects, tuningMap, selectedGuid, loaded]);
 
   const totalBands = useMemo(() => blocks.reduce((n, b) => n + b.bands.length, 0), [blocks]);
 
@@ -136,6 +147,30 @@ export function useConfig(
     ]);
   };
 
+  const addEffect = (type: string) => {
+    markDirty();
+    setEffects((prev) =>
+      prev.some((e) => e.type === type) ? prev : [...prev, { type, enabled: true, params: defaultEffectParams(type) }],
+    );
+  };
+
+  const removeEffect = (type: string) => {
+    markDirty();
+    setEffects((prev) => prev.filter((e) => e.type !== type));
+  };
+
+  const toggleEffect = (type: string) => {
+    markDirty();
+    setEffects((prev) => prev.map((e) => (e.type === type ? { ...e, enabled: !e.enabled } : e)));
+  };
+
+  const patchEffectParam = (type: string, key: string, value: number | string) => {
+    markDirty();
+    setEffects((prev) =>
+      prev.map((e) => (e.type === type ? { ...e, params: { ...(e.params ?? {}), [key]: value } } : e)),
+    );
+  };
+
   const removeBlock = (idx: number) => {
     markDirty();
     setBlocks((prev) => prev.filter((_, i) => i !== idx));
@@ -172,12 +207,18 @@ export function useConfig(
   return {
     blocks,
     setBlocks,
+    effects,
+    setEffects,
     tuningMap,
     loaded,
     dirtyRef,
     markDirty,
     applyPreset,
     addBand,
+    addEffect,
+    removeEffect,
+    toggleEffect,
+    patchEffectParam,
     removeBlock,
     removeGroup,
     patchBlock,

@@ -1,7 +1,7 @@
-// VxAPO App — config.toml 生成与解析（UI 设计规范 01 契约）
-// 只负责自身生成的结构；外部 TOML 的非 peq 效果器忽略。
-
-import type { Band, Block } from "./model";
+// VxAPO App —— config.toml 生成与解析（UI 设计规范 01 契约）
+// 只负责自身生成的结构；外部 TOML 的非 peq 未知效果器保留为 tail。
+import type { Band, Block, EffectItem } from "./model";
+import { KNOWN_EFFECT_TYPES, defaultEffectParams } from "./effects";
 
 function num(n: number): string {
   if (!Number.isFinite(n)) return "0";
@@ -9,10 +9,10 @@ function num(n: number): string {
 }
 
 function str(s: string): string {
-  return JSON.stringify(s); // TOML basic string 转义与 JSON 兼容（引号/反斜杠）
+  return JSON.stringify(s);
 }
 
-export function buildToml(blocks: Block[], enabled = true): string {
+export function buildToml(blocks: Block[], enabled = true, effects: EffectItem[] = []): string {
   const out: string[] = ["version = 1", `enabled = ${enabled}`, "", "[meta]", 'app = "vxapo"', "schema = 1", ""];
   for (const b of blocks) {
     out.push("[[effects]]", 'type = "peq"');
@@ -24,25 +24,32 @@ export function buildToml(blocks: Block[], enabled = true): string {
     }
     out.push("");
   }
+  for (const e of effects) {
+    out.push("[[effects]]", `type = ${str(e.type)}`, `enabled = ${e.enabled}`);
+    for (const [k, v] of Object.entries({ ...defaultEffectParams(e.type), ...(e.params ?? {}) })) {
+      out.push(typeof v === "number" ? `${k} = ${num(v)}` : `${k} = ${str(String(v))}`);
+    }
+    out.push("");
+  }
   return out.join("\n");
 }
 
-/** 解析自身生成的 config.toml（逐行状态机，只支持 peq 块）。 */
 function pushBlock(blocks: Block[], b: Block) {
   if (!b.bands.length) return;
   if (b.bands.length === 1) {
     blocks.push(b);
     return;
   }
-  // 一个 band 一张卡：多段 peq 块拆成多个单段块（保留 group/name/enabled）。
   for (const band of b.bands) {
     blocks.push({ group: b.group, name: b.name, enabled: b.enabled, bands: [band] });
   }
 }
 
-export function parseConfig(text: string): Block[] {
+export function parseConfig(text: string): { blocks: Block[]; effects: EffectItem[] } {
   const blocks: Block[] = [];
+  const effects: EffectItem[] = [];
   let current: Block | null = null;
+  let currentEffect: EffectItem | null = null;
   const lineRe = /^\s*([A-Za-z0-9_.-]+)\s*=\s*(.+?)\s*$/;
 
   for (const raw of text.split(/\r?\n/)) {
@@ -53,19 +60,35 @@ export function parseConfig(text: string): Block[] {
     }
     if (line.startsWith("[[effects]]")) {
       if (current) pushBlock(blocks, current);
+      if (currentEffect) effects.push(currentEffect);
       current = { enabled: true, bands: [] };
+      currentEffect = null;
       continue;
     }
-    if (!current) continue;
     const m = lineRe.exec(line);
     if (!m) continue;
     const key = m[1];
     const value = m[2];
     const unquote = (v: string) => (v.startsWith('"') ? JSON.parse(v) : v);
+    if (key === "type") {
+      const t = unquote(value);
+      if (t !== "peq") {
+        current = null;
+        if (KNOWN_EFFECT_TYPES.includes(t)) currentEffect = { type: t, enabled: true };
+      }
+      continue;
+    }
+    if (currentEffect) {
+      if (key === "enabled") {
+        currentEffect.enabled = value === "true";
+      } else if (key !== "type") {
+        const n = Number(value);
+        (currentEffect.params ??= {})[key] = Number.isFinite(n) ? n : unquote(value);
+      }
+      continue;
+    }
+    if (!current) continue;
     switch (key) {
-      case "type":
-        if (unquote(value) !== "peq") current = null; // 只处理 peq 块
-        break;
       case "group":
         current.group = unquote(value);
         break;
@@ -76,7 +99,7 @@ export function parseConfig(text: string): Block[] {
         current.enabled = value === "true";
         break;
       case "crossover_hz":
-        break; // 固定 200，忽略
+        break;
       case "fc":
         current.bands.push({ fc: Number(value), gain_db: 0, q: 1 });
         break;
@@ -91,19 +114,21 @@ export function parseConfig(text: string): Block[] {
     }
   }
   if (current) pushBlock(blocks, current);
-  return blocks;
+  if (currentEffect) effects.push(currentEffect);
+  return { blocks, effects };
 }
 
 export interface ConfigParse {
   blocks: Block[];
-  /** 顶层总开关：false = 整链 passthrough（driver v9.17）。 */
+  effects: EffectItem[];
+  /** 顶层总开关：false = 整链 passthrough（driver v9.17） */
   enabled: boolean;
-  /** 原文件中首个非 peq 效果块起、到文件末尾的原始文本（保存时原样拼回，防止丢 wide/aural 等）。 */
+  /** 首个未知非 peq 效果器块起、到文件末尾的原始文本（保存时原样拼回，避免破坏第三方效果器） */
   tail: string;
 }
 
 export function parseConfigWithTail(text: string): ConfigParse {
-  const blocks = parseConfig(text);
+  const { blocks, effects } = parseConfig(text);
   const lines = text.split(/\r?\n/);
   let enabled = true;
   for (const line of lines) {
@@ -126,11 +151,11 @@ export function parseConfigWithTail(text: string): ConfigParse {
         break;
       }
     }
-    if (type && type !== "peq") {
-      return { blocks, enabled, tail: "\n" + lines.slice(i).join("\n") };
+    if (type && type !== "peq" && !KNOWN_EFFECT_TYPES.includes(type)) {
+      return { blocks, effects, enabled, tail: "\n" + lines.slice(i).join("\n") };
     }
   }
-  return { blocks, enabled, tail: "" };
+  return { blocks, effects, enabled, tail: "" };
 }
 
 export function countBands(blocks: Block[]): number {

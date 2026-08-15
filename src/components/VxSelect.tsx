@@ -11,12 +11,13 @@ interface VxSelectProps {
   options: VxSelectOption[];
   onValueChange: (value: string) => void;
   ariaLabel?: string;
+  disabled?: boolean;
 }
 
-export default function VxSelect({ value, options, onValueChange, ariaLabel }: VxSelectProps) {
+export default function VxSelect({ value, options, onValueChange, ariaLabel, disabled = false }: VxSelectProps) {
   return (
-    <Select.Root value={value} onValueChange={onValueChange}>
-      <Select.Trigger className="vx-select" aria-label={ariaLabel}>
+    <Select.Root value={value} onValueChange={onValueChange} disabled={disabled}>
+      <Select.Trigger className={`vx-select${disabled ? " disabled" : ""}`} aria-label={ariaLabel}>
         <Select.Value />
         <Select.Icon className="vx-select-icon">
           <ChevronDown size={14} />

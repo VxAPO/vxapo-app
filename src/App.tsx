@@ -50,9 +50,14 @@ export default function App() {
   const {
     blocks,
     setBlocks,
+    effects,
     markDirty,
     applyPreset,
     addBand,
+    addEffect,
+    removeEffect,
+    toggleEffect,
+    patchEffectParam,
     removeBlock,
     removeGroup,
     patchBlock,
@@ -75,6 +80,8 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const bottomRowRef = useRef<HTMLDivElement | null>(null);
+  const [bottomBarPad, setBottomBarPad] = useState(220);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const [selGeom, setSelGeom] = useState<{ cx: number; top: number; bodyW: number; bodyH: number } | null>(null);
   const [savePresetOpen, setSavePresetOpen] = useState(false);
@@ -366,6 +373,17 @@ export default function App() {
     [],
   );
 
+  // 底部悬浮条真实高度 -> 调音区底部留白，保证最后一行卡片能完全滚到悬浮条上方
+  useLayoutEffect(() => {
+    const el = bottomRowRef.current;
+    if (!el) return;
+    const update = () => setBottomBarPad(Math.ceil(el.getBoundingClientRect().height) + 16);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const overlayContent = useCallback(
     (key: string, num: number): ReactNode => {
       const bi = blocks.findIndex((b) => b.id === key);
@@ -449,8 +467,10 @@ export default function App() {
           library={LIBRARY}
           customPresets={customPresets}
           usedPresets={[...usedPresetIds]}
+          effects={effects}
           onApplyPreset={handleApplyPreset}
           onDeletePreset={setDeletePresetTarget}
+          onAddEffect={addEffect}
           onAddBand={addBand}
           channelOn={channelOn}
           onToggleChannel={toggleChannel}
@@ -467,21 +487,27 @@ export default function App() {
             onAdd={() => setInstallOpen(true)}
           />
 
-          <div
-            className="device-body"
-            ref={bodyRef}
-            onPointerDown={onBodyPointerDown}
-            onPointerMove={onBodyPointerMove}
-            onPointerUp={onBodyPointerUp}
-            onPointerCancel={onBodyPointerUp}
-          >
-            {loadErr && <div className="hint-row show err">{loadErr}</div>}
+          <div className="device-body">
+            <div
+              className="tuning-scroll"
+              ref={bodyRef}
+              style={{ paddingBottom: bottomBarPad }}
+              onPointerDown={onBodyPointerDown}
+              onPointerMove={onBodyPointerMove}
+              onPointerUp={onBodyPointerUp}
+              onPointerCancel={onBodyPointerUp}
+            >
+              {loadErr && <div className="hint-row show err">{loadErr}</div>}
             {!loadErr && view === "preset" && (
               <PresetView
                 blocks={blocks}
                 blocksEmpty={blocks.length === 0}
                 selectedIds={selectedIds}
                 accentOf={accentOf}
+                effects={effects}
+                onToggleEffect={toggleEffect}
+                onRemoveEffect={removeEffect}
+                onChangeEffectParam={patchEffectParam}
                 activeKey={dragApi.activeKey}
                 flyKey={dragApi.fly?.key ?? null}
                 virtualIndexOf={dragApi.virtualIndexOf}
@@ -497,6 +523,10 @@ export default function App() {
                 blocks={blocks}
                 channelOn={channelOn}
                 selectedIds={selectedIds}
+                effects={effects}
+                onToggleEffect={toggleEffect}
+                onRemoveEffect={removeEffect}
+                onChangeEffectParam={patchEffectParam}
                 activeKey={dragApi.activeKey}
                 flyKey={dragApi.fly?.key ?? null}
                 virtualIndexOf={dragApi.virtualIndexOf}
@@ -525,16 +555,6 @@ export default function App() {
                 </div>
               </div>
             )}
-            <div className="bottom-row">
-              <DevicePropsCard device={selected} peakGain={peakGain} totalBands={totalBands} />
-              <CurvePanel
-                blocks={blocks}
-                fs={selected?.sample_rate ?? 48000}
-                yTop={yTop}
-                curveChannel={curveChannel}
-                onCurveChannelChange={setCurveChannel}
-              />
-            </div>
             {marquee && (
               <div
                 className="marquee-box"
@@ -546,6 +566,17 @@ export default function App() {
                 }}
               />
             )}
+            </div>
+            <div className="bottom-row" ref={bottomRowRef}>
+              <DevicePropsCard device={selected} peakGain={peakGain} totalBands={totalBands} />
+              <CurvePanel
+                blocks={blocks}
+                fs={selected?.sample_rate ?? 48000}
+                yTop={yTop}
+                curveChannel={curveChannel}
+                onCurveChannelChange={setCurveChannel}
+              />
+            </div>
           </div>
         </main>
       </div>

@@ -45,4 +45,12 @@ export interface PresetLibraryEntry {
   bands: (Band & { name?: string })[];
 }
 
+/** 非 peq 效果器（写入 config.toml 的 [[effects]]，driver 原生支持） */
+export interface EffectItem {
+  type: string;
+  enabled: boolean;
+  /** 参数（键与 driver 一致），没有配置的键不写 TOML */
+  params?: Record<string, number | string>;
+}
+
 export type ThemeMode = "light" | "dark" | "system";
