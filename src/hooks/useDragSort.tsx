@@ -1,8 +1,5 @@
-import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { arrayMove } from "@dnd-kit/sortable";
-import type { Block } from "../lib/model";
-import { buildSemanticUnits } from "../lib/blocks";
 
 /** 稳定性约束：消抖必须长于所有拖拽动画，避免动画未结束又触发新一轮布局 */
 const ENTER_DEBOUNCE_MS = 500;
@@ -49,12 +46,15 @@ interface DragListeners {
 }
 
 interface UseDragSortOptions {
-  setBlocks: Dispatch<SetStateAction<Block[]>>;
+  /** 拖拽槽位范围：只收集带相同 data-dnd-group 的卡片 */
+  group: string;
   markDirty: () => void;
   overlayContent: (key: string, num: number) => ReactNode;
+  /** 提交重排结果（key 为目标卡片 key，target 为目标虚拟序号） */
+  commitOrder: (key: string, target: number) => void;
 }
 
-export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSortOptions) {
+export function useDragSort({ group, markDirty, overlayContent, commitOrder }: UseDragSortOptions) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [dragSize, setDragSize] = useState<{ width: number; height: number } | null>(null);
   const [overlayNum, setOverlayNum] = useState(0);
@@ -200,21 +200,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
 
   const commitDragOrder = (d: DragSession, target: number) => {
     markDirty();
-    const key = d.key;
-    if (key.startsWith("s-") || key.startsWith("g-")) {
-      setBlocks((prev) => {
-        const units = buildSemanticUnits(prev);
-        const oi = units.findIndex((u) => u.key === key);
-        if (oi < 0 || oi === target) return prev;
-        return arrayMove(units, oi, target).flatMap((u) => u.blocks);
-      });
-    } else {
-      setBlocks((prev) => {
-        const oi = prev.findIndex((b) => b.id === key);
-        if (oi < 0 || oi === target) return prev;
-        return arrayMove(prev, oi, target);
-      });
-    }
+    commitOrder(d.key, target);
   };
 
   const finalizeDrop = (
@@ -298,7 +284,7 @@ export function useDragSort({ setBlocks, markDirty, overlayContent }: UseDragSor
     resetCardStyles();
     pointerDownRef.current = true;
 
-    const els = Array.from(document.querySelectorAll<HTMLElement>("[data-dnd-id]"));
+    const els = Array.from(document.querySelectorAll<HTMLElement>(`[data-dnd-group="${group}"]`));
     const slots = els.map((el) => ({ key: el.dataset.dndId!, rect: el.getBoundingClientRect() }));
     const order = slots.map((s) => s.key);
     const base = new Map(order.map((k, i) => [k, i]));

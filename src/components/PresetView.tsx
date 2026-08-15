@@ -18,6 +18,9 @@ interface PresetViewProps {
   flyKey: string | null;
   virtualIndexOf: (key: string) => number | null;
   onDragStart: (key: string, x: number, y: number) => void;
+  effectActiveKey: string | null;
+  effectFlyKey: string | null;
+  effectOnDragStart: (key: string, x: number, y: number) => void;
   onRemoveBlock: (idx: number) => void;
   onRemoveGroup: (label: string) => void;
   onPatchBand: (blockIdx: number, bandIdx: number, patch: BandPatch) => void;
@@ -37,6 +40,9 @@ export default function PresetView({
   flyKey,
   virtualIndexOf,
   onDragStart,
+  effectActiveKey,
+  effectFlyKey,
+  effectOnDragStart,
   onRemoveBlock,
   onRemoveGroup,
   onPatchBand,
@@ -77,15 +83,26 @@ export default function PresetView({
       <div className="tuning-section">
         <div className="section-title">效果器</div>
         <div className="cards device-cards">
-          {effects.map((e) => (
-            <EffectSemanticCard
-              key={e.type}
-              effect={e}
-              onToggle={onToggleEffect}
-              onRemove={onRemoveEffect}
-              onStrengthChange={onChangeEffectStrength}
-            />
-          ))}
+          {effects.map((e) => {
+            const effKey = `e-${e.type}`;
+            const effActive = effectActiveKey === effKey || effectFlyKey === effKey;
+            return (
+              <DragCard
+                key={effKey}
+                id={effKey}
+                group="effects"
+                className={`effect-card${e.enabled ? " enabled" : " disabled"}${effActive ? " is-dragging" : ""}`}
+                onDragStart={effectOnDragStart}
+              >
+                <EffectSemanticCard
+                  effect={e}
+                  onToggle={onToggleEffect}
+                  onRemove={onRemoveEffect}
+                  onStrengthChange={onChangeEffectStrength}
+                />
+              </DragCard>
+            );
+          })}
         </div>
       </div>
     </>

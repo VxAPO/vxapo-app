@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Save, Trash2 } from "lucide-react";
+import { arrayMove } from "@dnd-kit/sortable";
 import "./App.css";
 import "./new.css";
 import type { Block, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { LIBRARY } from "./data/library";
-import { presetAccent } from "./lib/blocks";
+import { buildSemanticUnits, presetAccent } from "./lib/blocks";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useDragSort } from "./hooks/useDragSort";
@@ -19,6 +20,8 @@ import CurvePanel from "./components/CurvePanel";
 import DevicePropsCard from "./components/DevicePropsCard";
 import DeviceTabs from "./components/DeviceTabs";
 import DragLayer from "./components/DragLayer";
+import EffectCard from "./components/EffectCard";
+import EffectSemanticCard from "./components/EffectSemanticCard";
 import InstallDialog from "./components/InstallDialog";
 import PresetView from "./components/PresetView";
 import SavePresetDialog from "./components/SavePresetDialog";
@@ -51,6 +54,7 @@ export default function App() {
     blocks,
     setBlocks,
     effects,
+    setEffects,
     markDirty,
     applyPreset,
     addBand,
@@ -84,6 +88,8 @@ export default function App() {
   const bottomRowRef = useRef<HTMLDivElement | null>(null);
   const [bottomBarPad, setBottomBarPad] = useState(220);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const marqueeRafRef = useRef(0);
+  const pendingMarqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [selGeom, setSelGeom] = useState<{ cx: number; top: number; bodyW: number; bodyH: number } | null>(null);
   const [savePresetOpen, setSavePresetOpen] = useState(false);
   const [savePresetBlocks, setSavePresetBlocks] = useState<Block[]>([]);
@@ -145,7 +151,7 @@ export default function App() {
   const onBodyPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const t = e.target as HTMLElement;
-    if (t.closest("[data-dnd-id], button, input, select, .bottom-row")) return;
+    if (t.closest("[data-dnd-id], button, input, select, .bottom-row, .gs-root, [role='slider']")) return;
     const body = bodyRef.current;
     if (!body) return;
     try {
@@ -156,6 +162,9 @@ export default function App() {
     const rect = body.getBoundingClientRect();
     const x = e.clientX - rect.left + body.scrollLeft;
     const y = e.clientY - rect.top + body.scrollTop;
+    window.cancelAnimationFrame(marqueeRafRef.current);
+    marqueeRafRef.current = 0;
+    pendingMarqueeRef.current = null;
     marqueeStartRef.current = { x, y };
     setMarquee({ x1: x, y1: y, x2: x, y2: y });
   };
@@ -167,13 +176,24 @@ export default function App() {
     const rect = body.getBoundingClientRect();
     const x = e.clientX - rect.left + body.scrollLeft;
     const y = e.clientY - rect.top + body.scrollTop;
-    setMarquee({ x1: s.x, y1: s.y, x2: x, y2: y });
+    pendingMarqueeRef.current = { x1: s.x, y1: s.y, x2: x, y2: y };
+    if (!marqueeRafRef.current) {
+      marqueeRafRef.current = requestAnimationFrame(() => {
+        marqueeRafRef.current = 0;
+        const m = pendingMarqueeRef.current;
+        pendingMarqueeRef.current = null;
+        if (m) setMarquee(m);
+      });
+    }
   };
 
   const onBodyPointerUp = () => {
+    window.cancelAnimationFrame(marqueeRafRef.current);
+    marqueeRafRef.current = 0;
     const s = marqueeStartRef.current;
     const body = bodyRef.current;
-    const m = marquee;
+    const m = marquee ?? pendingMarqueeRef.current;
+    pendingMarqueeRef.current = null;
     marqueeStartRef.current = null;
     setMarquee(null);
     if (!s || !body || !m) return;
@@ -189,6 +209,7 @@ export default function App() {
     }
     const ids: string[] = [];
     body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+      if (el.dataset.dndGroup === "effects") return;
       const r = el.getBoundingClientRect();
       const rx = r.left - rect.left + body.scrollLeft;
       const ry = r.top - rect.top + body.scrollTop;
@@ -199,6 +220,8 @@ export default function App() {
     });
     setSelectedIds(ids);
   };
+
+  useEffect(() => () => window.cancelAnimationFrame(marqueeRafRef.current), []);
 
   const deleteSelectedCards = () => {
     const ids = selectedIds;
@@ -302,7 +325,7 @@ export default function App() {
       bodyW: rect.width,
       bodyH: rect.height,
     });
-  }, [selectedIds, blocks]);
+  }, [selectedIds, blocks, view]);
 
   // 工具栏目标位置（选中范围变化后用于飞行）
   const toolbarTarget = useMemo(
@@ -310,10 +333,13 @@ export default function App() {
       selGeom
         ? {
             x: Math.max(8, Math.min(selGeom.cx, selGeom.bodyW - 8)),
-            y: Math.max(8, Math.min(selGeom.top, selGeom.bodyH - 64)),
+            y: Math.max(
+              8,
+              Math.min(selGeom.top - (view === "advanced" ? 26 : 10), selGeom.bodyH - 64),
+            ),
           }
         : null,
-    [selGeom],
+    [selGeom, view],
   );
 
   // 位移动画沿用卡片飞行的二次贝塞尔：控制点水平偏移、先快后慢
@@ -419,7 +445,76 @@ export default function App() {
     [blocks, view, removeBlock, removeGroup, patchBlock, patchBand],
   );
 
-  const dragApi = useDragSort({ setBlocks, markDirty, overlayContent });
+  const commitBlockOrder = useCallback(
+    (key: string, target: number) => {
+      if (key.startsWith("s-") || key.startsWith("g-")) {
+        setBlocks((prev) => {
+          const units = buildSemanticUnits(prev);
+          const oi = units.findIndex((u) => u.key === key);
+          if (oi < 0 || oi === target) return prev;
+          return arrayMove(units, oi, target).flatMap((u) => u.blocks);
+        });
+      } else {
+        setBlocks((prev) => {
+          const oi = prev.findIndex((b) => b.id === key);
+          if (oi < 0 || oi === target) return prev;
+          return arrayMove(prev, oi, target);
+        });
+      }
+    },
+    [setBlocks],
+  );
+
+  const commitEffectOrder = useCallback(
+    (key: string, target: number) => {
+      setEffects((prev) => {
+        const oi = prev.findIndex((e) => `e-${e.type}` === key);
+        if (oi < 0 || oi === target) return prev;
+        return arrayMove(prev, oi, target);
+      });
+    },
+    [setEffects],
+  );
+
+  const effectOverlayContent = useCallback(
+    (key: string, _num: number): ReactNode => {
+      const type = key.slice(2);
+      const e = effects.find((x) => x.type === type);
+      if (!e) return null;
+      if (view === "preset") {
+        return (
+          <EffectSemanticCard
+            effect={e}
+            onToggle={toggleEffect}
+            onRemove={removeEffect}
+            onStrengthChange={patchEffectSemantic}
+          />
+        );
+      }
+      return (
+        <EffectCard
+          effect={e}
+          onToggle={toggleEffect}
+          onRemove={removeEffect}
+          onChangeParam={patchEffectParam}
+        />
+      );
+    },
+    [effects, view, toggleEffect, removeEffect, patchEffectSemantic, patchEffectParam],
+  );
+
+  const blocksDragApi = useDragSort({
+    group: "bands",
+    markDirty,
+    overlayContent,
+    commitOrder: commitBlockOrder,
+  });
+  const effectsDragApi = useDragSort({
+    group: "effects",
+    markDirty,
+    overlayContent: effectOverlayContent,
+    commitOrder: commitEffectOrder,
+  });
 
   const overlayClassForKey = (key: string): string => {
     const b = blocks.find((x) => x.id === key);
@@ -437,7 +532,8 @@ export default function App() {
   };
 
   const switchView = (v: ViewMode) => {
-    dragApi.cancelDrag();
+    blocksDragApi.cancelDrag();
+    effectsDragApi.cancelDrag();
     setSegDir(v === "advanced" ? "right" : "left");
     setView(v);
   };
@@ -509,10 +605,13 @@ export default function App() {
                 onToggleEffect={toggleEffect}
                 onRemoveEffect={removeEffect}
                 onChangeEffectStrength={patchEffectSemantic}
-                activeKey={dragApi.activeKey}
-                flyKey={dragApi.fly?.key ?? null}
-                virtualIndexOf={dragApi.virtualIndexOf}
-                onDragStart={dragApi.startDrag}
+                activeKey={blocksDragApi.activeKey}
+                flyKey={blocksDragApi.fly?.key ?? null}
+                virtualIndexOf={blocksDragApi.virtualIndexOf}
+                onDragStart={blocksDragApi.startDrag}
+                effectActiveKey={effectsDragApi.activeKey}
+                effectFlyKey={effectsDragApi.fly?.key ?? null}
+                effectOnDragStart={effectsDragApi.startDrag}
                 onRemoveBlock={removeBlock}
                 onRemoveGroup={removeGroup}
                 onPatchBand={patchBand}
@@ -528,10 +627,13 @@ export default function App() {
                 onToggleEffect={toggleEffect}
                 onRemoveEffect={removeEffect}
                 onChangeEffectParam={patchEffectParam}
-                activeKey={dragApi.activeKey}
-                flyKey={dragApi.fly?.key ?? null}
-                virtualIndexOf={dragApi.virtualIndexOf}
-                onDragStart={dragApi.startDrag}
+                activeKey={blocksDragApi.activeKey}
+                flyKey={blocksDragApi.fly?.key ?? null}
+                virtualIndexOf={blocksDragApi.virtualIndexOf}
+                onDragStart={blocksDragApi.startDrag}
+                effectActiveKey={effectsDragApi.activeKey}
+                effectFlyKey={effectsDragApi.fly?.key ?? null}
+                effectOnDragStart={effectsDragApi.startDrag}
                 onRemoveBlock={removeBlock}
                 onPatchBlock={patchBlock}
                 onPatchBand={patchBand}
@@ -624,13 +726,24 @@ export default function App() {
         onConfirm={() => void confirmUninstall()}
       />
       <DragLayer
-        activeKey={dragApi.activeKey}
-        dragSize={dragApi.dragSize}
-        fly={dragApi.fly}
-        overlayRef={dragApi.overlayRef}
-        activeContent={dragApi.activeKey ? dragApi.renderOverlay(dragApi.activeKey, dragApi.overlayNum) : null}
+        activeKey={blocksDragApi.activeKey}
+        dragSize={blocksDragApi.dragSize}
+        fly={blocksDragApi.fly}
+        overlayRef={blocksDragApi.overlayRef}
+        activeContent={blocksDragApi.activeKey ? blocksDragApi.renderOverlay(blocksDragApi.activeKey, blocksDragApi.overlayNum) : null}
         classForKey={overlayClassForKey}
         styleForKey={overlayStyleForKey}
+      />
+      <DragLayer
+        activeKey={effectsDragApi.activeKey}
+        dragSize={effectsDragApi.dragSize}
+        fly={effectsDragApi.fly}
+        overlayRef={effectsDragApi.overlayRef}
+        activeContent={effectsDragApi.activeKey ? effectsDragApi.renderOverlay(effectsDragApi.activeKey, effectsDragApi.overlayNum) : null}
+        classForKey={(key) => {
+          const e = effects.find((x) => `e-${x.type}` === key);
+          return `effect-card${e ? (e.enabled ? " enabled" : " disabled") : ""}`;
+        }}
       />
       {notice && <Toast message={notice} />}
     </div>

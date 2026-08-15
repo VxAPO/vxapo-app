@@ -610,7 +610,7 @@ button {
   padding: 12px 12px 210px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 22px;
 }
 
 .tuning-section {
@@ -1228,8 +1228,10 @@ input[type="number"]::-webkit-outer-spin-button {
   outline: none;
 }
 
-.vx-select:focus-visible {
-  box-shadow: 0 0 0 3px var(--brand-soft);
+.vx-select:focus-visible,
+.vx-select[data-state="open"] {
+  outline: none;
+  border-color: var(--brand);
 }
 
 .vx-select-icon {
@@ -1534,7 +1536,7 @@ input[type="number"]::-webkit-outer-spin-button {
   align-items: center;
   justify-content: center;
   height: 10px;
-  margin: -4px 0 2px;
+  margin: -6px 0 2px;
   cursor: grab;
   touch-action: none;
   border-radius: 4px;
@@ -1847,6 +1849,19 @@ input[type="number"]::-webkit-outer-spin-button {
   flex: none;
 }
 
+.fader-row.semantic .sem-label {
+  width: 30px;
+}
+
+.fader-row.semantic .sem-label:last-child {
+  text-align: right;
+}
+
+.fader-row.semantic {
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+
 /* 语义视图组标识：组内卡共用左侧组色边条 */
 .sem-group {
   border-left: 3px solid var(--card-accent, var(--brand));
@@ -1892,12 +1907,55 @@ input[type="number"]::-webkit-outer-spin-button {
   position: relative;
 }
 
+.effect-card.enabled {
+  border-color: rgba(71, 195, 209, 0.55);
+}
+
+/* 效果器卡接入拖拽：占位与悬浮/飞行覆盖层不被卡片自身样式覆盖 */
+.drag-card.is-dragging.effect-card {
+  z-index: 0;
+  background: var(--surface-inset);
+  border: 1px dashed var(--border-strong);
+  box-shadow: none;
+}
+
+.drag-fly.overlay-fixed.effect-card {
+  position: fixed;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+.drag-fly.fly-anim.effect-card {
+  position: fixed;
+}
+
+.effect-card.disabled .effect-name,
+.effect-card.disabled input,
+.effect-card.disabled .g-val {
+  color: var(--text-weak);
+}
+
+.effect-card.disabled .effect-name {
+  font-weight: 400;
+}
+
+.effect-card.disabled input {
+  pointer-events: none;
+}
+
 .effect-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   padding-right: 24px;
+  position: relative;
+}
+
+.effect-card .close-x {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
 }
 
 .effect-name {
@@ -1912,37 +1970,41 @@ input[type="number"]::-webkit-outer-spin-button {
   line-height: 1.5;
 }
 
-.effect-toggle {
+.effect-dot {
   flex: none;
-  min-width: 34px;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 9999px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
   border: 2px solid var(--text-weak);
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.effect-toggle.on {
-  background: #47c3d1;
-  border-color: #47c3d1;
-  color: #fff;
+.effect-dot.on {
+  background: var(--brand);
+  border-color: var(--brand);
 }
 
-.effect-toggle:hover {
+.effect-dot:hover {
   border-color: var(--brand-deep);
+}
+
+.effect-card .g-val {
+  width: 64px;
+  color: #3d4552;
+}
+
+.effect-strength-row .effect-param-label,
+.effect-strength-row .g-val {
+  width: 36px;
 }
 
 .effect-params {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  margin-top: 2px;
+  margin-top: 10px;
 }
 
 .effect-param-row {
@@ -1967,6 +2029,37 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .effect-params .gain-input {
+  flex: none;
+}
+
+.band-params {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.band-param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.band-param-label {
+  flex: none;
+  width: 56px;
+  font-size: 11px;
+  color: var(--text-weak);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.band-param-row .gs-root {
+  flex: 1;
+}
+
+.band-param-row .gain-input {
   flex: none;
 }
 
@@ -2015,9 +2108,13 @@ input[type="number"]::-webkit-outer-spin-button {
   gap: 8px;
   padding: 10px 12px;
   border-radius: 14px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  background: color-mix(in srgb, var(--card) 45%, transparent);
+  backdrop-filter: blur(32px) saturate(1.3);
+  -webkit-backdrop-filter: blur(32px) saturate(1.3);
+  border: 1px solid color-mix(in srgb, var(--border) 55%, #ffffff);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 6px 16px rgba(0, 0, 0, 0.15);
   animation: sel-toolbar-in 0.22s ease-out;
 }
 
@@ -2058,24 +2155,29 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .sel-action.delete {
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
 }
 
 .sel-action.delete:hover {
-  filter: brightness(1.08);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
 }
 
 @keyframes sel-toolbar-in {
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(6px);
-    box-shadow: var(--hover-shadow);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      var(--hover-shadow);
   }
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      0 6px 16px rgba(0, 0, 0, 0.15);
   }
 }
 

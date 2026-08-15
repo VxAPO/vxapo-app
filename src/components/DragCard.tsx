@@ -6,12 +6,26 @@ interface DragCardProps {
   className?: string;
   style?: CSSProperties;
   hidden?: boolean;
+  group?: string;
   onDragStart: (key: string, x: number, y: number) => void;
 }
 
-export default function DragCard({ id, children, className = "", style, hidden = false, onDragStart }: DragCardProps) {
+export default function DragCard({
+  id,
+  children,
+  className = "",
+  style,
+  hidden = false,
+  group = "bands",
+  onDragStart,
+}: DragCardProps) {
   return (
-    <div className={`drag-card ${className}`} data-dnd-id={id} style={{ ...style, display: hidden ? "none" : undefined }}>
+    <div
+      className={`drag-card ${className}`}
+      data-dnd-id={id}
+      data-dnd-group={group}
+      style={{ ...style, display: hidden ? "none" : undefined }}
+    >
       <div
         className="drag-bar"
         onPointerDown={(e) => {

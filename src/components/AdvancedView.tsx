@@ -17,6 +17,9 @@ interface AdvancedViewProps {
   flyKey: string | null;
   virtualIndexOf: (key: string) => number | null;
   onDragStart: (key: string, x: number, y: number) => void;
+  effectActiveKey: string | null;
+  effectFlyKey: string | null;
+  effectOnDragStart: (key: string, x: number, y: number) => void;
   onRemoveBlock: (idx: number) => void;
   onPatchBlock: (idx: number, patch: Partial<Block>) => void;
   onPatchBand: (blockIdx: number, bandIdx: number, patch: BandPatch) => void;
@@ -35,6 +38,9 @@ export default function AdvancedView({
   flyKey,
   virtualIndexOf,
   onDragStart,
+  effectActiveKey,
+  effectFlyKey,
+  effectOnDragStart,
   onRemoveBlock,
   onPatchBlock,
   onPatchBand,
@@ -75,15 +81,26 @@ export default function AdvancedView({
       <div className="tuning-section">
         <div className="section-title">效果器</div>
         <div className="cards device-cards">
-          {effects.map((e) => (
-            <EffectCard
-              key={e.type}
-              effect={e}
-              onToggle={onToggleEffect}
-              onRemove={onRemoveEffect}
-              onChangeParam={onChangeEffectParam}
-            />
-          ))}
+          {effects.map((e) => {
+            const effKey = `e-${e.type}`;
+            const effActive = effectActiveKey === effKey || effectFlyKey === effKey;
+            return (
+              <DragCard
+                key={effKey}
+                id={effKey}
+                group="effects"
+                className={`effect-card${e.enabled ? " enabled" : " disabled"}${effActive ? " is-dragging" : ""}`}
+                onDragStart={effectOnDragStart}
+              >
+                <EffectCard
+                  effect={e}
+                  onToggle={onToggleEffect}
+                  onRemove={onRemoveEffect}
+                  onChangeParam={onChangeEffectParam}
+                />
+              </DragCard>
+            );
+          })}
         </div>
       </div>
     </>

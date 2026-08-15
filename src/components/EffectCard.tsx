@@ -19,27 +19,26 @@ export default function EffectCard({ effect, onToggle, onRemove, onChangeParam }
   const defs = effectParams(effect.type);
 
   return (
-    <div className="effect-card">
-      <button
-        className="close-x"
-        type="button"
-        aria-label="删除效果器"
-        onClick={() => onRemove(effect.type)}
-      >
-        <X size={12} strokeWidth={2.5} />
-      </button>
+    <>
       <div className="effect-head">
-        <span className="effect-name">{def?.name ?? effect.type}</span>
         <button
-          className={`effect-toggle${effect.enabled ? " on" : ""}`}
+          className={`effect-dot${effect.enabled ? " on" : ""}`}
           type="button"
           aria-pressed={effect.enabled}
+          aria-label={effect.enabled ? "停用效果器" : "启用效果器"}
+          title={effect.enabled ? "点击停用效果器" : "点击启用效果器"}
           onClick={() => onToggle(effect.type)}
+        />
+        <span className="effect-name">{def?.name ?? effect.type}</span>
+        <button
+          className="close-x"
+          type="button"
+          aria-label="删除效果器"
+          onClick={() => onRemove(effect.type)}
         >
-          {effect.enabled ? "开" : "关"}
+          <X size={12} strokeWidth={2.5} />
         </button>
       </div>
-      {def?.desc ? <p className="effect-desc">{def.desc}</p> : null}
       {defs.length > 0 && (
         <div className="effect-params">
           {defs.map((p) => {
@@ -90,6 +89,6 @@ export default function EffectCard({ effect, onToggle, onRemove, onChangeParam }
           })}
         </div>
       )}
-    </div>
+    </>
   );
 }
