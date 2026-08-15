@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Device } from "../lib/model";
 
 interface DevicePropsCardProps {
@@ -8,7 +9,7 @@ interface DevicePropsCardProps {
   channelCounts: number[];
 }
 
-export default function DevicePropsCard({
+function DevicePropsCard({
   device: selected,
   peakGain,
   totalBands,
@@ -29,3 +30,5 @@ export default function DevicePropsCard({
     </div>
   );
 }
+
+export default memo(DevicePropsCard);

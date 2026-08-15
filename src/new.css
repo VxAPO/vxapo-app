@@ -92,7 +92,7 @@ button {
 .logo {
   width: 18px;
   height: 18px;
-  margin-left: 8px;
+  margin-left: 4px;
   margin-right: 4px;
   position: relative;
   top: -1px;
@@ -296,7 +296,7 @@ button {
 .cards {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .device-cards {
@@ -394,9 +394,14 @@ button {
 }
 
 .p-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   margin: 0 0 4px;
+}
+
+.p-group {
+  font-size: 14px;
+  color: var(--preset-accent, var(--brand-deep));
 }
 
 .p-desc {
@@ -422,9 +427,13 @@ button {
   height: 24px;
   padding: 0 12px;
   font-size: 12px;
-  background: var(--accent-bg);
-  color: var(--on-accent);
+  background: var(--preset-accent, var(--brand));
+  color: #fff;
   font-weight: 500;
+}
+
+.add:not(:disabled):hover {
+  filter: brightness(1.08);
 }
 
 .adv-list {
@@ -771,6 +780,30 @@ button {
   box-shadow: var(--card-shadow);
 }
 
+.group-card.enabled {
+  border-color: rgba(71, 195, 209, 0.55);
+}
+
+/* 组卡启用描边跟随组色（无组卡保持默认青色描边） */
+.group-card.enabled.sem-group {
+  border-color: var(--card-accent, var(--brand));
+}
+
+.group-card.disabled .enable-dot {
+  color: #3d4552;
+  border-color: #3d4552;
+}
+
+.group-card.disabled .g-name {
+  color: var(--text-weak);
+  font-weight: 400;
+}
+
+.group-card.disabled input {
+  color: var(--text-weak);
+  pointer-events: none;
+}
+
 .group-card.standalone {
   grid-column: auto;
   max-width: none;
@@ -862,7 +895,6 @@ button {
   gap: 12px;
   height: 36px;
   border-radius: 10px;
-  border: 1px solid var(--border);
   background: var(--card);
   padding: 0 12px;
   width: fit-content;
@@ -967,7 +999,7 @@ button {
   border: 2px solid var(--text-weak);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   display: inline-flex;
@@ -1034,7 +1066,7 @@ button {
 }
 
 .field-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-weak);
   line-height: 1;
 }
@@ -1197,13 +1229,6 @@ input[type="number"]::-webkit-outer-spin-button {
   backdrop-filter: blur(40px) saturate(1.4);
   -webkit-backdrop-filter: blur(40px) saturate(1.4);
   pointer-events: auto;
-}
-
-:root.is-resizing .curve-wrap,
-:root.is-resizing .dev-props-card,
-:root.is-resizing .sel-toolbar {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
 }
 
 .curve-head {
@@ -1521,7 +1546,7 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .seg.view-seg {
   position: absolute;
-  left: 50%;
+  left: calc(50% + var(--sidebar-w, 0px) / 2);
   top: 50%;
   transform: translate(-50%, -50%);
   display: inline-flex;
@@ -2001,7 +2026,7 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .sem-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-weak);
   flex: none;
 }
@@ -2026,6 +2051,17 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .sem-group .group-head {
   padding-right: 96px;
+}
+
+/* 组卡数字标号开关配色统一跟随组色 */
+.sem-group .enable-dot.on {
+  background: var(--card-accent, var(--brand));
+  border-color: var(--card-accent, var(--brand));
+  color: #fff;
+}
+
+.sem-group .enable-dot:hover {
+  border-color: var(--card-accent, var(--brand));
 }
 
 .sem-chip {
@@ -2171,7 +2207,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .effect-param-label {
   flex: none;
   width: 64px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-weak);
   white-space: nowrap;
   overflow: hidden;
@@ -2202,7 +2238,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .band-param-label {
   flex: none;
   width: 56px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-weak);
   white-space: nowrap;
   overflow: hidden;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../lib/model";
 import { channelLabel } from "../lib/channels";
 import CurvePlot from "./CurvePlot";
@@ -15,7 +15,7 @@ interface CurvePanelProps {
   firstChannel: string;
 }
 
-export default function CurvePanel({
+function CurvePanel({
   blocks,
   fs,
   yTop,
@@ -28,6 +28,20 @@ export default function CurvePanel({
   const [curveW, setCurveW] = useState(640);
   const curveRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef(0);
+  const visibleBlocks = useMemo(
+    () =>
+      channelOn
+        ? blocks.filter((b) => (b.channel ?? firstChannel) === curveChannel)
+        : blocks,
+    [blocks, channelOn, curveChannel, firstChannel],
+  );
+  const channelOptions = useMemo(
+    () =>
+      channelOn
+        ? channelNames.map((c) => ({ value: c, label: channelLabel(c) }))
+        : [{ value: "all", label: "全部声道" }],
+    [channelOn, channelNames],
+  );
 
   useEffect(() => {
     const el = curveRef.current;
@@ -55,21 +69,13 @@ export default function CurvePanel({
         <span className="t">频响曲线</span>
         <VxSelect
           value={curveChannel}
-          options={
-            channelOn
-              ? channelNames.map((c) => ({ value: c, label: channelLabel(c) }))
-              : [{ value: "all", label: "全部声道" }]
-          }
+          options={channelOptions}
           onValueChange={onCurveChannelChange}
           ariaLabel="声道"
         />
       </div>
       <CurvePlot
-        blocks={
-          channelOn
-            ? blocks.filter((b) => (b.channel ?? firstChannel) === curveChannel)
-            : blocks
-        }
+        blocks={visibleBlocks}
         fs={fs}
         curveW={curveW}
         yTop={yTop}
@@ -77,3 +83,5 @@ export default function CurvePanel({
     </div>
   );
 }
+
+export default memo(CurvePanel);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
 /** 稳定性约束：消抖必须长于所有拖拽动画，避免动画未结束又触发新一轮布局 */
@@ -76,6 +76,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   const flySafetyRef = useRef<number | undefined>(undefined);
   const overlayContentRef = useRef(overlayContent);
   overlayContentRef.current = overlayContent;
+  const optionsRef = useRef({ markDirty, commitOrder });
+  optionsRef.current = { markDirty, commitOrder };
 
   const revealDraggedCards = () => {
     // 兜底：无论 is-dragging 类是否被状态更新打断，落地动画期间原卡片内容都必须保持隐藏
@@ -199,6 +201,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   };
 
   const commitDragOrder = (d: DragSession, target: number) => {
+    const { markDirty, commitOrder } = optionsRef.current;
     markDirty();
     commitOrder(d.key, target);
   };
@@ -257,7 +260,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     });
   };
 
-  const renderOverlay = (key: string, num: number): ReactNode => {
+  const renderOverlay = useCallback((key: string, num: number): ReactNode => {
     const content = overlayContentRef.current(key, num);
     if (content == null) {
       const html = dragRef.current?.html;
@@ -272,9 +275,9 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
         {content}
       </>
     );
-  };
+  }, []);
 
-  const startDrag = (key: string, x: number, y: number) => {
+  const startDrag = useCallback((key: string, x: number, y: number) => {
     const token = ++dragTokenRef.current;
     settlingRef.current = false;
     removeListeners();
@@ -401,9 +404,9 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
-  };
+  }, [group]);
 
-  const cancelDrag = () => {
+  const cancelDrag = useCallback(() => {
     pointerDownRef.current = false;
     settlingRef.current = false;
     window.clearTimeout(flySafetyRef.current);
@@ -416,7 +419,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     setFly(null);
     flyRef.current = null;
     setTick((t) => t + 1);
-  };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -436,12 +439,15 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     };
   }, []);
 
-  const virtualIndexOf = (key: string): number | null =>
-    dragRef.current && !settlingRef.current
-      ? dragRef.current.virtual.get(key) ?? null
-      : null;
+  const virtualIndexOf = useCallback(
+    (key: string): number | null =>
+      dragRef.current && !settlingRef.current
+        ? dragRef.current.virtual.get(key) ?? null
+        : null,
+    [],
+  );
 
-  const completeFly = (id: number) => {
+  const completeFly = useCallback((id: number) => {
     window.clearTimeout(flySafetyRef.current);
     setFly((prev) => {
       if (prev && prev.id === id) {
@@ -451,7 +457,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       }
       return prev;
     });
-  };
+  }, []);
 
   return {
     activeKey,

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, Copy, Save, Trash2 } from "lucide-react";
 import { arrayMove } from "@dnd-kit/sortable";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
 import type { Block, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { LIBRARY } from "./data/library";
-import { buildSemanticUnits, presetAccent } from "./lib/blocks";
+import { accentStyle, buildSemanticUnits, presetAccent } from "./lib/blocks";
 import { channelLabel, channelNamesFor } from "./lib/channels";
+import { loadCustomPresets, loadPresetMeta, saveStored } from "./lib/storage";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useDragSort } from "./hooks/useDragSort";
@@ -27,6 +27,7 @@ import EffectSemanticCard from "./components/EffectSemanticCard";
 import InstallDialog from "./components/InstallDialog";
 import PresetView from "./components/PresetView";
 import SavePresetDialog from "./components/SavePresetDialog";
+import SelectionToolbar from "./components/SelectionToolbar";
 import SemanticUnitCard from "./components/SemanticUnitCard";
 import SettingsDialog from "./components/SettingsDialog";
 import Sidebar from "./components/Sidebar";
@@ -34,10 +35,14 @@ import Toast from "./components/Toast";
 import TopBar from "./components/TopBar";
 import UninstallDialog from "./components/UninstallDialog";
 
+/** 底部悬浮条预留高度：保证最后一行卡片能完全滚到悬浮条上方 */
+const BOTTOM_BAR_PAD = 400;
+
 export default function App() {
   const { notice, notify } = useToast();
   const [loadErr, setLoadErr] = useState("");
   const onError = useCallback((msg: string) => setLoadErr(msg), []);
+  const handleUninstalled = useCallback((name: string) => notify(`已卸载 ${name}`), [notify]);
 
   const {
     selectedGuid,
@@ -50,7 +55,7 @@ export default function App() {
     setUninstallTarget,
     uninstalling,
     confirmUninstall,
-  } = useDevices(onError, (name) => notify(`已卸载 ${name}`));
+  } = useDevices(onError, handleUninstalled);
 
   const [channelOn, setChannelOn] = useState(false);
   const [activeChannel, setActiveChannel] = useState("L");
@@ -100,9 +105,6 @@ export default function App() {
   const [hintShift, setHintShift] = useState(0);
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  const bottomRowRef = useRef<HTMLDivElement | null>(null);
-  const resizeClassTimerRef = useRef<number | undefined>(undefined);
-  const [bottomBarPad, setBottomBarPad] = useState(400);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
   const pendingMarqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -111,13 +113,7 @@ export default function App() {
   const [savePresetBlocks, setSavePresetBlocks] = useState<Block[]>([]);
   const [savePresetDefaultName, setSavePresetDefaultName] = useState("自定义预设");
   const [deletePresetTarget, setDeletePresetTarget] = useState<PresetLibraryEntry | null>(null);
-  const [presetMeta, setPresetMeta] = useState<Record<string, { presetId: string; accent: string }>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("vxapo.presetMeta") ?? "{}");
-    } catch {
-      return {};
-    }
-  });
+  const [presetMeta, setPresetMeta] = useState(loadPresetMeta);
   const toolbarElRef = useRef<HTMLDivElement | null>(null);
   const toolbarAnimRef = useRef<{
     raf: number;
@@ -126,20 +122,14 @@ export default function App() {
     to: { x: number; y: number };
     t0: number;
   } | null>(null);
-  const [customPresets, setCustomPresets] = useState<PresetLibraryEntry[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("vxapo.customPresets") ?? "[]") as PresetLibraryEntry[];
-    } catch {
-      return [];
-    }
-  });
+  const [customPresets, setCustomPresets] = useState(loadCustomPresets);
 
   useEffect(() => {
-    localStorage.setItem("vxapo.customPresets", JSON.stringify(customPresets));
+    saveStored("vxapo.customPresets", customPresets);
   }, [customPresets]);
 
   useEffect(() => {
-    localStorage.setItem("vxapo.presetMeta", JSON.stringify(presetMeta));
+    saveStored("vxapo.presetMeta", presetMeta);
   }, [presetMeta]);
 
   const peakGain = useMemo(() => {
@@ -166,7 +156,8 @@ export default function App() {
 
   const onBodyPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    const t = e.target as HTMLElement;
+    const t = e.target;
+    if (!(t instanceof Element)) return;
     if (t.closest("[data-dnd-id], button, input, select, .bottom-row, .gs-root, [role='slider']")) return;
     const body = bodyRef.current;
     if (!body) return;
@@ -239,22 +230,6 @@ export default function App() {
 
   useEffect(() => () => window.cancelAnimationFrame(marqueeRafRef.current), []);
 
-  // 窗口拉伸期间临时关掉毛玻璃，避免每帧重算 backdrop-filter 造成卡顿
-  useEffect(() => {
-    const onResize = () => {
-      document.documentElement.classList.add("is-resizing");
-      window.clearTimeout(resizeClassTimerRef.current);
-      resizeClassTimerRef.current = window.setTimeout(() => {
-        document.documentElement.classList.remove("is-resizing");
-      }, 180);
-    };
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.clearTimeout(resizeClassTimerRef.current);
-    };
-  }, []);
-
   // 空态提示行水平对齐顶栏视图切换的真实中心（左右按钮簇宽度不同，不能按窗口中心算）
   useLayoutEffect(() => {
     const scrollEl = bodyRef.current;
@@ -275,15 +250,15 @@ export default function App() {
     };
   }, []);
 
-  const deleteSelectedCards = () => {
+  const deleteSelectedCards = useCallback(() => {
     const ids = selectedIds;
     if (!ids.length) return;
     markDirty();
     setBlocks((prev) => prev.filter((b) => !ids.includes(b.id ?? "")));
     setSelectedIds([]);
-  };
+  }, [selectedIds, markDirty]);
 
-  const copySelectedToChannel = (ch: string) => {
+  const copySelectedToChannel = useCallback((ch: string) => {
     const ids = selectedIds;
     if (!ids.length || !channelOn) return;
     const count = ids.length;
@@ -307,25 +282,26 @@ export default function App() {
     setActiveChannel(ch);
     setCopyOpen(false);
     notify(`已复制 ${count} 段到${channelLabel(ch)}`);
-  };
+  }, [selectedIds, channelOn, channelBandCounts, markDirty, notify]);
 
   useEffect(() => {
     if (!copyOpen) return;
     const close = (e: PointerEvent) => {
-      if ((e.target as HTMLElement).closest(".sel-copy")) return;
+      const t = e.target;
+      if (t instanceof Element && t.closest(".sel-copy")) return;
       setCopyOpen(false);
     };
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
   }, [copyOpen]);
 
-  const openSavePreset = () => {
+  const openSavePreset = useCallback(() => {
     const picked = blocks.filter((b) => selectedIds.includes(b.id ?? ""));
     if (!picked.length) return;
     setSavePresetBlocks(picked);
     setSavePresetDefaultName(`自定义预设 ${customPresets.length + 1}`);
     setSavePresetOpen(true);
-  };
+  }, [blocks, selectedIds, customPresets]);
 
   // 已使用：当前 blocks 里还存在该预设注册过组标签的卡片
   const usedPresetIds = useMemo(() => {
@@ -337,10 +313,13 @@ export default function App() {
   }, [blocks, presetMeta]);
 
   // 卡片配色：预设注册的组色优先，否则按频段感知推导
-  const accentOf = (b: Block): string =>
-    (b.group ? presetMeta[b.group]?.accent : undefined) ?? presetAccent(b.bands);
+  const accentOf = useCallback(
+    (b: Block): string =>
+      (b.group ? presetMeta[b.group]?.accent : undefined) ?? presetAccent(b.bands),
+    [presetMeta],
+  );
 
-  const handleApplyPreset = (p: PresetLibraryEntry) => {
+  const handleApplyPreset = useCallback((p: PresetLibraryEntry) => {
     if (usedPresetIds.has(p.id)) {
       notify("该预设已添加过一次");
       return;
@@ -352,9 +331,9 @@ export default function App() {
         [label]: { presetId: p.id, accent: p.color ?? presetAccent(p.bands) },
       }));
     }
-  };
+  }, [usedPresetIds, applyPreset, notify]);
 
-  const handleSavePreset = (name: string, desc: string, color: string, descriptions: string[]) => {
+  const handleSavePreset = useCallback((name: string, desc: string, color: string, descriptions: string[]) => {
     const entry: PresetLibraryEntry = {
       id: `custom-${Date.now()}`,
       group: "自定义",
@@ -370,14 +349,14 @@ export default function App() {
     setSavePresetOpen(false);
     setSelectedIds([]);
     notify("已保存自定义预设");
-  };
+  }, [savePresetBlocks, notify]);
 
-  const confirmDeletePreset = () => {
+  const confirmDeletePreset = useCallback(() => {
     if (!deletePresetTarget) return;
     setCustomPresets((prev) => prev.filter((p) => p.id !== deletePresetTarget.id));
     setDeletePresetTarget(null);
     notify("已删除自定义预设");
-  };
+  }, [deletePresetTarget, notify]);
 
   // 选中工具栏几何：按选中卡片包围盒宽度取水平中心，下边距按网格行高动态计算
   useEffect(() => {
@@ -488,17 +467,6 @@ export default function App() {
     [],
   );
 
-  // 底部悬浮条真实高度 -> 调音区底部留白，保证最后一行卡片能完全滚到悬浮条上方
-  useLayoutEffect(() => {
-    const el = bottomRowRef.current;
-    if (!el) return;
-    const update = () => setBottomBarPad(400);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [installedDevices.length]);
-
   const overlayContent = useCallback(
     (key: string, num: number): ReactNode => {
       const bi = blocks.findIndex((b) => b.id === key);
@@ -514,6 +482,7 @@ export default function App() {
             num={num}
             onRemoveBlock={removeBlock}
             onRemoveGroup={removeGroup}
+            onPatchBlock={patchBlock}
             onPatchBand={patchBand}
           />
         );
@@ -617,36 +586,78 @@ export default function App() {
     commitOrder: commitEffectOrder,
   });
 
-  const overlayClassForKey = (key: string): string => {
-    const b = blocks.find((x) => x.id === key);
-    if (!b) return "group-card";
-    return view === "preset"
-      ? "group-card standalone"
-      : `band-card${b.enabled ? " enabled" : " disabled"}`;
-  };
+  const overlayClassForKey = useCallback(
+    (key: string): string => {
+      const b = blocks.find((x) => x.id === key);
+      if (!b) return "group-card";
+      return view === "preset"
+        ? `group-card standalone${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}`
+        : `band-card${b.enabled ? " enabled" : " disabled"}`;
+    },
+    [blocks, view],
+  );
 
   // 拖拽悬浮/飞行副本携带组配色，组名+叉的 chip 使用真实组色
-  const overlayStyleForKey = (key: string): CSSProperties | undefined => {
-    if (view !== "preset") return undefined;
-    const b = blocks.find((x) => x.id === key);
-    return b ? ({ "--card-accent": accentOf(b) } as CSSProperties) : undefined;
-  };
+  const overlayStyleForKey = useCallback(
+    (key: string): CSSProperties | undefined => {
+      if (view !== "preset") return undefined;
+      const b = blocks.find((x) => x.id === key);
+      return b ? accentStyle(accentOf(b)) : undefined;
+    },
+    [view, blocks, accentOf],
+  );
 
-  const switchView = (v: ViewMode) => {
+  const effectOverlayClassForKey = useCallback(
+    (key: string): string => {
+      const e = effects.find((x) => `e-${x.type}` === key);
+      return `effect-card${e ? (e.enabled ? " enabled" : " disabled") : ""}`;
+    },
+    [effects],
+  );
+
+  const switchView = useCallback((v: ViewMode) => {
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
     setSegDir(v === "advanced" ? "right" : "left");
     setView(v);
-  };
+  }, [blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
 
-  const toggleChannel = () => {
+  const toggleChannel = useCallback(() => {
     markDirty();
     setChannelOn((v) => !v);
     setView("advanced");
     setSegDir("right");
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
-  };
+  }, [markDirty, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
+
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openInstall = useCallback(() => setInstallOpen(true), []);
+  const handleToggleMaximize = useCallback(() => void toggleMaximize(), [toggleMaximize]);
+  const handleInstalled = useCallback((name: string) => notify(`已安装 ${name}`), [notify]);
+  const handleCurveChannelChange = useCallback(
+    (v: string) => {
+      if (channelOn) setActiveChannel(v);
+    },
+    [channelOn],
+  );
+  const handleAddBand = useCallback(() => addBand(effActiveChannel), [addBand, effActiveChannel]);
+  const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
+  const closeDeletePreset = useCallback((open: boolean) => {
+    if (!open) setDeletePresetTarget(null);
+  }, []);
+  const closeUninstall = useCallback((open: boolean) => {
+    if (!open) setUninstallTarget(null);
+  }, []);
+  const handleConfirmUninstall = useCallback(() => {
+    void confirmUninstall();
+  }, [confirmUninstall]);
+
+  const usedPresetList = useMemo(() => [...usedPresetIds], [usedPresetIds]);
+  const channelCounts = useMemo(
+    () => channelNames.map((c) => channelBandCounts[c] ?? 0),
+    [channelNames, channelBandCounts],
+  );
 
   return (
     <div className="app-shell-new">
@@ -657,9 +668,9 @@ export default function App() {
         segDir={segDir}
         isMax={isMax}
         onViewChange={switchView}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={openSettings}
         onMinimize={minimize}
-        onToggleMaximize={() => void toggleMaximize()}
+        onToggleMaximize={handleToggleMaximize}
         onClose={close}
       />
 
@@ -670,12 +681,12 @@ export default function App() {
           onSideChange={setSide}
           library={LIBRARY}
           customPresets={customPresets}
-          usedPresets={[...usedPresetIds]}
+          usedPresets={usedPresetList}
           effects={effects}
           onApplyPreset={handleApplyPreset}
           onDeletePreset={setDeletePresetTarget}
           onAddEffect={addEffect}
-          onAddBand={() => addBand(effActiveChannel)}
+          onAddBand={handleAddBand}
           channelOn={channelOn}
           onToggleChannel={toggleChannel}
         />
@@ -688,7 +699,7 @@ export default function App() {
             onSelect={setSelectedGuid}
             onToggleTuning={toggleDeviceTuning}
             onUninstall={setUninstallTarget}
-            onAdd={() => setInstallOpen(true)}
+            onAdd={openInstall}
           />
 
           <div className="device-body">
@@ -713,7 +724,7 @@ export default function App() {
             <div
               className="tuning-scroll"
               ref={bodyRef}
-              style={{ paddingBottom: bottomBarPad }}
+              style={{ paddingBottom: BOTTOM_BAR_PAD }}
               onPointerDown={onBodyPointerDown}
               onPointerMove={onBodyPointerMove}
               onPointerUp={onBodyPointerUp}
@@ -741,6 +752,7 @@ export default function App() {
                 effectOnDragStart={effectsDragApi.startDrag}
                 onRemoveBlock={removeBlock}
                 onRemoveGroup={removeGroup}
+                onPatchBlock={patchBlock}
                 onPatchBand={patchBand}
               />
             )}
@@ -775,51 +787,18 @@ export default function App() {
             )}
 
             {selGeom && selectedIds.length > 0 && (
-              <div
-                className="sel-toolbar"
-                ref={toolbarElRef}
-              >
-                <div className="sel-toolbar-label">已选 {selectedIds.length} 段</div>
-                <div className="sel-toolbar-actions">
-                  {channelOn && (
-                    <div className="sel-copy">
-                      <button
-                        type="button"
-                        className="sel-copy-btn"
-                        onClick={() => setCopyOpen((o) => !o)}
-                      >
-                        <Copy size={14} strokeWidth={2.2} />
-                        <span>复制到声道</span>
-                        <ChevronDown size={14} />
-                      </button>
-                      {copyOpen && (
-                        <div className="sel-copy-menu">
-                          {channelNames
-                            .filter((c) => c !== effActiveChannel)
-                            .map((c) => (
-                              <button
-                                key={c}
-                                type="button"
-                                className="sel-copy-item"
-                                onClick={() => copySelectedToChannel(c)}
-                              >
-                                {channelLabel(c)}
-                              </button>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <button className="sel-action save" type="button" onClick={openSavePreset}>
-                    <Save size={14} strokeWidth={2.2} />
-                    <span>保存为自定义预设</span>
-                  </button>
-                  <button className="sel-action delete" type="button" onClick={deleteSelectedCards}>
-                    <Trash2 size={14} strokeWidth={2.2} />
-                    <span>删除</span>
-                  </button>
-                </div>
-              </div>
+              <SelectionToolbar
+                selectedCount={selectedIds.length}
+                channelOn={channelOn}
+                channelNames={channelNames}
+                activeChannel={effActiveChannel}
+                copyOpen={copyOpen}
+                toolbarRef={toolbarElRef}
+                onToggleCopy={handleToggleCopy}
+                onCopyToChannel={copySelectedToChannel}
+                onSave={openSavePreset}
+                onDelete={deleteSelectedCards}
+              />
             )}
             {marquee && (
               <div
@@ -833,22 +812,20 @@ export default function App() {
               />
             )}
             </div>
-            <div className="bottom-row" ref={bottomRowRef}>
+            <div className="bottom-row">
               <DevicePropsCard
                 device={selected}
                 peakGain={peakGain}
                 totalBands={totalBands}
                 channelOn={channelOn}
-                channelCounts={channelNames.map((c) => channelBandCounts[c] ?? 0)}
+                channelCounts={channelCounts}
               />
               <CurvePanel
                 blocks={blocks}
                 fs={selected?.sample_rate ?? 48000}
                 yTop={yTop}
                 curveChannel={channelOn ? effActiveChannel : "all"}
-                onCurveChannelChange={(v) => {
-                  if (channelOn) setActiveChannel(v);
-                }}
+                onCurveChannelChange={handleCurveChannelChange}
                 channelOn={channelOn}
                 channelNames={channelNames}
                 firstChannel={channelNames[0] ?? "L"}
@@ -875,9 +852,7 @@ export default function App() {
       />
       <ConfirmDialog
         open={deletePresetTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeletePresetTarget(null);
-        }}
+        onOpenChange={closeDeletePreset}
         title="删除自定义预设"
         message={
           deletePresetTarget ? `确定删除“${deletePresetTarget.name}”吗？删除后不可恢复。` : ""
@@ -890,16 +865,14 @@ export default function App() {
         devices={devices}
         onError={onError}
         onRefresh={refresh}
-        onInstalled={(name) => notify(`已安装 ${name}`)}
+        onInstalled={handleInstalled}
       />
       <UninstallDialog
         device={uninstallTarget}
         open={uninstallTarget !== null}
         busy={uninstalling}
-        onOpenChange={(open) => {
-          if (!open) setUninstallTarget(null);
-        }}
-        onConfirm={() => void confirmUninstall()}
+        onOpenChange={closeUninstall}
+        onConfirm={handleConfirmUninstall}
       />
       <DragLayer
         activeKey={blocksDragApi.activeKey}
@@ -916,10 +889,7 @@ export default function App() {
         fly={effectsDragApi.fly}
         overlayRef={effectsDragApi.overlayRef}
         activeContent={effectsDragApi.activeKey ? effectsDragApi.renderOverlay(effectsDragApi.activeKey, effectsDragApi.overlayNum) : null}
-        classForKey={(key) => {
-          const e = effects.find((x) => `e-${x.type}` === key);
-          return `effect-card${e ? (e.enabled ? " enabled" : " disabled") : ""}`;
-        }}
+        classForKey={effectOverlayClassForKey}
       />
       {notice && <Toast message={notice} />}
     </div>

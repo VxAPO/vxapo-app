@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { X } from "lucide-react";
 import type { Device } from "../lib/model";
 
@@ -11,7 +12,7 @@ interface DeviceTabsProps {
   onAdd: () => void;
 }
 
-export default function DeviceTabs({
+function DeviceTabs({
   devices,
   selectedGuid,
   tuningOn,
@@ -62,3 +63,5 @@ export default function DeviceTabs({
     </div>
   );
 }
+
+export default memo(DeviceTabs);

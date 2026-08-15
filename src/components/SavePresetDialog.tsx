@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
@@ -28,7 +28,7 @@ function fmtDb(db: number): string {
 }
 
 /** 保存自定义预设：可编辑整体名称与每段 PEAK 的语义描述 */
-export default function SavePresetDialog({
+function SavePresetDialog({
   open,
   onOpenChange,
   blocks,
@@ -140,3 +140,5 @@ export default function SavePresetDialog({
     </Dialog.Root>
   );
 }
+
+export default memo(SavePresetDialog);

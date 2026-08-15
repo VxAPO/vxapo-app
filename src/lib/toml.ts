@@ -120,7 +120,7 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
         break;
       case "channels": {
         try {
-          const arr = JSON.parse(value) as unknown;
+          const arr: unknown = JSON.parse(value);
           if (Array.isArray(arr) && arr.length) current.channel = String(arr[0]);
         } catch {
           /* 忽略无法解析的 channels */

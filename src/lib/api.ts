@@ -17,8 +17,7 @@ export async function writeConfig(guid: string, content: string): Promise<void> 
 
 export async function listDevices(): Promise<Device[]> {
   if (!isTauri) return [];
-  const raw = await invoke<string>("list_devices");
-  return JSON.parse(raw) as Device[];
+  return invoke<Device[]>("list_devices");
 }
 
 export async function uninstallDevice(guid: string): Promise<void> {
@@ -47,4 +46,9 @@ export function friendlyError(e: unknown): string {
   const msg = String(e);
   if (/os error 5/i.test(msg)) return "权限不足，无法读写配置（请以管理员身份运行一次以修复权限）";
   return msg;
+}
+
+/** 轮询/刷新时避免无变化数据触发整树重渲染 */
+export function deviceListsEqual(a: Device[], b: Device[]): boolean {
+  return a.length === b.length && a.every((d, i) => JSON.stringify(d) === JSON.stringify(b[i]));
 }

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ThemeMode } from "../lib/model";
@@ -15,7 +16,7 @@ const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: "system", label: "跟随系统" },
 ];
 
-export default function SettingsDialog({
+function SettingsDialog({
   open,
   onOpenChange,
   theme,
@@ -66,3 +67,5 @@ export default function SettingsDialog({
     </Dialog.Root>
   );
 }
+
+export default memo(SettingsDialog);

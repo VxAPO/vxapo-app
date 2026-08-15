@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export function useWindowControls() {
@@ -20,21 +20,21 @@ export function useWindowControls() {
     return () => dispose?.();
   }, []);
 
-  const minimize = () => {
+  const minimize = useCallback(() => {
     try { void getCurrentWindow().minimize(); } catch { /* web fallback */ }
-  };
+  }, []);
 
-  const toggleMaximize = async () => {
+  const toggleMaximize = useCallback(async () => {
     try {
       const w = getCurrentWindow();
       await w.toggleMaximize();
       setIsMax(await w.isMaximized());
     } catch { /* web fallback */ }
-  };
+  }, []);
 
-  const close = () => {
+  const close = useCallback(() => {
     try { void getCurrentWindow().close(); } catch { /* web fallback */ }
-  };
+  }, []);
 
   return { isMax, minimize, toggleMaximize, close };
 }

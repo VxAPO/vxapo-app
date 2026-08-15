@@ -1,6 +1,6 @@
-import { Fragment } from "react";
+import { Fragment, memo } from "react";
 import type { Block, EffectItem } from "../lib/model";
-import type { BandPatch } from "../lib/blocks";
+import { accentStyle, type BandPatch } from "../lib/blocks";
 import DragCard from "./DragCard";
 import EffectSemanticCard from "./EffectSemanticCard";
 import SemanticUnitCard from "./SemanticUnitCard";
@@ -25,11 +25,12 @@ interface PresetViewProps {
   effectOnDragStart: (key: string, x: number, y: number) => void;
   onRemoveBlock: (idx: number) => void;
   onRemoveGroup: (label: string) => void;
+  onPatchBlock: (idx: number, patch: Partial<Block>) => void;
   onPatchBand: (blockIdx: number, bandIdx: number, patch: BandPatch) => void;
 }
 
 /** 语义视图：滤波器与效果器分区，组内卡只保留组标识 */
-export default function PresetView({
+function PresetView({
   blocks,
   showFilterEmptyHint,
   showEffectEmptyHint,
@@ -49,6 +50,7 @@ export default function PresetView({
   effectOnDragStart,
   onRemoveBlock,
   onRemoveGroup,
+  onPatchBlock,
   onPatchBand,
 }: PresetViewProps) {
   return (
@@ -72,8 +74,8 @@ export default function PresetView({
               <Fragment key={elementKey}>
                 <DragCard
                   id={elementKey}
-                  className={`group-card standalone${active ? " is-dragging" : ""}${isGroup ? " sem-group" : ""}${selectedIds.includes(elementKey) ? " is-selected" : ""}`}
-                  style={isGroup ? ({ "--card-accent": accentOf(b) } as React.CSSProperties) : undefined}
+                  className={`group-card standalone${b.enabled ? " enabled" : " disabled"}${active ? " is-dragging" : ""}${isGroup ? " sem-group" : ""}${selectedIds.includes(elementKey) ? " is-selected" : ""}`}
+                  style={isGroup ? accentStyle(accentOf(b)) : undefined}
                   onDragStart={onDragStart}
                 >
                   <SemanticUnitCard
@@ -83,6 +85,7 @@ export default function PresetView({
                     dragNum={virtualIndexOf(elementKey)}
                     onRemoveBlock={onRemoveBlock}
                     onRemoveGroup={onRemoveGroup}
+                    onPatchBlock={onPatchBlock}
                     onPatchBand={onPatchBand}
                   />
                 </DragCard>
@@ -127,3 +130,5 @@ export default function PresetView({
     </>
   );
 }
+
+export default memo(PresetView);

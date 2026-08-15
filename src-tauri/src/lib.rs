@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
+use std::sync::OnceLock;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -9,9 +11,13 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// vxapo-cli 路径：env VXAPO_CLI 优先，缺省开发机固定路径。
-fn cli_path() -> String {
-    std::env::var("VXAPO_CLI").unwrap_or_else(|_| {
-        r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe".to_string()
+static CLI_PATH: OnceLock<String> = OnceLock::new();
+
+fn cli_path() -> &'static str {
+    CLI_PATH.get_or_init(|| {
+        std::env::var("VXAPO_CLI").unwrap_or_else(|_| {
+            r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe".to_string()
+        })
     })
 }
 
@@ -37,15 +43,45 @@ fn read_config(guid: String) -> Result<String, String> {
     }
 }
 
-/// 设备列表（CLI list --json，UI 设计规范 05）。
+/// 设备列表（CLI list --json，UI 设计规范 05）；Rust 侧反序列化，
+/// 前端直接拿到强类型数组，避免字符串二次解析。
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+struct Device {
+    index: i64,
+    name: String,
+    guid: String,
+    #[serde(default)]
+    installed_version: Option<String>,
+    #[serde(default)]
+    install_mode: Option<String>,
+    #[serde(default)]
+    slots: HashMap<String, Option<String>>,
+    #[serde(default)]
+    sample_rate: Option<f64>,
+    #[serde(default)]
+    channels: Option<i64>,
+    #[serde(default)]
+    bit_depth: Option<i64>,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    volume: Option<f64>,
+    #[serde(default)]
+    eapo: Option<String>,
+    #[serde(default)]
+    lost_slot: Option<String>,
+}
+
 #[tauri::command]
-fn list_devices() -> Result<String, String> {
+fn list_devices() -> Result<Vec<Device>, String> {
     let out = Command::new(cli_path())
         .args(["list", "--json"])
         .output()
         .map_err(|e| format!("CLI 启动失败：{e}"))?;
     if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        serde_json::from_str(&raw).map_err(|e| format!("CLI 输出解析失败：{e}"))
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
@@ -204,7 +240,7 @@ fn run_cli(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
 fn uninstall_device(guid: String) -> Result<String, String> {
     let cli = cli_path();
     let tag = format!("uninstall_{}", guid.replace(['{', '}'], ""));
-    run_cli(&cli, &["uninstall", "-d", &guid], &tag)
+    run_cli(cli, &["uninstall", "-d", &guid], &tag)
 }
 
 /// 安装设备：以 `runas` 提权调 `vxapo-cli install -d <guid> --json`
@@ -213,7 +249,7 @@ fn uninstall_device(guid: String) -> Result<String, String> {
 fn install_device(guid: String) -> Result<String, String> {
     let cli = cli_path();
     let tag = format!("install_{}", guid.replace(['{', '}'], ""));
-    run_cli(&cli, &["install", "-d", &guid], &tag)
+    run_cli(cli, &["install", "-d", &guid], &tag)
 }
 
 /// 读取安装/卸载进度文本（供 UI 实时展示）。

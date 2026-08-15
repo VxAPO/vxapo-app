@@ -1,3 +1,4 @@
+import { memo } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
@@ -11,7 +12,7 @@ interface ConfirmDialogProps {
 }
 
 /** 通用确认弹窗，用于不可逆操作（如删除自定义预设） */
-export default function ConfirmDialog({
+function ConfirmDialog({
   open,
   onOpenChange,
   title,
@@ -50,3 +51,5 @@ export default function ConfirmDialog({
     </Dialog.Root>
   );
 }
+
+export default memo(ConfirmDialog);

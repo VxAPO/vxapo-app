@@ -1,6 +1,7 @@
+import { memo } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Headphones, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { friendlyError, installDevice, isInstalled, readProgress } from "../lib/api";
 import type { Device } from "../lib/model";
 
@@ -13,7 +14,7 @@ interface InstallDialogProps {
   onInstalled: (name: string) => void;
 }
 
-export default function InstallDialog({
+function InstallDialog({
   open,
   onOpenChange,
   devices,
@@ -23,6 +24,14 @@ export default function InstallDialog({
 }: InstallDialogProps) {
   const [installingGuid, setInstallingGuid] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!installingGuid) {
@@ -31,7 +40,8 @@ export default function InstallDialog({
     }
     const tag = "install_" + installingGuid.replace(/[{}]/g, "");
     const timer = window.setInterval(async () => {
-      setProgress(await readProgress(tag));
+      const text = await readProgress(tag);
+      if (aliveRef.current) setProgress(text);
     }, 400);
     return () => window.clearInterval(timer);
   }, [installingGuid]);
@@ -104,3 +114,5 @@ export default function InstallDialog({
     </Dialog.Root>
   );
 }
+
+export default memo(InstallDialog);

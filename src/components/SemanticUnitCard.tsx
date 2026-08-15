@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { semanticName, type BandPatch } from "../lib/blocks";
@@ -11,11 +12,12 @@ interface SemanticUnitCardProps {
   num?: number;
   onRemoveBlock: (idx: number) => void;
   onRemoveGroup: (label: string) => void;
+  onPatchBlock: (idx: number, patch: Partial<Block>) => void;
   onPatchBand: (blockIdx: number, bandIdx: number, patch: BandPatch) => void;
 }
 
 /** 语义视图单段卡：滑块收窄靠左，频率输入框与滑块同行靠右；组卡用组标签 X 整组删除 */
-export default function SemanticUnitCard({
+function SemanticUnitCard({
   block: b,
   index: bi,
   groupLabel,
@@ -23,6 +25,7 @@ export default function SemanticUnitCard({
   num,
   onRemoveBlock,
   onRemoveGroup,
+  onPatchBlock,
   onPatchBand,
 }: SemanticUnitCardProps) {
   return (
@@ -33,9 +36,16 @@ export default function SemanticUnitCard({
         </button>
       )}
       <div className="group-head">
-        <span className="ord">
+        <button
+          className={`enable-dot ${b.enabled ? "on" : ""}`}
+          type="button"
+          aria-pressed={b.enabled}
+          aria-label={b.enabled ? "停用该段" : "启用该段"}
+          title={b.enabled ? "点击停用该段" : "点击启用该段"}
+          onClick={() => onPatchBlock(bi, { enabled: !b.enabled })}
+        >
           {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
-        </span>
+        </button>
         <span className="g-name">{semanticName(b)}</span>
         <span className="grow" />
         {groupLabel ? (
@@ -64,6 +74,7 @@ export default function SemanticUnitCard({
           min={-6}
           max={6}
           value={b.bands[0]?.gain_db ?? 0}
+          disabled={!b.enabled}
           onValueChange={(v) => onPatchBand(bi, 0, { gain_db: v })}
         />
         <span className="sem-label">强</span>
@@ -71,3 +82,5 @@ export default function SemanticUnitCard({
     </>
   );
 }
+
+export default memo(SemanticUnitCard);

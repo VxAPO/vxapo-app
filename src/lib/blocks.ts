@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Block } from "./model";
 
 export const PERCEPTUAL_RANGES: [number, number, string][] = [
@@ -43,6 +44,24 @@ export function presetAccent(bands: { fc: number }[]): string {
   if (avg < 2000) return "#519741";
   if (avg < 8000) return "#00a3a5";
   return "#8078e5";
+}
+
+export interface CardAccentStyle extends CSSProperties {
+  "--card-accent"?: string;
+}
+
+/** 卡片配色 CSS 变量（组色/感知色统一从这里注入） */
+export function accentStyle(accent?: string): CardAccentStyle | undefined {
+  return accent ? { "--card-accent": accent } : undefined;
+}
+
+export interface PresetCardStyle extends CSSProperties {
+  "--preset-accent"?: string;
+}
+
+/** 侧栏预设卡片配色 CSS 变量（左侧骑边色条） */
+export function presetCardStyle(accent?: string): PresetCardStyle | undefined {
+  return accent ? { "--preset-accent": accent } : undefined;
 }
 
 export function nextGroupName(base: string, groups: Set<string>): string {
@@ -141,7 +160,8 @@ export function buildRenderOrder(blocks: Block[], groups: BlockGroup[]): RenderO
     }
     if (emitted.has(b.group)) return;
     emitted.add(b.group);
-    const g = groups.find((x) => x.label === b.group)!;
+    const g = groups.find((x) => x.label === b.group);
+    if (!g) return;
     out.push({ kind: "group", g, ord: idx + 1 });
   });
   return out;

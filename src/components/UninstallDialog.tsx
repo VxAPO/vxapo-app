@@ -1,6 +1,7 @@
+import { memo } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { TriangleAlert, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readProgress } from "../lib/api";
 import type { Device } from "../lib/model";
 
@@ -12,7 +13,7 @@ interface UninstallDialogProps {
   onConfirm: () => void;
 }
 
-export default function UninstallDialog({
+function UninstallDialog({
   device,
   open,
   busy,
@@ -20,6 +21,14 @@ export default function UninstallDialog({
   onConfirm,
 }: UninstallDialogProps) {
   const [progress, setProgress] = useState("");
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!busy || !device) {
@@ -28,7 +37,8 @@ export default function UninstallDialog({
     }
     const tag = "uninstall_" + device.guid.replace(/[{}]/g, "");
     const timer = window.setInterval(async () => {
-      setProgress(await readProgress(tag));
+      const text = await readProgress(tag);
+      if (aliveRef.current) setProgress(text);
     }, 400);
     return () => window.clearInterval(timer);
   }, [busy, device]);
@@ -72,3 +82,5 @@ export default function UninstallDialog({
     </Dialog.Root>
   );
 }
+
+export default memo(UninstallDialog);

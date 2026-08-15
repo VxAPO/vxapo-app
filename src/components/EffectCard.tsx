@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { X } from "lucide-react";
 import type { EffectItem } from "../lib/model";
 import { defaultEffectParams, effectDef, effectParams } from "../lib/effects";
@@ -12,7 +13,7 @@ interface EffectCardProps {
 }
 
 /** 效果器卡片：中文名 + 开关 + 删除 + 参数 */
-export default function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardProps) {
+function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardProps) {
   const def = effectDef(effect.type);
   const params = { ...defaultEffectParams(effect.type), ...(effect.params ?? {}) };
   const disabled = !effect.enabled;
@@ -92,3 +93,5 @@ export default function EffectCard({ effect, onToggle, onRemove, onChangeParam }
     </>
   );
 }
+
+export default memo(EffectCard);

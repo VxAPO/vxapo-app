@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { X } from "lucide-react";
 import type { EffectItem } from "../lib/model";
 import { defaultEffectParams, effectDef, semanticStrength } from "../lib/effects";
@@ -11,7 +12,7 @@ interface EffectSemanticCardProps {
 }
 
 /** 语义视图效果器卡：只暴露感知强度，参数细调在参数视图 */
-export default function EffectSemanticCard({
+function EffectSemanticCard({
   effect,
   onToggle,
   onRemove,
@@ -62,3 +63,5 @@ export default function EffectSemanticCard({
     </>
   );
 }
+
+export default memo(EffectSemanticCard);

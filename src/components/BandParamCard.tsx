@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import type { BandPatch } from "../lib/blocks";
@@ -22,7 +23,7 @@ interface BandParamCardProps {
 }
 
 /** 参数视图滤波器卡：中心频率/Q/Gain 均为「标签 + 滑块 + 输入框」 */
-export default function BandParamCard({
+function BandParamCard({
   block: b,
   index: bi,
   dragNum,
@@ -123,3 +124,5 @@ export default function BandParamCard({
     </>
   );
 }
+
+export default memo(BandParamCard);

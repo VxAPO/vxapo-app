@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { X } from "lucide-react";
 import type { EffectItem, PresetLibraryEntry, SideSection } from "../lib/model";
-import { presetAccent } from "../lib/blocks";
+import { presetAccent, presetCardStyle } from "../lib/blocks";
 import { EFFECT_DEFS } from "../lib/effects";
+
+const SIDEBAR_MIN = 210;
+const SECTIONS: SideSection[] = ["preset", "custom", "advanced"];
+/** 最大宽度随窗口动态变化：最小窗口（800px）时上限 314，始终给右侧视图留出足够宽度 */
+const sidebarMax = () => Math.min(480, Math.max(SIDEBAR_MIN, window.innerWidth - 486));
 
 interface SidebarProps {
   disabled: boolean;
@@ -21,7 +26,7 @@ interface SidebarProps {
   onToggleChannel: () => void;
 }
 
-export default function Sidebar({
+function Sidebar({
   disabled,
   side,
   onSideChange,
@@ -36,9 +41,6 @@ export default function Sidebar({
   channelOn,
   onToggleChannel,
 }: SidebarProps) {
-  const SIDEBAR_MIN = 210;
-  /** 最大宽度随窗口动态变化：最小窗口（800px）时上限 314，始终给右侧视图留出足够宽度 */
-  const sidebarMax = () => Math.min(480, Math.max(SIDEBAR_MIN, window.innerWidth - 486));
   const [sideW, setSideW] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem("vxapo.sidebarWidth"));
@@ -116,7 +118,7 @@ export default function Sidebar({
       <div className={`sidebar-scroll${disabled ? " disabled" : ""}`}>
         <div className="side-seg">
         <div className="labels">
-          {(["preset", "custom", "advanced"] as SideSection[]).map((s) => (
+          {SECTIONS.map((s) => (
             <button key={s} type="button" aria-pressed={side === s} onClick={() => onSideChange(s)}>
               {s === "preset" ? "预设" : s === "custom" ? "自定义" : "高级"}
             </button>
@@ -135,9 +137,9 @@ export default function Sidebar({
               <div
                 className={`preset-card${used ? " used" : ""}`}
                 key={p.id}
-                style={{ "--preset-accent": accent } as React.CSSProperties}
+                style={presetCardStyle(accent)}
               >
-                <p className="p-name">{p.group} · {p.name}</p>
+                <p className="p-name"><span className="p-group">{p.group}</span> · {p.name}</p>
                 <p className="p-desc">{p.desc}</p>
                 <div className="row">
                   <span className="sub">{p.bands.length} 段</span>
@@ -167,7 +169,7 @@ export default function Sidebar({
               <div
                 className="preset-card"
                 key={p.id}
-                style={{ "--preset-accent": p.color ?? presetAccent(p.bands) } as React.CSSProperties}
+                style={presetCardStyle(p.color ?? presetAccent(p.bands))}
               >
                 <button
                   className="preset-del"
@@ -178,7 +180,7 @@ export default function Sidebar({
                 >
                   <X size={12} strokeWidth={2.5} />
                 </button>
-                <p className="p-name">{p.group} · {p.name}</p>
+                <p className="p-name"><span className="p-group">{p.group}</span> · {p.name}</p>
                 {p.desc ? <p className="p-desc">{p.desc}</p> : null}
                 <div className="row">
                   <span className="sub">{p.bands.length} 段</span>
@@ -254,3 +256,5 @@ export default function Sidebar({
     </aside>
   );
 }
+
+export default memo(Sidebar);

@@ -47,6 +47,52 @@ export interface PresetLibraryEntry {
   bands: (Band & { name?: string })[];
 }
 
+export interface PresetMetaEntry {
+  presetId: string;
+  accent: string;
+}
+
+export type PresetMeta = Record<string, PresetMetaEntry>;
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+function isNamedBand(v: unknown): v is Band & { name?: string } {
+  return (
+    isRecord(v) &&
+    typeof v.fc === "number" &&
+    typeof v.gain_db === "number" &&
+    typeof v.q === "number" &&
+    (v.name === undefined || typeof v.name === "string")
+  );
+}
+
+export function isPresetLibraryEntry(v: unknown): v is PresetLibraryEntry {
+  return (
+    isRecord(v) &&
+    typeof v.id === "string" &&
+    typeof v.group === "string" &&
+    typeof v.name === "string" &&
+    typeof v.desc === "string" &&
+    (v.color === undefined || typeof v.color === "string") &&
+    Array.isArray(v.bands) &&
+    v.bands.every(isNamedBand)
+  );
+}
+
+export function isPresetMeta(v: unknown): v is PresetMeta {
+  return (
+    isRecord(v) &&
+    Object.values(v).every(
+      (m) =>
+        isRecord(m) &&
+        typeof m.presetId === "string" &&
+        typeof m.accent === "string",
+    )
+  );
+}
+
 /** 非 peq 效果器（写入 config.toml 的 [[effects]]，driver 原生支持） */
 export interface EffectItem {
   type: string;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { friendlyError, readConfig, writeConfig } from "../lib/api";
 import type { Block, EffectItem, PresetLibraryEntry } from "../lib/model";
 import { buildToml, parseConfigWithTail, type ChannelCtx } from "../lib/toml";
@@ -10,6 +10,7 @@ import {
   nextGroupName,
   type BandPatch,
 } from "../lib/blocks";
+import { useInterval } from "./useInterval";
 
 function normalizeEffects(list: EffectItem[]): EffectItem[] {
   return list.map((e) => ({ ...e, params: { ...defaultEffectParams(e.type), ...(e.params ?? {}) } }));
@@ -29,6 +30,12 @@ export function useConfig(
   const dirtyRef = useRef(false);
   const tailRef = useRef("");
 
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(saveTimer.current);
+    };
+  }, []);
+
   // 兜底：任何 blocks 变化后给缺失稳定 id 的块补 id（拖拽依赖稳定键）
   useEffect(() => {
     setBlocks((prev) => {
@@ -39,15 +46,19 @@ export function useConfig(
 
   useEffect(() => {
     if (!selectedGuid) return;
+    let alive = true;
     setLoaded(false);
     readConfig(selectedGuid)
       .then((text) => {
+        if (!alive) return;
         try {
           const parsed = parseConfigWithTail(text);
           setBlocks(ensureBlockIds(parsed.blocks));
           setEffects(normalizeEffects(parsed.effects));
           tailRef.current = parsed.tail;
-          setTuningMap((prev) => ({ ...prev, [selectedGuid]: parsed.enabled }));
+          setTuningMap((prev) =>
+            prev[selectedGuid] === parsed.enabled ? prev : { ...prev, [selectedGuid]: parsed.enabled },
+          );
         } catch {
           setBlocks([]);
           tailRef.current = "";
@@ -56,40 +67,44 @@ export function useConfig(
         setLoaded(true);
       })
       .catch((e: unknown) => {
+        if (!alive) return;
         setBlocks([]);
         tailRef.current = "";
         onError(friendlyError(e));
         setLoaded(true);
       });
+    return () => {
+      alive = false;
+    };
   }, [selectedGuid, onError]);
 
   // 监控 config 目录热更新：外部/驱动改写 config.toml 时自动刷新 UI（编辑中跳过，避免覆盖手头改动）
-  useEffect(() => {
-    if (!selectedGuid || !loaded) return;
-    const timer = window.setInterval(() => {
-      if (dirtyRef.current) return;
-      readConfig(selectedGuid)
-        .then((text) => {
-          if (dirtyRef.current) return;
-          const parsed = parseConfigWithTail(text);
-          tailRef.current = parsed.tail;
-          setTuningMap((prev) => ({ ...prev, [selectedGuid]: parsed.enabled }));
-          setEffects((prev) => {
-            const next = normalizeEffects(parsed.effects);
-            return effectsEqual(prev, next) ? prev : next;
-          });
-          setBlocks((prev) => {
-            const next = parsed.blocks;
-            if (prev.length === next.length && prev.every((b, i) => blocksEqualShape(b, next[i]))) {
-              return prev;
-            }
-            return mergeBlockIds(prev, next);
-          });
-        })
-        .catch(() => {});
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [selectedGuid, loaded]);
+  const pollConfig = useCallback(() => {
+    if (!selectedGuid || dirtyRef.current) return;
+    readConfig(selectedGuid)
+      .then((text) => {
+        if (dirtyRef.current) return;
+        const parsed = parseConfigWithTail(text);
+        tailRef.current = parsed.tail;
+        setTuningMap((prev) =>
+          prev[selectedGuid] === parsed.enabled ? prev : { ...prev, [selectedGuid]: parsed.enabled },
+        );
+        setEffects((prev) => {
+          const next = normalizeEffects(parsed.effects);
+          return effectsEqual(prev, next) ? prev : next;
+        });
+        setBlocks((prev) => {
+          const next = parsed.blocks;
+          if (prev.length === next.length && prev.every((b, i) => blocksEqualShape(b, next[i]))) {
+            return prev;
+          }
+          return mergeBlockIds(prev, next);
+        });
+      })
+      .catch(() => {});
+  }, [selectedGuid]);
+
+  useInterval(pollConfig, selectedGuid && loaded ? 2000 : null);
 
   // 自动保存（300ms 去抖，原子写由 Rust 侧负责）
   useEffect(() => {
@@ -131,11 +146,11 @@ export function useConfig(
     return counts;
   }, [blocks, totalBands, channelCtx.mode, channelCtx.first]);
 
-  const markDirty = () => {
+  const markDirty = useCallback(() => {
     dirtyRef.current = true;
-  };
+  }, []);
 
-  const applyPreset = (p: PresetLibraryEntry): string | undefined => {
+  const applyPreset = useCallback((p: PresetLibraryEntry): string | undefined => {
     const current = channelCtx.mode ? (channelBandCounts[channelCtx.active] ?? 0) : totalBands;
     if (current + p.bands.length > 31) {
       notify(`最多 31 段，当前 ${current} 段，添加 ${p.bands.length} 段将超限`);
@@ -158,9 +173,9 @@ export function useConfig(
       ];
     });
     return group;
-  };
+  }, [channelCtx.mode, channelCtx.active, channelBandCounts, totalBands, blocks, notify, markDirty]);
 
-  const addBand = (channel?: string) => {
+  const addBand = useCallback((channel?: string) => {
     const current = channelCtx.mode ? (channelBandCounts[channelCtx.active] ?? 0) : totalBands;
     if (current >= 31) {
       notify("该声道最多 31 段，已达到上限");
@@ -176,33 +191,33 @@ export function useConfig(
         bands: [{ fc: 1000, gain_db: 0, q: 1 }],
       },
     ]);
-  };
+  }, [channelCtx.mode, channelCtx.active, channelBandCounts, totalBands, notify, markDirty]);
 
-  const addEffect = (type: string) => {
+  const addEffect = useCallback((type: string) => {
     markDirty();
     setEffects((prev) =>
       prev.some((e) => e.type === type) ? prev : [...prev, { type, enabled: true, params: defaultEffectParams(type) }],
     );
-  };
+  }, [markDirty]);
 
-  const removeEffect = (type: string) => {
+  const removeEffect = useCallback((type: string) => {
     markDirty();
     setEffects((prev) => prev.filter((e) => e.type !== type));
-  };
+  }, [markDirty]);
 
-  const toggleEffect = (type: string) => {
+  const toggleEffect = useCallback((type: string) => {
     markDirty();
     setEffects((prev) => prev.map((e) => (e.type === type ? { ...e, enabled: !e.enabled } : e)));
-  };
+  }, [markDirty]);
 
-  const patchEffectParam = (type: string, key: string, value: number | string) => {
+  const patchEffectParam = useCallback((type: string, key: string, value: number | string) => {
     markDirty();
     setEffects((prev) =>
       prev.map((e) => (e.type === type ? { ...e, params: { ...(e.params ?? {}), [key]: value } } : e)),
     );
-  };
+  }, [markDirty]);
 
-  const patchEffectSemantic = (type: string, strength: number) => {
+  const patchEffectSemantic = useCallback((type: string, strength: number) => {
     markDirty();
     setEffects((prev) =>
       prev.map((e) =>
@@ -211,24 +226,24 @@ export function useConfig(
           : e,
       ),
     );
-  };
+  }, [markDirty]);
 
-  const removeBlock = (idx: number) => {
+  const removeBlock = useCallback((idx: number) => {
     markDirty();
     setBlocks((prev) => prev.filter((_, i) => i !== idx));
-  };
+  }, [markDirty]);
 
-  const removeGroup = (label: string) => {
+  const removeGroup = useCallback((label: string) => {
     markDirty();
     setBlocks((prev) => prev.filter((b) => b.group !== label));
-  };
+  }, [markDirty]);
 
-  const patchBlock = (idx: number, patch: Partial<Block>) => {
+  const patchBlock = useCallback((idx: number, patch: Partial<Block>) => {
     markDirty();
     setBlocks((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
-  };
+  }, [markDirty]);
 
-  const patchBand = (blockIdx: number, bandIdx: number, patch: BandPatch) => {
+  const patchBand = useCallback((blockIdx: number, bandIdx: number, patch: BandPatch) => {
     markDirty();
     setBlocks((prev) =>
       prev.map((b, i) =>
@@ -237,14 +252,14 @@ export function useConfig(
           : b,
       ),
     );
-  };
+  }, [markDirty]);
 
-  const deviceTuningOn = (guid: string) => tuningMap[guid] ?? true;
-  const toggleDeviceTuning = (guid: string) => {
+  const deviceTuningOn = useCallback((guid: string) => tuningMap[guid] ?? true, [tuningMap]);
+  const toggleDeviceTuning = useCallback((guid: string) => {
     const next = !deviceTuningOn(guid);
     markDirty();
     setTuningMap((prev) => ({ ...prev, [guid]: next }));
-  };
+  }, [deviceTuningOn, markDirty]);
 
   return {
     blocks,

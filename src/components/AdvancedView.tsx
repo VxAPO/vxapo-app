@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, memo } from "react";
 import type { Block, EffectItem } from "../lib/model";
 import type { BandPatch } from "../lib/blocks";
 import { channelLabel } from "../lib/channels";
@@ -34,7 +34,7 @@ interface AdvancedViewProps {
 }
 
 /** 参数视图：滤波器与效果器分区，通道选择只属于滤波器 */
-export default function AdvancedView({
+function AdvancedView({
   blocks,
   showFilterEmptyHint,
   showEffectEmptyHint,
@@ -155,3 +155,5 @@ export default function AdvancedView({
     </>
   );
 }
+
+export default memo(AdvancedView);

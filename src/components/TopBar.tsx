@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Copy, Minus, SlidersHorizontal, Square, Tags, X } from "lucide-react";
 import type { ViewMode } from "../lib/model";
 import logoUrl from "../assets/VxAPO_icon_v4.svg";
@@ -15,7 +16,7 @@ interface TopBarProps {
   onClose: () => void;
 }
 
-export default function TopBar({
+function TopBar({
   view,
   channelOn,
   noDevices,
@@ -58,3 +59,5 @@ export default function TopBar({
     </div>
   );
 }
+
+export default memo(TopBar);
