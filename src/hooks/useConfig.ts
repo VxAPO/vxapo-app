@@ -101,15 +101,15 @@ export function useConfig(
     dirtyRef.current = true;
   };
 
-  const applyPreset = (p: PresetLibraryEntry) => {
+  const applyPreset = (p: PresetLibraryEntry): string | undefined => {
     if (totalBands + p.bands.length > 31) {
       notify(`最多 31 段，当前 ${totalBands} 段，添加 ${p.bands.length} 段将超限`);
-      return;
+      return undefined;
     }
+    const groups = new Set(blocks.map((b) => b.group).filter((g): g is string => !!g));
+    const group = nextGroupName(p.group, groups);
     markDirty();
     setBlocks((prev) => {
-      const groups = new Set(prev.map((b) => b.group).filter((g): g is string => !!g));
-      const group = nextGroupName(p.group, groups);
       return [
         ...prev,
         ...p.bands.map((b) => ({
@@ -121,6 +121,7 @@ export function useConfig(
         })),
       ];
     });
+    return group;
   };
 
   const addBand = () => {

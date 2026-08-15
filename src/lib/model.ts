@@ -40,6 +40,8 @@ export interface PresetLibraryEntry {
   group: string;
   name: string;
   desc: string;
+  /** 感知配色（自定义预设可自选，缺省按频段推导） */
+  color?: string;
   bands: (Band & { name?: string })[];
 }
 

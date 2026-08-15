@@ -11,7 +11,13 @@ interface CurvePanelProps {
   onCurveChannelChange: (v: string) => void;
 }
 
-export default function CurvePanel({ blocks, fs, yTop, curveChannel, onCurveChannelChange }: CurvePanelProps) {
+export default function CurvePanel({
+  blocks,
+  fs,
+  yTop,
+  curveChannel,
+  onCurveChannelChange,
+}: CurvePanelProps) {
   const [curveW, setCurveW] = useState(640);
   const curveRef = useRef<HTMLDivElement | null>(null);
 

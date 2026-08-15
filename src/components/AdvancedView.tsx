@@ -7,6 +7,7 @@ import BandParamCard from "./BandParamCard";
 interface AdvancedViewProps {
   blocks: Block[];
   channelOn: boolean;
+  selectedIds: string[];
   activeKey: string | null;
   flyKey: string | null;
   virtualIndexOf: (key: string) => number | null;
@@ -19,6 +20,7 @@ interface AdvancedViewProps {
 export default function AdvancedView({
   blocks,
   channelOn,
+  selectedIds,
   activeKey,
   flyKey,
   virtualIndexOf,
@@ -42,7 +44,7 @@ export default function AdvancedView({
           <Fragment key={b.id ?? bi}>
             <DragCard
               id={b.id ?? String(bi)}
-              className={`band-card${b.enabled ? " enabled" : " disabled"}${activeKey === (b.id ?? String(bi)) || flyKey === (b.id ?? String(bi)) ? " is-dragging" : ""}`}
+              className={`band-card${b.enabled ? " enabled" : " disabled"}${activeKey === (b.id ?? String(bi)) || flyKey === (b.id ?? String(bi)) ? " is-dragging" : ""}${selectedIds.includes(b.id ?? String(bi)) ? " is-selected" : ""}`}
               onDragStart={onDragStart}
             >
               <BandParamCard

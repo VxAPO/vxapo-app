@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import type { RefObject, ReactNode } from "react";
+import type { CSSProperties, RefObject, ReactNode } from "react";
 import type { FlyState } from "../hooks/useDragSort";
 
 interface DragLayerProps {
@@ -9,6 +9,7 @@ interface DragLayerProps {
   overlayRef: RefObject<HTMLDivElement | null>;
   activeContent: ReactNode;
   classForKey: (key: string) => string;
+  styleForKey?: (key: string) => CSSProperties | undefined;
 }
 
 export default function DragLayer({
@@ -18,6 +19,7 @@ export default function DragLayer({
   overlayRef,
   activeContent,
   classForKey,
+  styleForKey,
 }: DragLayerProps) {
   return (
     <>
@@ -25,20 +27,31 @@ export default function DragLayer({
         <div
           ref={overlayRef}
           className={`drag-fly overlay-fixed ${classForKey(activeKey)}`}
-          style={dragSize ? { width: dragSize.width, height: dragSize.height } : undefined}
+          style={{
+            ...(styleForKey?.(activeKey) ?? {}),
+            ...(dragSize ? { width: dragSize.width, height: dragSize.height } : {}),
+          }}
         >
           {activeContent}
         </div>
       )}
       <AnimatePresence>
-        {fly && <FlyPath key={fly.id} fly={fly} classForKey={classForKey} />}
+        {fly && <FlyPath key={fly.id} fly={fly} classForKey={classForKey} styleForKey={styleForKey} />}
       </AnimatePresence>
     </>
   );
 }
 
 /** 松手飞行动画：二次贝塞尔弧线匀速飞行，到位后停顿并淡出阴影，体现悬浮落地 */
-function FlyPath({ fly, classForKey }: { fly: FlyState; classForKey: (key: string) => string }) {
+function FlyPath({
+  fly,
+  classForKey,
+  styleForKey,
+}: {
+  fly: FlyState;
+  classForKey: (key: string) => string;
+  styleForKey?: (key: string) => CSSProperties | undefined;
+}) {
   // 二次贝塞尔：控制点 = 中点 + 垂直方向的弧高
   const dx = fly.to.left - fly.from.left;
   const dy = fly.to.top - fly.from.top;
@@ -80,6 +93,7 @@ function FlyPath({ fly, classForKey }: { fly: FlyState; classForKey: (key: strin
   return (
     <motion.div
       className={`drag-fly fly-anim ${classForKey(fly.key)}`}
+      style={styleForKey?.(fly.key)}
       initial={{
         left: fly.from.left,
         top: fly.from.top,

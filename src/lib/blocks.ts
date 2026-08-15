@@ -33,6 +33,18 @@ export function semanticName(block: Block): string {
   return n;
 }
 
+/** 预设感知配色：按频段平均频率映射（与 24 色调色盘同源） */
+export function presetAccent(bands: { fc: number }[]): string {
+  const fcs = bands.map((b) => b.fc).filter((v) => Number.isFinite(v));
+  if (!fcs.length) return "#519741";
+  const avg = fcs.reduce((a, b) => a + b, 0) / fcs.length;
+  if (avg < 160) return "#d76a00";
+  if (avg < 500) return "#e05d40";
+  if (avg < 2000) return "#519741";
+  if (avg < 8000) return "#00a3a5";
+  return "#8078e5";
+}
+
 export function nextGroupName(base: string, groups: Set<string>): string {
   if (!groups.has(base)) return base;
   let n = 2;

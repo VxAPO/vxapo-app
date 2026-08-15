@@ -1,11 +1,16 @@
 import { Plus } from "lucide-react";
+import { X } from "lucide-react";
 import type { PresetLibraryEntry, SideSection } from "../lib/model";
+import { presetAccent } from "../lib/blocks";
 
 interface SidebarProps {
   side: SideSection;
   onSideChange: (s: SideSection) => void;
   library: PresetLibraryEntry[];
+  customPresets: PresetLibraryEntry[];
+  usedPresets: string[];
   onApplyPreset: (p: PresetLibraryEntry) => void;
+  onDeletePreset: (p: PresetLibraryEntry) => void;
   onAddBand: () => void;
   channelOn: boolean;
   onToggleChannel: () => void;
@@ -15,7 +20,10 @@ export default function Sidebar({
   side,
   onSideChange,
   library,
+  customPresets,
+  usedPresets,
   onApplyPreset,
+  onDeletePreset,
   onAddBand,
   channelOn,
   onToggleChannel,
@@ -36,24 +44,65 @@ export default function Sidebar({
 
       {side === "preset" && (
         <div className="cards">
-          {library.map((p) => (
-            <div className="preset-card" key={p.id}>
-              <p className="p-name">{p.group} · {p.name}</p>
-              <p className="p-desc">{p.desc}</p>
-              <div className="row">
-                <span className="sub">{p.bands.length} 段</span>
-                <button className="add" type="button" onClick={() => onApplyPreset(p)}>添加</button>
+          {library.map((p) => {
+            const used = usedPresets.includes(p.id);
+            const accent = p.color ?? presetAccent(p.bands);
+            return (
+              <div
+                className={`preset-card${used ? " used" : ""}`}
+                key={p.id}
+                style={{ "--preset-accent": accent } as React.CSSProperties}
+              >
+                <p className="p-name">{p.group} · {p.name}</p>
+                <p className="p-desc">{p.desc}</p>
+                <div className="row">
+                  <span className="sub">{p.bands.length} 段</span>
+                  <button
+                    className="add"
+                    type="button"
+                    disabled={used}
+                    onClick={() => onApplyPreset(p)}
+                  >
+                    {used ? "已添加" : "添加"}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {side === "custom" && (
         <div className="cards">
-          <div className="preset-card">
-            <p className="p-desc">暂无自定义预设，在高级视图中将 peaking 拖拽成组后可保存</p>
-          </div>
+          {customPresets.length === 0 ? (
+            <div className="preset-card preset-empty">
+              <p className="p-desc">暂无自定义预设，框选卡片后可保存</p>
+            </div>
+          ) : (
+            customPresets.map((p) => (
+              <div
+                className="preset-card"
+                key={p.id}
+                style={{ "--preset-accent": p.color ?? presetAccent(p.bands) } as React.CSSProperties}
+              >
+                <button
+                  className="preset-del"
+                  type="button"
+                  aria-label="删除预设"
+                  title="删除预设"
+                  onClick={() => onDeletePreset(p)}
+                >
+                  <X size={12} strokeWidth={2.5} />
+                </button>
+                <p className="p-name">{p.group} · {p.name}</p>
+                {p.desc ? <p className="p-desc">{p.desc}</p> : null}
+                <div className="row">
+                  <span className="sub">{p.bands.length} 段</span>
+                  <button className="add" type="button" onClick={() => onApplyPreset(p)}>添加</button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 

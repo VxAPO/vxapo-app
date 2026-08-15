@@ -7,6 +7,8 @@ import SemanticUnitCard from "./SemanticUnitCard";
 interface PresetViewProps {
   blocks: Block[];
   blocksEmpty: boolean;
+  selectedIds: string[];
+  accentOf: (b: Block) => string;
   activeKey: string | null;
   flyKey: string | null;
   virtualIndexOf: (key: string) => number | null;
@@ -20,6 +22,8 @@ interface PresetViewProps {
 export default function PresetView({
   blocks,
   blocksEmpty,
+  selectedIds,
+  accentOf,
   activeKey,
   flyKey,
   virtualIndexOf,
@@ -40,7 +44,8 @@ export default function PresetView({
             <Fragment key={elementKey}>
               <DragCard
                 id={elementKey}
-                className={`group-card standalone${active ? " is-dragging" : ""}${isGroup ? " sem-group" : ""}`}
+                className={`group-card standalone${active ? " is-dragging" : ""}${isGroup ? " sem-group" : ""}${selectedIds.includes(elementKey) ? " is-selected" : ""}`}
+                style={isGroup ? ({ "--card-accent": accentOf(b) } as React.CSSProperties) : undefined}
                 onDragStart={onDragStart}
               >
                 <SemanticUnitCard

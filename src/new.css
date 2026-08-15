@@ -272,7 +272,67 @@ button {
   border-radius: 16px;
   padding: 12px;
   position: relative;
-  box-shadow: var(--card-shadow);
+  box-shadow: inset 3px 0 0 var(--preset-accent, transparent), var(--card-shadow);
+}
+
+.preset-card.used {
+  opacity: 0.55;
+  filter: grayscale(0.8);
+  cursor: not-allowed;
+}
+
+.preset-card.used .add {
+  pointer-events: none;
+}
+
+.add:disabled {
+  background: var(--disabled-fill);
+  color: #fff;
+  cursor: not-allowed;
+}
+
+/* 自定义预设选色盘 */
+.preset-swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.preset-swatch.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.preset-swatch.custom {
+  background: var(--surface-inset);
+  border: 1px dashed var(--border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-weak);
+}
+
+.preset-swatch.custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.preset-swatch-plus {
+  font-size: 13px;
+  line-height: 1;
 }
 
 .p-name {
@@ -1748,9 +1808,9 @@ input[type="number"]::-webkit-outer-spin-button {
   flex: none;
 }
 
-/* 语义视图组标识：组内卡共用左侧品牌色边条 */
+/* 语义视图组标识：组内卡共用左侧组色边条 */
 .sem-group {
-  border-left: 3px solid var(--brand);
+  border-left: 3px solid var(--card-accent, var(--brand));
 }
 
 .sem-group .group-head {
@@ -1767,8 +1827,8 @@ input[type="number"]::-webkit-outer-spin-button {
   height: 20px;
   padding: 0 8px;
   border-radius: 9999px;
-  background: var(--brand-soft);
-  color: var(--brand-deep);
+  background: color-mix(in srgb, var(--card-accent, var(--brand)) 14%, transparent);
+  color: var(--card-accent, var(--brand-deep));
   font-size: 11px;
   font-weight: 600;
   flex: none;
@@ -1776,5 +1836,262 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .sem-chip:hover {
+  background: color-mix(in srgb, var(--card-accent, var(--brand)) 24%, transparent);
+}
+
+/* 框选卡片 */
+.device-body {
+  position: relative;
+}
+
+.marquee-box {
+  position: absolute;
+  z-index: 40;
+  border: 1px dashed var(--brand-deep);
+  background: rgba(71, 195, 209, 0.1);
+  pointer-events: none;
+}
+
+.drag-card.is-selected {
+  outline: 2px solid var(--card-accent, var(--brand));
+  outline-offset: -2px;
+}
+
+/* 被框选的卡片拖拽成占位框时：不再用描边覆盖，虚线直接换成对应色 */
+.drag-card.is-dragging.is-selected {
+  outline: none;
+  border-color: var(--card-accent, var(--brand));
+}
+
+/* 未被框选的有组卡拖拽时，占位框左侧保留组色边（只改颜色，边框宽度不变） */
+.drag-card.is-dragging:not(.is-selected).sem-group {
+  border-left-color: var(--card-accent);
+}
+
+/* 选中工具栏：圆角矩形，浮动在选中网格下方，按选中宽度动态居中 */
+.sel-toolbar {
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  animation: sel-toolbar-in 0.22s ease-out;
+}
+
+.sel-toolbar-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sel-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sel-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sel-action.save {
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  border: 1px solid rgba(71, 195, 209, 0.45);
+}
+
+.sel-action.save:hover {
   background: rgba(71, 195, 209, 0.2);
+}
+
+.sel-action.delete {
+  background: var(--danger);
+  color: #fff;
+}
+
+.sel-action.delete:hover {
+  filter: brightness(1.08);
+}
+
+@keyframes sel-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+    box-shadow: var(--hover-shadow);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* 保存自定义预设弹窗 */
+.vx-dialog-wide {
+  width: min(520px, calc(100vw - 48px));
+}
+
+.vx-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vx-field + .vx-field {
+  margin-top: 10px;
+}
+
+.vx-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.vx-text-input {
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.vx-text-input:focus-visible {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.preset-band-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.preset-band-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preset-band-row .vx-text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-band-tag {
+  flex: none;
+  width: 110px;
+  font-size: 11px;
+  color: var(--text-weak);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vx-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.vx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vx-btn.ghost {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.vx-btn.ghost:hover {
+  background: var(--border);
+}
+
+.vx-btn.primary {
+  background: var(--brand);
+  color: var(--on-accent);
+}
+
+.vx-btn.primary:hover {
+  filter: brightness(1.05);
+}
+
+.vx-btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.vx-btn.danger:hover {
+  filter: brightness(1.08);
+}
+
+.vx-confirm-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 自定义预设卡片右上角删除 */
+.preset-del {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-weak);
+  padding: 0;
+}
+
+.preset-del:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 自定义预设为空时的占位卡：文字居中 */
+.preset-card.preset-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 76px;
+}
+
+.preset-card.preset-empty .p-desc {
+  text-align: center;
+  margin: 0;
 }
