@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { friendlyError, readConfig, writeConfig } from "../lib/api";
 import type { Block, EffectItem, PresetLibraryEntry } from "../lib/model";
 import { buildToml, parseConfigWithTail } from "../lib/toml";
-import { defaultEffectParams, effectsEqual } from "../lib/effects";
+import { applySemanticStrength, defaultEffectParams, effectsEqual } from "../lib/effects";
 import {
   blocksEqualShape,
   ensureBlockIds,
@@ -171,6 +171,17 @@ export function useConfig(
     );
   };
 
+  const patchEffectSemantic = (type: string, strength: number) => {
+    markDirty();
+    setEffects((prev) =>
+      prev.map((e) =>
+        e.type === type
+          ? { ...e, params: applySemanticStrength(type, strength, { ...defaultEffectParams(type), ...(e.params ?? {}) }) }
+          : e,
+      ),
+    );
+  };
+
   const removeBlock = (idx: number) => {
     markDirty();
     setBlocks((prev) => prev.filter((_, i) => i !== idx));
@@ -219,6 +230,7 @@ export function useConfig(
     removeEffect,
     toggleEffect,
     patchEffectParam,
+    patchEffectSemantic,
     removeBlock,
     removeGroup,
     patchBlock,

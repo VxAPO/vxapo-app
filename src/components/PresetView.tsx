@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import type { Block, EffectItem } from "../lib/model";
 import type { BandPatch } from "../lib/blocks";
 import DragCard from "./DragCard";
-import EffectCard from "./EffectCard";
+import EffectSemanticCard from "./EffectSemanticCard";
 import SemanticUnitCard from "./SemanticUnitCard";
 
 interface PresetViewProps {
@@ -13,7 +13,7 @@ interface PresetViewProps {
   effects: EffectItem[];
   onToggleEffect: (type: string) => void;
   onRemoveEffect: (type: string) => void;
-  onChangeEffectParam: (type: string, key: string, value: number | string) => void;
+  onChangeEffectStrength: (type: string, strength: number) => void;
   activeKey: string | null;
   flyKey: string | null;
   virtualIndexOf: (key: string) => number | null;
@@ -32,7 +32,7 @@ export default function PresetView({
   effects,
   onToggleEffect,
   onRemoveEffect,
-  onChangeEffectParam,
+  onChangeEffectStrength,
   activeKey,
   flyKey,
   virtualIndexOf,
@@ -78,12 +78,12 @@ export default function PresetView({
         <div className="section-title">效果器</div>
         <div className="cards device-cards">
           {effects.map((e) => (
-            <EffectCard
+            <EffectSemanticCard
               key={e.type}
               effect={e}
               onToggle={onToggleEffect}
               onRemove={onRemoveEffect}
-              onChangeParam={onChangeEffectParam}
+              onStrengthChange={onChangeEffectStrength}
             />
           ))}
         </div>

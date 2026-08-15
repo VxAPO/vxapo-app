@@ -113,3 +113,57 @@ export function effectParams(type: string): EffectParamDef[] {
 export function defaultEffectParams(type: string): Record<string, number | string> {
   return { ...(DEFAULT_EFFECT_PARAMS[type] ?? {}) };
 }
+
+function asNum(v: number | string | undefined, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** 语义强度（0..1）：把效果器核心参数换算成感知量，参数视图里的细调会同步反映 */
+export function semanticStrength(type: string, params: Record<string, number | string>): number {
+  switch (type) {
+    case "wide":
+      return clamp01(asNum(params.intensity, 0.354331));
+    case "aural":
+      return clamp01(asNum(params.wet, 1));
+    case "reverb":
+      return clamp01(asNum(params.wet, 0.3));
+    case "maximizer":
+      return clamp01(asNum(params.gain_boost_db, 6) / 30);
+    case "loudness": {
+      const ref = asNum(params.reference_phon, 80);
+      return clamp01((ref - asNum(params.phon, ref)) / 40);
+    }
+    default:
+      return 1;
+  }
+}
+
+/** 把语义强度（0..1）写回对应的核心参数，与参数视图共用同一份数据 */
+export function applySemanticStrength(
+  type: string,
+  strength: number,
+  params: Record<string, number | string>,
+): Record<string, number | string> {
+  const next = { ...params };
+  const s = clamp01(strength);
+  switch (type) {
+    case "wide":
+      next.intensity = Math.round(s * 10000) / 10000;
+      break;
+    case "aural":
+    case "reverb":
+      next.wet = Math.round(s * 10000) / 10000;
+      break;
+    case "maximizer":
+      next.gain_boost_db = Math.round(s * 3000) / 100;
+      break;
+    case "loudness": {
+      const ref = asNum(params.reference_phon, 80);
+      next.phon = Math.round((ref - s * 40) * 100) / 100;
+      break;
+    }
+  }
+  return next;
+}

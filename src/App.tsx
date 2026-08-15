@@ -58,6 +58,7 @@ export default function App() {
     removeEffect,
     toggleEffect,
     patchEffectParam,
+    patchEffectSemantic,
     removeBlock,
     removeGroup,
     patchBlock,
@@ -507,7 +508,7 @@ export default function App() {
                 effects={effects}
                 onToggleEffect={toggleEffect}
                 onRemoveEffect={removeEffect}
-                onChangeEffectParam={patchEffectParam}
+                onChangeEffectStrength={patchEffectSemantic}
                 activeKey={dragApi.activeKey}
                 flyKey={dragApi.fly?.key ?? null}
                 virtualIndexOf={dragApi.virtualIndexOf}
