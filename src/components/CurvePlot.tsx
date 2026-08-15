@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { Block } from "../lib/model";
 
 /** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
@@ -96,7 +96,7 @@ interface HoverPt {
   cvy: number;
 }
 
-export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
+function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
   const [hoverPt, setHoverPt] = useState<HoverPt | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -327,7 +327,7 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
       <svg
         ref={svgRef}
         viewBox={`0 0 ${curveW} 220`}
-        width="100%"
+        width={curveW}
         height="220"
         preserveAspectRatio="none"
         role="img"
@@ -409,3 +409,5 @@ export default function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) 
     </>
   );
 }
+
+export default memo(CurvePlot);

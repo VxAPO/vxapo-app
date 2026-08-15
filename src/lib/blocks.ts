@@ -61,6 +61,7 @@ export function blocksEqualShape(a: Block, b: Block): boolean {
   return (
     a.group === b.group &&
     a.name === b.name &&
+    a.channel === b.channel &&
     a.enabled === b.enabled &&
     a.bands.length === b.bands.length &&
     a.bands.every((band, i) => {

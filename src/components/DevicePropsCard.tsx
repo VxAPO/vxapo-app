@@ -4,9 +4,17 @@ interface DevicePropsCardProps {
   device: Device | null;
   peakGain: number;
   totalBands: number;
+  channelOn: boolean;
+  channelCounts: number[];
 }
 
-export default function DevicePropsCard({ device: selected, peakGain, totalBands }: DevicePropsCardProps) {
+export default function DevicePropsCard({
+  device: selected,
+  peakGain,
+  totalBands,
+  channelOn,
+  channelCounts,
+}: DevicePropsCardProps) {
   return (
     <div className="dev-props-card">
       <div className="dev-props-title">设备属性</div>
@@ -17,7 +25,7 @@ export default function DevicePropsCard({ device: selected, peakGain, totalBands
       <div className="dev-prop"><span>位深</span><b>{selected?.bit_depth != null ? `${selected.bit_depth} bit` : "—"}</b></div>
       <div className="dev-prop"><span>音量</span><b>{selected?.volume != null ? `${Math.round(selected.volume * 100)}%` : "—"}</b></div>
       <div className="dev-prop"><span>峰值增益</span><b>{peakGain > 0 ? "+" : ""}{peakGain.toFixed(1)} dB</b></div>
-      <div className="dev-prop"><span>段数</span><b>{totalBands}</b></div>
+      <div className="dev-prop"><span>段数</span><b>{channelOn && channelCounts.length ? channelCounts.join(" | ") : totalBands}</b></div>
     </div>
   );
 }

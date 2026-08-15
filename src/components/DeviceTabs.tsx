@@ -41,16 +41,24 @@ export default function DeviceTabs({
               aria-label={`卸载 ${d.name}`}
               onClick={() => onUninstall(d)}
             >
-              <X size={13} strokeWidth={2.5} />
+              <X size={14} strokeWidth={2.5} />
             </button>
           </div>
         ))}
       </div>
-      <button className="tab-add" type="button" aria-label="新设备安装" title="安装新设备" onClick={onAdd}>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="butt" />
-        </svg>
-      </button>
+      {devices.length > 0 && (
+        <button
+          className="tab-add"
+          type="button"
+          aria-label="新设备安装"
+          title="安装新设备"
+          onClick={onAdd}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="butt" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

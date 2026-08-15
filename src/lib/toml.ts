@@ -8,17 +8,35 @@ function num(n: number): string {
   return Number(n.toFixed(4)).toString();
 }
 
-function str(s: string): string {
+function str(s: unknown): string {
   return JSON.stringify(s);
 }
 
-export function buildToml(blocks: Block[], enabled = true, effects: EffectItem[] = []): string {
+export interface ChannelCtx {
+  /** 通道模式是否开启 */
+  mode: boolean;
+  /** 第一声道短名 */
+  first: string;
+  /** 当前激活声道短名（新增块归属） */
+  active: string;
+}
+
+export function buildToml(
+  blocks: Block[],
+  enabled = true,
+  effects: EffectItem[] = [],
+  channel?: ChannelCtx,
+): string {
   const out: string[] = ["version = 1", `enabled = ${enabled}`, "", "[meta]", 'app = "vxapo"', "schema = 1", ""];
-  for (const b of blocks) {
+  const writeBlocks = channel?.mode
+    ? blocks
+    : blocks.filter((b) => !b.channel || b.channel === channel?.first);
+  for (const b of writeBlocks) {
     out.push("[[effects]]", 'type = "peq"');
     if (b.group) out.push(`group = ${str(b.group)}`);
     if (b.name) out.push(`name = ${str(b.name)}`);
     out.push(`enabled = ${b.enabled}`, "crossover_hz = 200");
+    if (channel?.mode) out.push(`channels = ${str([b.channel ?? channel.first])}`);
     for (const band of b.bands) {
       out.push("", "[[effects.bands]]", `fc = ${num(band.fc)}`, `gain_db = ${num(band.gain_db)}`, `q = ${num(band.q)}`);
     }
@@ -41,7 +59,7 @@ function pushBlock(blocks: Block[], b: Block) {
     return;
   }
   for (const band of b.bands) {
-    blocks.push({ group: b.group, name: b.name, enabled: b.enabled, bands: [band] });
+    blocks.push({ group: b.group, name: b.name, channel: b.channel, enabled: b.enabled, bands: [band] });
   }
 }
 
@@ -81,7 +99,7 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
     if (currentEffect) {
       if (key === "enabled") {
         currentEffect.enabled = value === "true";
-      } else if (key !== "type") {
+      } else if (key !== "type" && key !== "channels") {
         const n = Number(value);
         (currentEffect.params ??= {})[key] = Number.isFinite(n) ? n : unquote(value);
       }
@@ -100,6 +118,15 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
         break;
       case "crossover_hz":
         break;
+      case "channels": {
+        try {
+          const arr = JSON.parse(value) as unknown;
+          if (Array.isArray(arr) && arr.length) current.channel = String(arr[0]);
+        } catch {
+          /* 忽略无法解析的 channels */
+        }
+        break;
+      }
       case "fc":
         current.bands.push({ fc: Number(value), gain_db: 0, q: 1 });
         break;

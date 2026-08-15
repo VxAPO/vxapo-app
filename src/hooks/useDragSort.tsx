@@ -244,7 +244,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
           key: d.key,
           content,
           from: box(from),
-          to: box(to),
+          // 飞行副本保持原卡尺寸，只把落点坐标移过去，避免高低不同的卡互相拉伸
+          to: { left: to.left, top: to.top, width: from.width, height: from.height },
         };
         setFly(nextFly);
         flyRef.current = nextFly;

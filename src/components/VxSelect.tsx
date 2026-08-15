@@ -1,4 +1,5 @@
 import * as Select from "@radix-ui/react-select";
+import type { ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 export interface VxSelectOption {
@@ -7,18 +8,29 @@ export interface VxSelectOption {
 }
 
 interface VxSelectProps {
-  value: string;
+  value?: string;
   options: VxSelectOption[];
   onValueChange: (value: string) => void;
   ariaLabel?: string;
   disabled?: boolean;
+  placeholder?: string;
+  icon?: ReactNode;
 }
 
-export default function VxSelect({ value, options, onValueChange, ariaLabel, disabled = false }: VxSelectProps) {
+export default function VxSelect({
+  value,
+  options,
+  onValueChange,
+  ariaLabel,
+  disabled = false,
+  placeholder,
+  icon,
+}: VxSelectProps) {
   return (
     <Select.Root value={value} onValueChange={onValueChange} disabled={disabled}>
       <Select.Trigger className={`vx-select${disabled ? " disabled" : ""}`} aria-label={ariaLabel}>
-        <Select.Value />
+        {icon}
+        <Select.Value placeholder={placeholder} />
         <Select.Icon className="vx-select-icon">
           <ChevronDown size={14} />
         </Select.Icon>

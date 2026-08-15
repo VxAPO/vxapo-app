@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Save, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, Save, Trash2 } from "lucide-react";
 import { arrayMove } from "@dnd-kit/sortable";
+import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
 import type { Block, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { LIBRARY } from "./data/library";
 import { buildSemanticUnits, presetAccent } from "./lib/blocks";
+import { channelLabel, channelNamesFor } from "./lib/channels";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useDragSort } from "./hooks/useDragSort";
@@ -50,6 +52,14 @@ export default function App() {
     confirmUninstall,
   } = useDevices(onError, (name) => notify(`已卸载 ${name}`));
 
+  const [channelOn, setChannelOn] = useState(false);
+  const [activeChannel, setActiveChannel] = useState("L");
+  const channelNames = useMemo(
+    () => channelNamesFor(selected?.channels),
+    [selected?.channels],
+  );
+  const effActiveChannel = channelNames.includes(activeChannel) ? activeChannel : (channelNames[0] ?? "L");
+
   const {
     blocks,
     setBlocks,
@@ -68,9 +78,14 @@ export default function App() {
     patchBlock,
     patchBand,
     totalBands,
+    channelBandCounts,
     deviceTuningOn,
     toggleDeviceTuning,
-  } = useConfig(selectedGuid, onError, notify);
+  } = useConfig(installedDevices.length === 0 ? null : selectedGuid, onError, notify, {
+    mode: channelOn,
+    first: channelNames[0] ?? "L",
+    active: effActiveChannel,
+  });
 
   const { theme, setTheme } = useTheme();
   const { isMax, minimize, toggleMaximize, close } = useWindowControls();
@@ -78,15 +93,16 @@ export default function App() {
   const [view, setView] = useState<ViewMode>("preset");
   const [side, setSide] = useState<SideSection>("preset");
   const [segDir, setSegDir] = useState<"left" | "right">("right");
-  const [channelOn, setChannelOn] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
-  const [curveChannel, setCurveChannel] = useState("左声道");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [hintShift, setHintShift] = useState(0);
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const bottomRowRef = useRef<HTMLDivElement | null>(null);
-  const [bottomBarPad, setBottomBarPad] = useState(220);
+  const resizeClassTimerRef = useRef<number | undefined>(undefined);
+  const [bottomBarPad, setBottomBarPad] = useState(400);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
   const pendingMarqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -223,6 +239,42 @@ export default function App() {
 
   useEffect(() => () => window.cancelAnimationFrame(marqueeRafRef.current), []);
 
+  // 窗口拉伸期间临时关掉毛玻璃，避免每帧重算 backdrop-filter 造成卡顿
+  useEffect(() => {
+    const onResize = () => {
+      document.documentElement.classList.add("is-resizing");
+      window.clearTimeout(resizeClassTimerRef.current);
+      resizeClassTimerRef.current = window.setTimeout(() => {
+        document.documentElement.classList.remove("is-resizing");
+      }, 180);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.clearTimeout(resizeClassTimerRef.current);
+    };
+  }, []);
+
+  // 空态提示行水平对齐顶栏视图切换的真实中心（左右按钮簇宽度不同，不能按窗口中心算）
+  useLayoutEffect(() => {
+    const scrollEl = bodyRef.current;
+    const segEl = document.querySelector<HTMLElement>(".view-seg");
+    if (!scrollEl || !segEl) return;
+    const update = () => {
+      const s = scrollEl.getBoundingClientRect();
+      const v = segEl.getBoundingClientRect();
+      setHintShift(v.left + v.width / 2 - (s.left + s.width / 2));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(scrollEl);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
   const deleteSelectedCards = () => {
     const ids = selectedIds;
     if (!ids.length) return;
@@ -230,6 +282,42 @@ export default function App() {
     setBlocks((prev) => prev.filter((b) => !ids.includes(b.id ?? "")));
     setSelectedIds([]);
   };
+
+  const copySelectedToChannel = (ch: string) => {
+    const ids = selectedIds;
+    if (!ids.length || !channelOn) return;
+    const count = ids.length;
+    if ((channelBandCounts[ch] ?? 0) + count > 31) {
+      notify(`目标声道最多 31 段，复制 ${count} 段将超限`);
+      return;
+    }
+    markDirty();
+    setBlocks((prev) => [
+      ...prev,
+      ...prev
+        .filter((b) => ids.includes(b.id ?? ""))
+        .map((b) => ({
+          ...b,
+          id: crypto.randomUUID(),
+          group: undefined,
+          channel: ch,
+        })),
+    ]);
+    setSelectedIds([]);
+    setActiveChannel(ch);
+    setCopyOpen(false);
+    notify(`已复制 ${count} 段到${channelLabel(ch)}`);
+  };
+
+  useEffect(() => {
+    if (!copyOpen) return;
+    const close = (e: PointerEvent) => {
+      if ((e.target as HTMLElement).closest(".sel-copy")) return;
+      setCopyOpen(false);
+    };
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [copyOpen]);
 
   const openSavePreset = () => {
     const picked = blocks.filter((b) => selectedIds.includes(b.id ?? ""));
@@ -335,7 +423,7 @@ export default function App() {
             x: Math.max(8, Math.min(selGeom.cx, selGeom.bodyW - 8)),
             y: Math.max(
               8,
-              Math.min(selGeom.top - (view === "advanced" ? 26 : 10), selGeom.bodyH - 64),
+              Math.min(selGeom.top - (view === "advanced" ? 36 : 10), selGeom.bodyH - 64),
             ),
           }
         : null,
@@ -404,12 +492,12 @@ export default function App() {
   useLayoutEffect(() => {
     const el = bottomRowRef.current;
     if (!el) return;
-    const update = () => setBottomBarPad(Math.ceil(el.getBoundingClientRect().height) + 16);
+    const update = () => setBottomBarPad(400);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [installedDevices.length]);
 
   const overlayContent = useCallback(
     (key: string, num: number): ReactNode => {
@@ -457,12 +545,25 @@ export default function App() {
       } else {
         setBlocks((prev) => {
           const oi = prev.findIndex((b) => b.id === key);
-          if (oi < 0 || oi === target) return prev;
-          return arrayMove(prev, oi, target);
+          if (oi < 0) return prev;
+          const first = channelNames[0] ?? "L";
+          const ch = prev[oi].channel ?? first;
+          const idxs: number[] = [];
+          prev.forEach((b, i) => {
+            if ((b.channel ?? first) === ch) idxs.push(i);
+          });
+          const oPos = idxs.indexOf(oi);
+          if (oPos < 0 || oPos === target) return prev;
+          const moved = arrayMove(idxs, oPos, target);
+          const next = [...prev];
+          moved.forEach((src, pos) => {
+            next[idxs[pos]] = prev[src];
+          });
+          return next;
         });
       }
     },
-    [setBlocks],
+    [setBlocks, channelNames],
   );
 
   const commitEffectOrder = useCallback(
@@ -541,6 +642,10 @@ export default function App() {
   const toggleChannel = () => {
     markDirty();
     setChannelOn((v) => !v);
+    setView("advanced");
+    setSegDir("right");
+    blocksDragApi.cancelDrag();
+    effectsDragApi.cancelDrag();
   };
 
   return (
@@ -548,6 +653,7 @@ export default function App() {
       <TopBar
         view={view}
         channelOn={channelOn}
+        noDevices={installedDevices.length === 0}
         segDir={segDir}
         isMax={isMax}
         onViewChange={switchView}
@@ -559,6 +665,7 @@ export default function App() {
 
       <div className="main">
         <Sidebar
+          disabled={installedDevices.length === 0}
           side={side}
           onSideChange={setSide}
           library={LIBRARY}
@@ -568,7 +675,7 @@ export default function App() {
           onApplyPreset={handleApplyPreset}
           onDeletePreset={setDeletePresetTarget}
           onAddEffect={addEffect}
-          onAddBand={addBand}
+          onAddBand={() => addBand(effActiveChannel)}
           channelOn={channelOn}
           onToggleChannel={toggleChannel}
         />
@@ -585,6 +692,24 @@ export default function App() {
           />
 
           <div className="device-body">
+            {installedDevices.length === 0 ? (
+              <div className="no-device">
+                <img className="no-device-logo" src={logoUrl} alt="" draggable={false} />
+                <button
+                  type="button"
+                  className="no-device-row"
+                  onClick={() => setInstallOpen(true)}
+                >
+                  <span className="no-device-plus">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="butt" />
+                    </svg>
+                  </span>
+                  <span className="no-device-tip">点击加号安装 VxAPO</span>
+                </button>
+              </div>
+            ) : (
+              <>
             <div
               className="tuning-scroll"
               ref={bodyRef}
@@ -598,7 +723,9 @@ export default function App() {
             {!loadErr && view === "preset" && (
               <PresetView
                 blocks={blocks}
-                blocksEmpty={blocks.length === 0}
+                showFilterEmptyHint={blocks.length === 0}
+                showEffectEmptyHint={effects.length === 0}
+                hintShift={hintShift}
                 selectedIds={selectedIds}
                 accentOf={accentOf}
                 effects={effects}
@@ -621,7 +748,14 @@ export default function App() {
             {!loadErr && view === "advanced" && (
               <AdvancedView
                 blocks={blocks}
+                showFilterEmptyHint={blocks.length === 0}
+                showEffectEmptyHint={effects.length === 0}
+                hintShift={hintShift}
                 channelOn={channelOn}
+                channelNames={channelNames}
+                firstChannel={channelNames[0] ?? "L"}
+                activeChannel={effActiveChannel}
+                onChannelChange={setActiveChannel}
                 selectedIds={selectedIds}
                 effects={effects}
                 onToggleEffect={toggleEffect}
@@ -647,6 +781,35 @@ export default function App() {
               >
                 <div className="sel-toolbar-label">已选 {selectedIds.length} 段</div>
                 <div className="sel-toolbar-actions">
+                  {channelOn && (
+                    <div className="sel-copy">
+                      <button
+                        type="button"
+                        className="sel-copy-btn"
+                        onClick={() => setCopyOpen((o) => !o)}
+                      >
+                        <Copy size={14} strokeWidth={2.2} />
+                        <span>复制到声道</span>
+                        <ChevronDown size={14} />
+                      </button>
+                      {copyOpen && (
+                        <div className="sel-copy-menu">
+                          {channelNames
+                            .filter((c) => c !== effActiveChannel)
+                            .map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                className="sel-copy-item"
+                                onClick={() => copySelectedToChannel(c)}
+                              >
+                                {channelLabel(c)}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button className="sel-action save" type="button" onClick={openSavePreset}>
                     <Save size={14} strokeWidth={2.2} />
                     <span>保存为自定义预设</span>
@@ -671,15 +834,28 @@ export default function App() {
             )}
             </div>
             <div className="bottom-row" ref={bottomRowRef}>
-              <DevicePropsCard device={selected} peakGain={peakGain} totalBands={totalBands} />
+              <DevicePropsCard
+                device={selected}
+                peakGain={peakGain}
+                totalBands={totalBands}
+                channelOn={channelOn}
+                channelCounts={channelNames.map((c) => channelBandCounts[c] ?? 0)}
+              />
               <CurvePanel
                 blocks={blocks}
                 fs={selected?.sample_rate ?? 48000}
                 yTop={yTop}
-                curveChannel={curveChannel}
-                onCurveChannelChange={setCurveChannel}
+                curveChannel={channelOn ? effActiveChannel : "all"}
+                onCurveChannelChange={(v) => {
+                  if (channelOn) setActiveChannel(v);
+                }}
+                channelOn={channelOn}
+                channelNames={channelNames}
+                firstChannel={channelNames[0] ?? "L"}
               />
             </div>
+              </>
+            )}
           </div>
         </main>
       </div>

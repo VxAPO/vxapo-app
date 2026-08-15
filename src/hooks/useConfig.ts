@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { friendlyError, readConfig, writeConfig } from "../lib/api";
 import type { Block, EffectItem, PresetLibraryEntry } from "../lib/model";
-import { buildToml, parseConfigWithTail } from "../lib/toml";
+import { buildToml, parseConfigWithTail, type ChannelCtx } from "../lib/toml";
 import { applySemanticStrength, defaultEffectParams, effectsEqual } from "../lib/effects";
 import {
   blocksEqualShape,
@@ -19,6 +19,7 @@ export function useConfig(
   selectedGuid: string | null,
   onError: (msg: string) => void,
   notify: (msg: string) => void,
+  channelCtx: ChannelCtx = { mode: false, first: "L", active: "L" },
 ) {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [effects, setEffects] = useState<EffectItem[]>([]);
@@ -96,7 +97,7 @@ export function useConfig(
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       const effective = tuningMap[selectedGuid] ?? true;
-      const content = buildToml(blocks, effective, effects) + tailRef.current;
+      const content = buildToml(blocks, effective, effects, channelCtx) + tailRef.current;
       writeConfig(selectedGuid, content)
         .then(() => {
           dirtyRef.current = false;
@@ -104,17 +105,40 @@ export function useConfig(
         .catch((e: unknown) => onError(friendlyError(e)));
     }, 300);
     return () => window.clearTimeout(saveTimer.current);
-  }, [blocks, effects, tuningMap, selectedGuid, loaded]);
+  }, [blocks, effects, tuningMap, selectedGuid, loaded, channelCtx.mode, channelCtx.first]);
 
-  const totalBands = useMemo(() => blocks.reduce((n, b) => n + b.bands.length, 0), [blocks]);
+  const writableBlocks = useMemo(
+    () =>
+      channelCtx.mode
+        ? blocks
+        : blocks.filter((b) => !b.channel || b.channel === channelCtx.first),
+    [blocks, channelCtx.mode, channelCtx.first],
+  );
+  const totalBands = useMemo(
+    () => writableBlocks.reduce((n, b) => n + b.bands.length, 0),
+    [writableBlocks],
+  );
+  const channelBandCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (!channelCtx.mode) {
+      counts[channelCtx.first] = totalBands;
+      return counts;
+    }
+    for (const b of blocks) {
+      const ch = b.channel ?? channelCtx.first;
+      counts[ch] = (counts[ch] ?? 0) + b.bands.length;
+    }
+    return counts;
+  }, [blocks, totalBands, channelCtx.mode, channelCtx.first]);
 
   const markDirty = () => {
     dirtyRef.current = true;
   };
 
   const applyPreset = (p: PresetLibraryEntry): string | undefined => {
-    if (totalBands + p.bands.length > 31) {
-      notify(`最多 31 段，当前 ${totalBands} 段，添加 ${p.bands.length} 段将超限`);
+    const current = channelCtx.mode ? (channelBandCounts[channelCtx.active] ?? 0) : totalBands;
+    if (current + p.bands.length > 31) {
+      notify(`最多 31 段，当前 ${current} 段，添加 ${p.bands.length} 段将超限`);
       return undefined;
     }
     const groups = new Set(blocks.map((b) => b.group).filter((g): g is string => !!g));
@@ -128,6 +152,7 @@ export function useConfig(
           group,
           name: b.name ?? p.name,
           enabled: true,
+          channel: channelCtx.mode ? channelCtx.active : undefined,
           bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q }],
         })),
       ];
@@ -135,15 +160,21 @@ export function useConfig(
     return group;
   };
 
-  const addBand = () => {
-    if (totalBands >= 31) {
-      notify("最多 31 段，已达到上限");
+  const addBand = (channel?: string) => {
+    const current = channelCtx.mode ? (channelBandCounts[channelCtx.active] ?? 0) : totalBands;
+    if (current >= 31) {
+      notify("该声道最多 31 段，已达到上限");
       return;
     }
     markDirty();
     setBlocks((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), enabled: true, bands: [{ fc: 1000, gain_db: 0, q: 1 }] },
+      {
+        id: crypto.randomUUID(),
+        enabled: true,
+        channel: channelCtx.mode ? (channel ?? channelCtx.active) : undefined,
+        bands: [{ fc: 1000, gain_db: 0, q: 1 }],
+      },
     ]);
   };
 
@@ -236,6 +267,7 @@ export function useConfig(
     patchBlock,
     patchBand,
     totalBands,
+    channelBandCounts,
     deviceTuningOn,
     toggleDeviceTuning,
   };

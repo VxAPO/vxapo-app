@@ -7,7 +7,9 @@ import SemanticUnitCard from "./SemanticUnitCard";
 
 interface PresetViewProps {
   blocks: Block[];
-  blocksEmpty: boolean;
+  showFilterEmptyHint: boolean;
+  showEffectEmptyHint: boolean;
+  hintShift: number;
   selectedIds: string[];
   accentOf: (b: Block) => string;
   effects: EffectItem[];
@@ -29,7 +31,9 @@ interface PresetViewProps {
 /** 语义视图：滤波器与效果器分区，组内卡只保留组标识 */
 export default function PresetView({
   blocks,
-  blocksEmpty,
+  showFilterEmptyHint,
+  showEffectEmptyHint,
+  hintShift,
   selectedIds,
   accentOf,
   effects,
@@ -51,7 +55,14 @@ export default function PresetView({
     <>
       <div className="tuning-section">
         <div className="section-title">滤波器</div>
-        {blocksEmpty && <div className="hint-row show">从预设栏添加调音</div>}
+        {showFilterEmptyHint && (
+          <div
+            className="hint-row show"
+            style={{ transform: `translateX(${hintShift}px)` }}
+          >
+            从侧栏添加调音
+          </div>
+        )}
         <div className="cards device-cards">
           {blocks.map((b, bi) => {
             const elementKey = b.id ?? String(bi);
@@ -82,6 +93,14 @@ export default function PresetView({
       </div>
       <div className="tuning-section">
         <div className="section-title">效果器</div>
+        {showEffectEmptyHint && (
+          <div
+            className="hint-row show"
+            style={{ transform: `translateX(${hintShift}px)` }}
+          >
+            从侧栏添加调音
+          </div>
+        )}
         <div className="cards device-cards">
           {effects.map((e) => {
             const effKey = `e-${e.type}`;

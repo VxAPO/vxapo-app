@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { X } from "lucide-react";
 import type { EffectItem, PresetLibraryEntry, SideSection } from "../lib/model";
@@ -5,6 +6,7 @@ import { presetAccent } from "../lib/blocks";
 import { EFFECT_DEFS } from "../lib/effects";
 
 interface SidebarProps {
+  disabled: boolean;
   side: SideSection;
   onSideChange: (s: SideSection) => void;
   library: PresetLibraryEntry[];
@@ -20,6 +22,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({
+  disabled,
   side,
   onSideChange,
   library,
@@ -33,9 +36,85 @@ export default function Sidebar({
   channelOn,
   onToggleChannel,
 }: SidebarProps) {
+  const SIDEBAR_MIN = 210;
+  /** 最大宽度随窗口动态变化：最小窗口（800px）时上限 314，始终给右侧视图留出足够宽度 */
+  const sidebarMax = () => Math.min(480, Math.max(SIDEBAR_MIN, window.innerWidth - 486));
+  const [sideW, setSideW] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem("vxapo.sidebarWidth"));
+      if (Number.isFinite(v)) return Math.min(sidebarMax(), Math.max(SIDEBAR_MIN, v));
+    } catch {
+      /* 忽略读取失败 */
+    }
+    return 220;
+  });
+  const [resizing, setResizing] = useState(false);
+  const resizeStartRef = useRef<{ startX: number; startW: number } | null>(null);
+  const resizeRafRef = useRef(0);
+  const pendingWRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("vxapo.sidebarWidth", String(sideW));
+      document.documentElement.style.setProperty("--sidebar-w", `${sideW}px`);
+    } catch {
+      /* 忽略写入失败 */
+    }
+  }, [sideW]);
+
+  useEffect(() => () => window.cancelAnimationFrame(resizeRafRef.current), []);
+
+  useEffect(() => {
+    const onResize = () => setSideW((prev) => Math.min(sidebarMax(), prev));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* 不支持捕获的环境继续走元素事件 */
+    }
+    resizeStartRef.current = { startX: e.clientX, startW: sideW };
+    setResizing(true);
+  };
+
+  const onResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = resizeStartRef.current;
+    if (!r) return;
+    pendingWRef.current = Math.min(
+      sidebarMax(),
+      Math.max(SIDEBAR_MIN, r.startW + (e.clientX - r.startX)),
+    );
+    if (!resizeRafRef.current) {
+      resizeRafRef.current = requestAnimationFrame(() => {
+        resizeRafRef.current = 0;
+        const w = pendingWRef.current;
+        pendingWRef.current = null;
+        if (w != null) setSideW(w);
+      });
+    }
+  };
+
+  const onResizeEnd = () => {
+    window.cancelAnimationFrame(resizeRafRef.current);
+    resizeRafRef.current = 0;
+    pendingWRef.current = null;
+    resizeStartRef.current = null;
+    setResizing(false);
+  };
+
   return (
-    <aside className="sidebar">
-      <div className="side-seg">
+    <aside
+      className={`sidebar${resizing ? " resizing" : ""}${disabled ? " disabled" : ""}`}
+      aria-disabled={disabled}
+      style={{ width: sideW }}
+    >
+      <div className={`sidebar-scroll${disabled ? " disabled" : ""}`}>
+        <div className="side-seg">
         <div className="labels">
           {(["preset", "custom", "advanced"] as SideSection[]).map((s) => (
             <button key={s} type="button" aria-pressed={side === s} onClick={() => onSideChange(s)}>
@@ -45,9 +124,9 @@ export default function Sidebar({
         </div>
         <div className="track" />
         <div className="ind" style={{ left: `${(side === "preset" ? 0 : side === "custom" ? 1 : 2) * 33.33}%`, width: "33.33%" }} />
-      </div>
+        </div>
 
-      {side === "preset" && (
+        {side === "preset" && (
         <div className="cards">
           {library.map((p) => {
             const used = usedPresets.includes(p.id);
@@ -75,9 +154,9 @@ export default function Sidebar({
             );
           })}
         </div>
-      )}
+        )}
 
-      {side === "custom" && (
+        {side === "custom" && (
         <div className="cards">
           {customPresets.length === 0 ? (
             <div className="preset-card preset-empty">
@@ -109,9 +188,9 @@ export default function Sidebar({
             ))
           )}
         </div>
-      )}
+        )}
 
-      {side === "advanced" && (
+        {side === "advanced" && (
         <div className="adv-list">
           <div className="adv-cat">滤波器</div>
           <button className="adv-pill" type="button" onClick={onAddBand}>
@@ -160,7 +239,18 @@ export default function Sidebar({
             <span>通道选择器</span>
           </button>
         </div>
-      )}
+        )}
+      </div>
+      <div
+        className={`sidebar-resizer${resizing ? " dragging" : ""}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整侧边栏宽度"
+        onPointerDown={onResizeDown}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeEnd}
+        onPointerCancel={onResizeEnd}
+      />
     </aside>
   );
 }

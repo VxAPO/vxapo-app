@@ -15,6 +15,8 @@ export interface Block {
   id?: string;
   group?: string;
   name?: string;
+  /** 配置里 channels 的第一个声道短名（无声道分配时，通道模式下按第一声道处理） */
+  channel?: string;
   enabled: boolean;
   bands: Band[];
 }
