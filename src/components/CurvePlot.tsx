@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { Block } from "../lib/model";
+import { snapPx } from "../lib/snap";
 
 /** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
 const FOLLOW_FACTOR = 0.08;
@@ -7,10 +8,6 @@ const FOLLOW_FACTOR = 0.08;
 const FLIP_TRANSLATE_MS = 280;
 /** 安全区半径：以曲线落点为圆心的圆，光标在圆内不切换基准侧 */
 const SAFE_RADIUS = 10;
-
-const DPR = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-/** 按设备像素取整，避免小数位移动画导致文字发虚 */
-const snapPx = (v: number) => Math.round(v * DPR) / DPR;
 
 interface TipGeom {
   wrap: DOMRect;

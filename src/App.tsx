@@ -7,6 +7,7 @@ import type { Block, PresetLibraryEntry, SideSection, ViewMode } from "./lib/mod
 import { LIBRARY } from "./data/library";
 import { accentStyle, buildSemanticUnits, presetAccent } from "./lib/blocks";
 import { channelLabel, channelNamesFor } from "./lib/channels";
+import { snapPx } from "./lib/snap";
 import { loadCustomPresets, loadPresetMeta, saveStored } from "./lib/storage";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
@@ -238,7 +239,7 @@ export default function App() {
     const update = () => {
       const s = scrollEl.getBoundingClientRect();
       const v = segEl.getBoundingClientRect();
-      setHintShift(v.left + v.width / 2 - (s.left + s.width / 2));
+      setHintShift(snapPx(v.left + v.width / 2 - (s.left + s.width / 2)));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -399,10 +400,12 @@ export default function App() {
     () =>
       selGeom
         ? {
-            x: Math.max(8, Math.min(selGeom.cx, selGeom.bodyW - 8)),
-            y: Math.max(
-              8,
-              Math.min(selGeom.top - (view === "advanced" ? 36 : 10), selGeom.bodyH - 64),
+            x: snapPx(Math.max(8, Math.min(selGeom.cx, selGeom.bodyW - 8))),
+            y: snapPx(
+              Math.max(
+                8,
+                Math.min(selGeom.top - (view === "advanced" ? 36 : 10), selGeom.bodyH - 64),
+              ),
             ),
           }
         : null,
@@ -447,8 +450,8 @@ export default function App() {
       const inv = 1 - k;
       const x = inv * inv * anim.start.x + 2 * inv * k * anim.ctrl.x + k * k * anim.to.x;
       const y = inv * inv * anim.start.y + 2 * inv * k * anim.ctrl.y + k * k * anim.to.y;
-      node.style.left = `${Math.round(x)}px`;
-      node.style.top = `${Math.round(y)}px`;
+      node.style.left = `${snapPx(x)}px`;
+      node.style.top = `${snapPx(y)}px`;
       if (t < 1) {
         anim.raf = requestAnimationFrame(step);
       } else {
@@ -804,10 +807,10 @@ export default function App() {
               <div
                 className="marquee-box"
                 style={{
-                  left: Math.min(marquee.x1, marquee.x2),
-                  top: Math.min(marquee.y1, marquee.y2),
-                  width: Math.abs(marquee.x2 - marquee.x1),
-                  height: Math.abs(marquee.y2 - marquee.y1),
+                  left: snapPx(Math.min(marquee.x1, marquee.x2)),
+                  top: snapPx(Math.min(marquee.y1, marquee.y2)),
+                  width: snapPx(Math.abs(marquee.x2 - marquee.x1)),
+                  height: snapPx(Math.abs(marquee.y2 - marquee.y1)),
                 }}
               />
             )}

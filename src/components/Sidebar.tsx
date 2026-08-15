@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type { EffectItem, PresetLibraryEntry, SideSection } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
 import { EFFECT_DEFS } from "../lib/effects";
+import { snapPx } from "../lib/snap";
 
 const SIDEBAR_MIN = 210;
 const SECTIONS: SideSection[] = ["preset", "custom", "advanced"];
@@ -44,7 +45,7 @@ function Sidebar({
   const [sideW, setSideW] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem("vxapo.sidebarWidth"));
-      if (Number.isFinite(v)) return Math.min(sidebarMax(), Math.max(SIDEBAR_MIN, v));
+      if (Number.isFinite(v)) return snapPx(Math.min(sidebarMax(), Math.max(SIDEBAR_MIN, v)));
     } catch {
       /* 忽略读取失败 */
     }
@@ -67,7 +68,7 @@ function Sidebar({
   useEffect(() => () => window.cancelAnimationFrame(resizeRafRef.current), []);
 
   useEffect(() => {
-    const onResize = () => setSideW((prev) => Math.min(sidebarMax(), prev));
+    const onResize = () => setSideW((prev) => snapPx(Math.min(sidebarMax(), prev)));
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -96,7 +97,7 @@ function Sidebar({
         resizeRafRef.current = 0;
         const w = pendingWRef.current;
         pendingWRef.current = null;
-        if (w != null) setSideW(w);
+        if (w != null) setSideW(snapPx(w));
       });
     }
   };

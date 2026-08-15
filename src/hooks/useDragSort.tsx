@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
+import { snapPx } from "../lib/snap";
 
 /** 稳定性约束：消抖必须长于所有拖拽动画，避免动画未结束又触发新一轮布局 */
 const ENTER_DEBOUNCE_MS = 500;
@@ -117,8 +118,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     const d = dragRef.current;
     if (!el || !d) return;
     // 取整到像素网格，悬浮副本的文字渲染与网格卡片保持一致
-    el.style.left = `${Math.round(x - d.offsetX)}px`;
-    el.style.top = `${Math.round(y - d.offsetY)}px`;
+    el.style.left = `${snapPx(x - d.offsetX)}px`;
+    el.style.top = `${snapPx(y - d.offsetY)}px`;
   };
 
   const slotIndexAt = (x: number, y: number, slots: Slot[]): number => {
@@ -183,7 +184,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       const el = document.querySelector<HTMLElement>(`[data-dnd-id="${k}"]`);
       if (el) {
         el.style.transition = trans;
-        el.style.transform = `translate(${toRect.left - baseRect.left}px, ${toRect.top - baseRect.top}px)`;
+        el.style.transform = `translate(${snapPx(toRect.left - baseRect.left)}px, ${snapPx(toRect.top - baseRect.top)}px)`;
       }
     }
     // 被拖卡自身就地占位：在网格流内移动它，避免出现第二张卡抢占槽位
@@ -193,7 +194,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       const baseRect = d.slots[draggedBase].rect;
       const toRect = d.slots[ghostSlot].rect;
       draggedEl.style.transition = trans;
-      draggedEl.style.transform = `translate(${toRect.left - baseRect.left}px, ${toRect.top - baseRect.top}px)`;
+      draggedEl.style.transform = `translate(${snapPx(toRect.left - baseRect.left)}px, ${snapPx(toRect.top - baseRect.top)}px)`;
     }
     d.virtual = target;
     animEndRef.current = performance.now() + LAYOUT_ANIM_MS + ANIM_SETTLE_BUFFER_MS;
