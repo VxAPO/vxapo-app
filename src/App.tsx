@@ -1197,9 +1197,9 @@ export default function App() {
                   data-view="preset"
                   className="view-stage"
                   onAnimationComplete={handlePresetStageComplete}
-                  initial={{ x: "-100%" }}
-                  animate={{ x: 0 }}
-                  exit={{ x: "-100%" }}
+                  initial={{ x: "-100%", opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: "-100%", opacity: 0 }}
                   transition={{ duration: 0.32, ease: "easeInOut" }}
                 >
                   <PresetView
@@ -1234,9 +1234,9 @@ export default function App() {
                   data-view="advanced"
                   className="view-stage"
                   onAnimationComplete={handleAdvancedStageComplete}
-                  initial={{ x: "100%" }}
-                  animate={{ x: 0 }}
-                  exit={{ x: "100%" }}
+                  initial={{ x: "100%", opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: "100%", opacity: 0 }}
                   transition={{ duration: 0.32, ease: "easeInOut" }}
                 >
                   <AdvancedView
