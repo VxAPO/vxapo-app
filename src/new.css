@@ -763,6 +763,12 @@ button {
   min-width: 0;
 }
 
+.view-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .view-stage {
   display: flex;
   flex-direction: column;

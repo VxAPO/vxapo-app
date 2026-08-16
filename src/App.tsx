@@ -156,12 +156,13 @@ export default function App() {
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [viewAnimating, setViewAnimating] = useState(false);
   const [toolbarHidden, setToolbarHidden] = useState(false);
-  const [viewSpacerH, setViewSpacerH] = useState<number | null>(null);
+  const [viewTransitionH, setViewTransitionH] = useState<number | null>(null);
   const viewAnimTimerRef = useRef<number | undefined>(undefined);
   const viewTransitionPendingRef = useRef(false);
   const viewEnterDoneRef = useRef(false);
   const viewExitDoneRef = useRef(false);
   const viewScrollTopRef = useRef(0);
+  const oldViewHRef = useRef(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
@@ -781,7 +782,7 @@ export default function App() {
   const finishViewAnim = useCallback(() => {
     window.clearTimeout(viewAnimTimerRef.current);
     viewTransitionPendingRef.current = false;
-    setViewSpacerH(null);
+    setViewTransitionH(null);
     setViewAnimating(false);
     setSelGeomTick((v) => v + 1);
     // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
@@ -801,9 +802,10 @@ export default function App() {
     const body = bodyRef.current;
     if (body) {
       viewScrollTopRef.current = body.scrollTop;
-      // 用 spacer 锁住旧 scrollHeight，防止 popLayout 把退场视图移出文档流后
-      // scrollHeight 骤降，浏览器把 scrollTop clamp 掉。
-      setViewSpacerH(body.scrollHeight);
+      // 平移期间让内容高度保持为旧页面高度；新视图挂载后由 minHeight 取
+      // max(旧高, 新高)，平移完成后再收窄。
+      oldViewHRef.current = body.scrollHeight;
+      setViewTransitionH(body.scrollHeight);
     }
     setViewAnimating(true);
     setToolbarHidden(true);
@@ -1092,6 +1094,10 @@ export default function App() {
               onPointerCancel={onBodyPointerUp}
             >
               {loadErr && <div className="hint-row show err">{loadErr}</div>}
+            <div
+              className="view-stack"
+              style={viewTransitionH != null ? { minHeight: viewTransitionH } : undefined}
+            >
             <AnimatePresence mode="popLayout" initial={false} onExitComplete={handleViewExitComplete}>
               {!loadErr && view === "preset" && (
                 <motion.div
@@ -1170,7 +1176,7 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-            {viewSpacerH !== null && <div aria-hidden style={{ height: viewSpacerH }} />}
+            </div>
 
             <AnimatePresence>
               {selGeom && selectedIds.length > 0 && !toolbarHidden && (
