@@ -76,6 +76,15 @@ fn read_import_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+/// 前端资源渲染完成后显示主窗口（配合 visible:false，消除白屏一闪）。
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("main") {
+        win.show().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// 导出当前设备 config.toml 到用户选择的路径。
 #[tauri::command]
 fn export_config(guid: String, path: String) -> Result<(), String> {
@@ -339,6 +348,7 @@ pub fn run() {
             write_config,
             read_config,
             read_import_file,
+            show_main_window,
             export_config,
             open_in_explorer,
             list_devices,
