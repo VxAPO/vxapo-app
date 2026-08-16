@@ -13,6 +13,18 @@
   initial-value: #c2c7d1;
 }
 
+@property --border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d9dee7;
+}
+
+@property --border-strong {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b3bbc8;
+}
+
 :root[data-theme="light"] {
   --frame: #f0f3f6;
   --content: #f7f9fc;
@@ -96,7 +108,9 @@
 .theme-transition {
   transition:
     --scrollbar 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    --scrollbar-hover 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    --scrollbar-hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --border 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --border-strong 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .theme-transition *,
