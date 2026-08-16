@@ -483,10 +483,15 @@ export default function App() {
     return () => ro.disconnect();
   }, [selectedIds.length > 0]);
 
-  // 视图/通道切换有 320ms 平移动画，期间旧几何保持不动；动画结束后再重测，避免测到中间态
+  // 视图/通道切换有 320ms 平移动画，期间旧几何保持不动；动画结束后再重测（360ms 留缓冲），避免测到中间态
   const lastViewRef = useRef(view);
   const lastChannelOnRef = useRef(channelOn);
   const lastActiveRef = useRef(effActiveChannel);
+  // selGeom 延迟重测用：避免把 view 加入 effect 依赖后在动画中途就测量。
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
   useEffect(() => {
     const changed =
       lastViewRef.current !== view ||
@@ -496,7 +501,7 @@ export default function App() {
     lastChannelOnRef.current = channelOn;
     lastActiveRef.current = effActiveChannel;
     if (!changed) return;
-    const t = window.setTimeout(() => setSelGeomTick((v) => v + 1), 330);
+    const t = window.setTimeout(() => setSelGeomTick((v) => v + 1), 360);
     return () => window.clearTimeout(t);
   }, [view, channelOn, effActiveChannel]);
 
@@ -508,9 +513,14 @@ export default function App() {
       return;
     }
     const rect = body.getBoundingClientRect();
-    const els = selectedIds
-      .map((id) => body.querySelector<HTMLElement>(`[data-dnd-id="${id}"]`))
-      .filter((el): el is HTMLElement => !!el);
+    // 视图切换时 AnimatePresence 可能同时保留退场/进场两个 view-stage；
+    // 必须只在当前 view-stage 内测量，否则会量到退场卡片的位置。
+    const stage = body.querySelector<HTMLElement>(`[data-view="${viewRef.current}"]`);
+    const els = stage
+      ? selectedIds
+          .map((id) => stage.querySelector<HTMLElement>(`[data-dnd-id="${id}"]`))
+          .filter((el): el is HTMLElement => !!el)
+      : [];
     if (!els.length) {
       // 视图切换/通道过滤动画期间选中卡片可能暂不可见：先给一个可见的默认几何，
       // 动画结束后的延迟重测会把浮窗移到正确位置，避免 selGeom 为 null 导致浮窗不显示
@@ -777,7 +787,7 @@ export default function App() {
       setViewAnimating(false);
       setToolbarHidden(false);
       setSelGeomTick((v) => v + 1);
-    }, 330);
+    }, 360);
   }, []);
 
   const switchView = useCallback((v: ViewMode) => {
@@ -1041,6 +1051,7 @@ export default function App() {
               {!loadErr && view === "preset" && (
                 <motion.div
                   key="preset"
+                  data-view="preset"
                   className="view-stage"
                   initial={{ x: "-100%" }}
                   animate={{ x: 0 }}
@@ -1076,6 +1087,7 @@ export default function App() {
               {!loadErr && view === "advanced" && (
                 <motion.div
                   key="advanced"
+                  data-view="advanced"
                   className="view-stage"
                   initial={{ x: "100%" }}
                   animate={{ x: 0 }}
