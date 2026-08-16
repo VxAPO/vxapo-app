@@ -1,16 +1,5 @@
 /* VxAPO App — 新壳样式（UI 设计规范 02/03/04） */
 
-/* 全局明暗主题颜色过渡：只过渡颜色类属性，不影响布局/位移类动画 */
-* {
-  transition:
-    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-    color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-    fill 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-    stroke 0.32s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 :root[data-theme="light"] {
   --frame: #f0f3f6;
   --content: #f7f9fc;
@@ -23,6 +12,7 @@
   --border-strong: #b3bbc8;
   --hover: #e3e8ef;
   --track: #e3e7ee;
+  --theme-hover-bg: #c2cbd8;
   --brand: #47c3d1;
   --brand-deep: #009aa2;
   --brand-soft: rgba(71, 195, 209, 0.1);
@@ -52,6 +42,7 @@
   --border-strong: rgba(255, 255, 255, 0.22);
   --hover: #25292e;
   --track: #22262a;
+  --theme-hover-bg: #363c45;
   --brand: #00919e;
   --brand-deep: #006265;
   --brand-soft: rgba(71, 195, 209, 0.14);
@@ -70,6 +61,22 @@
   --disabled-fill: #32363b;
   --tab-inactive: #2f3135;
   --tab-active: #45474c;
+}
+
+/* 主题切换过渡：只给主要大面积表面加颜色过渡，避免全元素过渡造成卡顿 */
+.app-shell-new,
+.topbar,
+.sidebar,
+.content,
+.device-body,
+.tuning-scroll,
+.bottom-row,
+.vx-dialog-overlay,
+.vx-dialog-content {
+  transition:
+    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .app-shell-new {
@@ -187,15 +194,6 @@ button {
   display: flex;
   width: 240px;
   flex: none;
-  --theme-hover-h: 220;
-  --theme-hover-s: 18%;
-  --theme-hover-l: 78%;
-}
-
-:root[data-theme="dark"] .theme-seg {
-  --theme-hover-h: 220;
-  --theme-hover-s: 12%;
-  --theme-hover-l: 34%;
 }
 
 .theme-seg button {
@@ -209,7 +207,7 @@ button {
 }
 
 .theme-seg button:hover {
-  background: hsl(var(--theme-hover-h), var(--theme-hover-s), var(--theme-hover-l));
+  background: var(--theme-hover-bg);
 }
 
 .theme-seg.no-hover button:hover {
