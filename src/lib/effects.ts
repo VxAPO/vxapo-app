@@ -24,11 +24,12 @@ export function effectDef(type: string): EffectDef | undefined {
 }
 
 export function effectsEqual(a: EffectItem[], b: EffectItem[]): boolean {
+  const ch = (x: EffectItem) => (x.channels?.length ? [...x.channels].sort().join(",") : "");
   return (
     a.length === b.length &&
     a.every((x, i) => {
       const y = b[i];
-      if (!y || x.type !== y.type || x.enabled !== y.enabled) return false;
+      if (!y || x.type !== y.type || x.enabled !== y.enabled || ch(x) !== ch(y)) return false;
       const px = x.params ?? {};
       const py = y.params ?? {};
       const kx = Object.keys(px);

@@ -70,14 +70,6 @@ function AdvancedView({
     <>
       <div className="tuning-section">
         <div className="section-title">滤波器</div>
-        {showFilterEmptyHint && (
-          <div
-            className="hint-row show"
-            style={{ transform: `translateX(${hintShift}px)` }}
-          >
-            从侧栏添加调音
-          </div>
-        )}
         {channelOn && (
           <div className="col-head">
             <span className="ch-name">{channelNames.length} 声道</span>
@@ -91,6 +83,14 @@ function AdvancedView({
                 {channelLabel(c)}
               </button>
             ))}
+          </div>
+        )}
+        {showFilterEmptyHint && (
+          <div
+            className="hint-row show"
+            style={{ transform: `translateX(${hintShift}px)` }}
+          >
+            从侧栏添加调音
           </div>
         )}
         <div className="cards device-cards">
@@ -131,7 +131,7 @@ function AdvancedView({
         )}
         <div className="cards device-cards">
           {effects.map((e) => {
-            const effKey = `e-${e.type}`;
+            const effKey = `e-${e.id ?? e.type}`;
             const effActive = effectActiveKey === effKey || effectFlyKey === effKey;
             return (
               <DragCard

@@ -11,6 +11,8 @@ interface TopBarProps {
   isMax: boolean;
   onViewChange: (v: ViewMode) => void;
   onOpenSettings: () => void;
+  onImport: () => void;
+  onExport: () => void;
   onMinimize: () => void;
   onToggleMaximize: () => void;
   onClose: () => void;
@@ -24,6 +26,8 @@ function TopBar({
   isMax,
   onViewChange,
   onOpenSettings,
+  onImport,
+  onExport,
   onMinimize,
   onToggleMaximize,
   onClose,
@@ -32,8 +36,8 @@ function TopBar({
     <div className="topbar" data-tauri-drag-region>
       <img className="logo" src={logoUrl} alt="VxAPO" draggable={false} />
       <button className="pill" type="button" onClick={onOpenSettings}>设置</button>
-      <button className="pill" type="button" disabled={noDevices}>导入</button>
-      <button className="pill" type="button" disabled={noDevices}>导出</button>
+      <button className="pill" type="button" disabled={noDevices} onClick={onImport}>导入</button>
+      <button className="pill" type="button" disabled={noDevices} onClick={onExport}>导出</button>
       <span className="spacer" data-tauri-drag-region />
       <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label="视图切换">
         <span className={`seg-thumb ${view === "advanced" ? "right" : ""}`} />

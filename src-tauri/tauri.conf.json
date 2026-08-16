@@ -21,7 +21,8 @@
         "transparent": true,
         "center": true,
         "resizable": true,
-        "maximized": true
+        "maximized": true,
+        "dragDropEnabled": true
       }
     ],
     "security": {

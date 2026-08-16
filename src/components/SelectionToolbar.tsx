@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { motion } from "framer-motion";
 import { ChevronDown, Copy, Save, Trash2 } from "lucide-react";
 import { channelLabel } from "../lib/channels";
 
@@ -29,7 +30,14 @@ export default function SelectionToolbar({
   onDelete,
 }: SelectionToolbarProps) {
   return (
-    <div className="sel-toolbar" ref={toolbarRef}>
+    <motion.div
+      className="sel-toolbar"
+      ref={toolbarRef}
+      initial={{ opacity: 0, x: "-50%", scale: 0.92, y: 6 }}
+      animate={{ opacity: 1, x: "-50%", scale: 1, y: 0 }}
+      exit={{ opacity: 0, x: "-50%", scale: 0.92, y: 6 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+    >
       <div className="sel-toolbar-label">已选 {selectedCount} 段</div>
       <div className="sel-toolbar-actions">
         {channelOn && (
@@ -70,6 +78,6 @@ export default function SelectionToolbar({
           <span>删除</span>
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

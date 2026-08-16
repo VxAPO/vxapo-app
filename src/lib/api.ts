@@ -35,6 +35,26 @@ export async function readProgress(tag: string): Promise<string> {
   return invoke<string>("read_progress", { tag });
 }
 
+/** 读取拖拽导入文件内容（Tauri 文件拖放事件路径）。 */
+export async function readImportFile(path: string): Promise<string> {
+  if (!isTauri) return "";
+  return invoke<string>("read_import_file", { path });
+}
+
+/** 导出当前设备 config.toml 到用户选择的路径，并在资源管理器中选中。 */
+export async function exportConfig(guid: string): Promise<void> {
+  if (!isTauri) return;
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const path = await save({
+    title: "导出 VxAPO 配置",
+    defaultPath: `config-${guid}.toml`,
+    filters: [{ name: "TOML", extensions: ["toml"] }],
+  });
+  if (!path) return;
+  await invoke("export_config", { guid, path });
+  await invoke("open_in_explorer", { path });
+}
+
 export function isInstalled(d: Device): boolean {
   return (
     !!d.installed_version ||

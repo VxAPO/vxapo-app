@@ -106,7 +106,7 @@ function PresetView({
         )}
         <div className="cards device-cards">
           {effects.map((e) => {
-            const effKey = `e-${e.type}`;
+            const effKey = `e-${e.id ?? e.type}`;
             const effActive = effectActiveKey === effKey || effectFlyKey === effKey;
             return (
               <DragCard

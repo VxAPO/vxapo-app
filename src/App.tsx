@@ -4,10 +4,12 @@ import { arrayMove } from "@dnd-kit/sortable";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
-import type { Block, PeqBandKind, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
+import type { Block, EffectItem, PeqBandKind, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { LIBRARY } from "./data/library";
 import { accentStyle, buildSemanticUnits, presetAccent } from "./lib/blocks";
 import { channelLabel, channelNamesFor } from "./lib/channels";
+import { exportConfig, friendlyError, writeConfig } from "./lib/api";
+import { parseConfigWithTail } from "./lib/toml";
 import { snapPx } from "./lib/snap";
 import { loadCustomPresets, loadPresetMeta, saveStored } from "./lib/storage";
 import { useConfig } from "./hooks/useConfig";
@@ -26,6 +28,7 @@ import DeviceTabs from "./components/DeviceTabs";
 import DragLayer from "./components/DragLayer";
 import EffectCard from "./components/EffectCard";
 import EffectSemanticCard from "./components/EffectSemanticCard";
+import ImportDialog from "./components/ImportDialog";
 import InstallDialog from "./components/InstallDialog";
 import PresetView from "./components/PresetView";
 import SavePresetDialog from "./components/SavePresetDialog";
@@ -145,21 +148,29 @@ export default function App() {
   const [segDir, setSegDir] = useState<"left" | "right">("right");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importDeviceGuid, setImportDeviceGuid] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [copyOpen, setCopyOpen] = useState(false);
   const [hintShift, setHintShift] = useState(0);
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [viewAnimating, setViewAnimating] = useState(false);
+  const [toolbarHidden, setToolbarHidden] = useState(false);
+  const viewAnimTimerRef = useRef<number | undefined>(undefined);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
   const pendingMarqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const [selGeom, setSelGeom] = useState<{ cx: number; top: number; bodyW: number; bodyH: number } | null>(null);
+  const [selGeom, setSelGeom] = useState<{ cx: number; minY: number; maxY: number; bodyW: number; bodyH: number } | null>(null);
   const [savePresetOpen, setSavePresetOpen] = useState(false);
   const [savePresetBlocks, setSavePresetBlocks] = useState<Block[]>([]);
   const [savePresetDefaultName, setSavePresetDefaultName] = useState("自定义预设");
   const [deletePresetTarget, setDeletePresetTarget] = useState<PresetLibraryEntry | null>(null);
   const [presetMeta, setPresetMeta] = useState(loadPresetMeta);
   const toolbarElRef = useRef<HTMLDivElement | null>(null);
+  const [toolbarH, setToolbarH] = useState(64);
+  const [toolbarW, setToolbarW] = useState(280);
+  const [selGeomTick, setSelGeomTick] = useState(0);
   const toolbarAnimRef = useRef<{
     raf: number;
     start: { x: number; y: number };
@@ -186,9 +197,24 @@ export default function App() {
     [blocks, channelOn, firstChannel, effActiveChannel],
   );
   const preampGainDb = useMemo(() => {
-    const p = effects.find((e) => e.type === "preamp" && e.enabled);
+    const target = channelOn ? effActiveChannel : "all";
+    const p = effects.find(
+      (e) =>
+        e.type === "preamp" &&
+        e.enabled &&
+        (e.channels?.length ? e.channels.includes(target) : target === "all"),
+    );
     return typeof p?.params?.gain_db === "number" ? p.params.gain_db : 0;
-  }, [effects]);
+  }, [effects, channelOn, effActiveChannel]);
+  const visibleEffects = useMemo(() => {
+    if (!channelOn) return effects;
+    return effects.filter(
+      (e) =>
+        e.type !== "preamp" ||
+        !e.channels?.length ||
+        e.channels.includes(effActiveChannel),
+    );
+  }, [effects, channelOn, effActiveChannel]);
   const evalFreqs = useMemo(() => buildEvalFreqs(visibleBlocks), [visibleBlocks]);
   const fs = selected?.sample_rate ?? 48000;
   const peakGain = useMemo(
@@ -203,8 +229,16 @@ export default function App() {
     setSelectedIds((prev) => prev.filter((id) => blocks.some((b) => b.id === id)));
   }, [blocks]);
 
+  // 通道选择变化后，旧声道的选中卡片从当前视图消失，框选浮窗失去几何参照；
+  // 直接清空选择，避免浮窗悬空/跳到错误位置。
+  useEffect(() => {
+    setSelectedIds([]);
+    setCopyOpen(false);
+  }, [channelOn, effActiveChannel]);
+
   const onBodyPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    if (viewAnimating) return; // 视图切换动画期间不启动框选，避免命中到移动中的卡片
     const t = e.target;
     if (!(t instanceof Element)) return;
     if (t.closest("[data-dnd-id], button, input, select, .bottom-row, .gs-root, [role='slider']")) return;
@@ -219,8 +253,10 @@ export default function App() {
       /* 捕获失败继续走元素事件 */
     }
     const rect = body.getBoundingClientRect();
-    const x = e.clientX - rect.left + body.scrollLeft;
-    const y = e.clientY - rect.top + body.scrollTop;
+    // marquee/toolbar 是 .tuning-scroll 的绝对定位子元素，
+    // 坐标相对滚动容器可视区（padding box），不要加 scrollTop/scrollLeft。
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
     window.cancelAnimationFrame(marqueeRafRef.current);
     marqueeRafRef.current = 0;
     pendingMarqueeRef.current = null;
@@ -233,8 +269,8 @@ export default function App() {
     const body = bodyRef.current;
     if (!s || !body) return;
     const rect = body.getBoundingClientRect();
-    const x = e.clientX - rect.left + body.scrollLeft;
-    const y = e.clientY - rect.top + body.scrollTop;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
     pendingMarqueeRef.current = { x1: s.x, y1: s.y, x2: x, y2: y };
     if (!marqueeRafRef.current) {
       marqueeRafRef.current = requestAnimationFrame(() => {
@@ -270,8 +306,8 @@ export default function App() {
     body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
       if (el.dataset.dndGroup === "effects") return;
       const r = el.getBoundingClientRect();
-      const rx = r.left - rect.left + body.scrollLeft;
-      const ry = r.top - rect.top + body.scrollTop;
+      const rx = r.left - rect.left;
+      const ry = r.top - rect.top;
       if (rx < x2 && rx + r.width > x1 && ry < y2 && ry + r.height > y1) {
         const id = el.dataset.dndId;
         if (id) ids.push(id);
@@ -281,6 +317,7 @@ export default function App() {
   };
 
   useEffect(() => () => window.cancelAnimationFrame(marqueeRafRef.current), []);
+  useEffect(() => () => window.clearTimeout(viewAnimTimerRef.current), []);
 
   // 空态提示行水平对齐顶栏视图切换的真实中心（左右按钮簇宽度不同，不能按窗口中心算）
   useLayoutEffect(() => {
@@ -412,6 +449,57 @@ export default function App() {
     notify("已删除自定义预设");
   }, [deletePresetTarget, notify]);
 
+  // 滚动时实时重测选中卡片几何，避免浮窗与卡片脱节。
+  useEffect(() => {
+    if (selectedIds.length === 0) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        setSelGeomTick((v) => v + 1);
+      });
+    };
+    body.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      body.removeEventListener("scroll", onScroll);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [selectedIds.length > 0]);
+
+  // 工具栏高度变化（如复制到声道菜单展开）时重新避让，避免被顶部/底部裁剪
+  useLayoutEffect(() => {
+    const el = toolbarElRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height;
+      const w = entries[0]?.contentRect.width;
+      if (h && h > 0) setToolbarH((prev) => (prev === h ? prev : h));
+      if (w && w > 0) setToolbarW((prev) => (prev === w ? prev : w));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [selectedIds.length > 0]);
+
+  // 视图/通道切换有 320ms 平移动画，期间旧几何保持不动；动画结束后再重测，避免测到中间态
+  const lastViewRef = useRef(view);
+  const lastChannelOnRef = useRef(channelOn);
+  const lastActiveRef = useRef(effActiveChannel);
+  useEffect(() => {
+    const changed =
+      lastViewRef.current !== view ||
+      lastChannelOnRef.current !== channelOn ||
+      lastActiveRef.current !== effActiveChannel;
+    lastViewRef.current = view;
+    lastChannelOnRef.current = channelOn;
+    lastActiveRef.current = effActiveChannel;
+    if (!changed) return;
+    const t = window.setTimeout(() => setSelGeomTick((v) => v + 1), 330);
+    return () => window.clearTimeout(t);
+  }, [view, channelOn, effActiveChannel]);
+
   // 选中工具栏几何：按选中卡片包围盒宽度取水平中心，下边距按网格行高动态计算
   useEffect(() => {
     const body = bodyRef.current;
@@ -424,46 +512,56 @@ export default function App() {
       .map((id) => body.querySelector<HTMLElement>(`[data-dnd-id="${id}"]`))
       .filter((el): el is HTMLElement => !!el);
     if (!els.length) {
-      setSelGeom(null);
+      // 视图切换/通道过滤动画期间选中卡片可能暂不可见：先给一个可见的默认几何，
+      // 动画结束后的延迟重测会把浮窗移到正确位置，避免 selGeom 为 null 导致浮窗不显示
+      setSelGeom({
+        cx: rect.width / 2,
+        minY: Math.round(rect.height * 0.3),
+        maxY: Math.round(rect.height * 0.35),
+        bodyW: rect.width,
+        bodyH: rect.height,
+      });
       return;
     }
     let minX = Infinity;
     let maxX = -Infinity;
+    let minY = Infinity;
     let maxY = -Infinity;
-    let rowH = 0;
     for (const el of els) {
       const r = el.getBoundingClientRect();
-      const x = r.left - rect.left + body.scrollLeft;
-      const y = r.top - rect.top + body.scrollTop;
+      const x = r.left - rect.left;
+      const y = r.top - rect.top;
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x + r.width);
+      minY = Math.min(minY, y);
       maxY = Math.max(maxY, y + r.height);
-      rowH = Math.max(rowH, r.height);
     }
     setSelGeom({
       cx: (minX + maxX) / 2,
-      top: maxY + Math.round(rowH * 0.5),
+      minY,
+      maxY,
       bodyW: rect.width,
       bodyH: rect.height,
     });
-  }, [selectedIds, blocks, view]);
+  }, [selectedIds, blocks, selGeomTick]);
 
   // 工具栏目标位置（选中范围变化后用于飞行）
-  const toolbarTarget = useMemo(
-    () =>
-      selGeom
-        ? {
-            x: snapPx(Math.max(8, Math.min(selGeom.cx, selGeom.bodyW - 8))),
-            y: snapPx(
-              Math.max(
-                8,
-                Math.min(selGeom.top - (view === "advanced" ? 36 : 10), selGeom.bodyH - 64),
-              ),
-            ),
-          }
-        : null,
-    [selGeom, view],
-  );
+  const toolbarTarget = useMemo(() => {
+    if (!selGeom) return null;
+    const gap = 10;
+    const x = snapPx(
+      Math.max(
+        8 + toolbarW / 2,
+        Math.min(selGeom.cx, selGeom.bodyW - 8 - toolbarW / 2),
+      ),
+    );
+    // 优先放在选中卡片下方；下方空间不足则放到上方，确保不覆盖选中范围且不超出容器
+    const belowY = selGeom.maxY + gap;
+    const aboveY = selGeom.minY - toolbarH - gap;
+    const rawY = belowY + toolbarH + 8 <= selGeom.bodyH ? belowY : aboveY;
+    const y = snapPx(Math.max(8, Math.min(rawY, selGeom.bodyH - toolbarH - 8)));
+    return { x, y };
+  }, [selGeom, toolbarH, toolbarW]);
 
   // 位移动画沿用卡片飞行的二次贝塞尔：控制点水平偏移、先快后慢
   useLayoutEffect(() => {
@@ -594,7 +692,7 @@ export default function App() {
   const commitEffectOrder = useCallback(
     (key: string, target: number) => {
       setEffects((prev) => {
-        const oi = prev.findIndex((e) => `e-${e.type}` === key);
+        const oi = prev.findIndex((e) => `e-${e.id ?? e.type}` === key);
         if (oi < 0 || oi === target) return prev;
         return arrayMove(prev, oi, target);
       });
@@ -604,8 +702,8 @@ export default function App() {
 
   const effectOverlayContent = useCallback(
     (key: string, _num: number): ReactNode => {
-      const type = key.slice(2);
-      const e = effects.find((x) => x.type === type);
+      const id = key.slice(2);
+      const e = effects.find((x) => (x.id ?? x.type) === id);
       if (!e) return null;
       if (view === "preset") {
         return (
@@ -665,13 +763,25 @@ export default function App() {
 
   const effectOverlayClassForKey = useCallback(
     (key: string): string => {
-      const e = effects.find((x) => `e-${x.type}` === key);
+      const e = effects.find((x) => `e-${x.id ?? x.type}` === key);
       return `effect-card${e ? (e.enabled ? " enabled" : " disabled") : ""}`;
     },
     [effects],
   );
 
+  const beginViewAnim = useCallback(() => {
+    setViewAnimating(true);
+    setToolbarHidden(true);
+    window.clearTimeout(viewAnimTimerRef.current);
+    viewAnimTimerRef.current = window.setTimeout(() => {
+      setViewAnimating(false);
+      setToolbarHidden(false);
+      setSelGeomTick((v) => v + 1);
+    }, 330);
+  }, []);
+
   const switchView = useCallback((v: ViewMode) => {
+    beginViewAnim();
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
     setSegDir(v === "advanced" ? "right" : "left");
@@ -680,15 +790,85 @@ export default function App() {
 
   const toggleChannel = useCallback(() => {
     markDirty();
+    beginViewAnim();
+    setCopyOpen(false);
+    const first = channelNames[0] ?? "L";
+    if (!channelOn) {
+      // 开启通道选择器：全局基准电平拆成每声道一个
+      setEffects((prev) => {
+        const globalPreamp = prev.find((e) => e.type === "preamp" && !e.channels?.length);
+        if (!globalPreamp) return prev;
+        const gain =
+          typeof globalPreamp.params?.gain_db === "number"
+            ? globalPreamp.params.gain_db
+            : 0;
+        const perChannel = channelNames.map((ch) => ({
+          id: `preamp:${ch}`,
+          type: "preamp" as const,
+          enabled: globalPreamp.enabled,
+          params: { gain_db: gain },
+          channels: [ch],
+        }));
+        return [...prev.filter((e) => e.type !== "preamp"), ...perChannel];
+      });
+    } else {
+      // 关闭通道选择器：按第一声道合并，取消声道标识
+      setEffects((prev) => {
+        const firstPreamp = prev.find(
+          (e) => e.type === "preamp" && e.channels?.includes(first),
+        );
+        if (!firstPreamp) return prev;
+        const gain =
+          typeof firstPreamp.params?.gain_db === "number"
+            ? firstPreamp.params.gain_db
+            : 0;
+        return [
+          ...prev.filter((e) => e.type !== "preamp"),
+          {
+            id: "preamp:all",
+            type: "preamp" as const,
+            enabled: firstPreamp.enabled,
+            params: { gain_db: gain },
+          },
+        ];
+      });
+    }
     setChannelOn((v) => !v);
     setView("advanced");
     setSegDir("right");
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
-  }, [markDirty, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
+  }, [channelOn, channelNames, markDirty, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
 
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const openInstall = useCallback(() => setInstallOpen(true), []);
+  const openImport = useCallback(() => {
+    const guid = selectedGuid ?? installedDevices[0]?.guid ?? null;
+    setImportDeviceGuid(guid);
+    setImportOpen(true);
+  }, [selectedGuid, installedDevices]);
+  const handleImport = useCallback(
+    async (guid: string, content: string) => {
+      try {
+        const parsed = parseConfigWithTail(content);
+        if (parsed.tail.trim()) {
+          notify("导入失败：TOML 中包含无法识别的内容");
+          return;
+        }
+        await writeConfig(guid, content);
+        setSelectedGuid(guid);
+        setImportOpen(false);
+        notify("导入成功");
+      } catch (e) {
+        notify(`导入失败：${friendlyError(e)}`);
+      }
+    },
+    [notify, setSelectedGuid],
+  );
+  const handleExport = useCallback(() => {
+    if (!selectedGuid) return;
+    exportConfig(selectedGuid).catch((e: unknown) => notify(`导出失败：${friendlyError(e)}`));
+  }, [selectedGuid, notify]);
   const handleToggleMaximize = useCallback(() => void toggleMaximize(), [toggleMaximize]);
   const handleInstalled = useCallback((name: string) => notify(`已安装 ${name}`), [notify]);
   const handleCurveChannelChange = useCallback(
@@ -697,31 +877,75 @@ export default function App() {
     },
     [channelOn],
   );
+
+  const handleChannelChange = useCallback((ch: string) => {
+    setActiveChannel(ch);
+    setSelectedIds([]);
+    setCopyOpen(false);
+  }, []);
   const handleAddBand = useCallback(
     (kind: PeqBandKind) => addBand(kind, effActiveChannel),
     [addBand, effActiveChannel],
   );
   const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
   const normalizeGain = useCallback(() => {
-    const freqs = buildEvalFreqs(blocks);
-    const globalPeak = curveMax(freqs, blocks, fs, 0);
-    if (Math.abs(globalPeak) < 0.05) {
+    const first = channelNames[0] ?? "L";
+    const groups = new Map<string, Block[]>();
+    if (channelOn) {
+      for (const ch of channelNames) groups.set(ch, []);
+      for (const b of blocks) {
+        const ch = b.channel ?? first;
+        const list = groups.get(ch);
+        if (list) list.push(b);
+        else groups.set(ch, [b]);
+      }
+    } else {
+      groups.set("all", blocks);
+    }
+
+    const updates: { id: string; channels?: string[]; gain_db: number }[] = [];
+    for (const [ch, chBlocks] of groups) {
+      const freqs = buildEvalFreqs(chBlocks);
+      const peak = curveMax(freqs, chBlocks, fs, 0);
+      if (Math.abs(peak) < 0.05) continue;
+      updates.push(
+        channelOn
+          ? { id: `preamp:${ch}`, channels: [ch], gain_db: Math.round(-peak * 10) / 10 }
+          : { id: "preamp:all", gain_db: Math.round(-peak * 10) / 10 },
+      );
+    }
+    if (!updates.length) {
       notify("当前峰值增益已接近 0 dB，无需归一化");
       return;
     }
-    const gain = -globalPeak;
-    const rounded = Math.round(gain * 10) / 10;
     markDirty();
     setEffects((prev) => {
-      const idx = prev.findIndex((e) => e.type === "preamp");
-      const item = { type: "preamp", enabled: true, params: { gain_db: rounded } };
-      if (idx < 0) return [...prev, item];
-      return prev.map((e, i) => (i === idx ? item : e));
+      let next = prev;
+      for (const u of updates) {
+        const item: EffectItem = {
+          id: u.id,
+          type: "preamp",
+          enabled: true,
+          params: { gain_db: u.gain_db },
+          ...(u.channels ? { channels: u.channels } : {}),
+        };
+        const idx = next.findIndex((e) => e.id === u.id);
+        next = idx < 0 ? [...next, item] : next.map((e, i) => (i === idx ? item : e));
+      }
+      return next;
     });
-    notify(
-      `已将基准电平设为 ${rounded > 0 ? "+" : ""}${rounded.toFixed(1)} dB，峰值补偿到 0 dB`,
-    );
-  }, [blocks, fs, markDirty, notify]);
+    if (channelOn) {
+      const summary = updates
+        .map((u) => `${u.channels?.[0]} ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB`)
+        .join("，");
+      notify(`已按声道设置基准电平：${summary}`);
+    } else {
+      const u = updates[0];
+      notify(
+        `已将基准电平设为 ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB，峰值补偿到 0 dB`,
+      );
+    }
+  }, [blocks, channelOn, channelNames, fs, markDirty, notify]);
   const closeDeletePreset = useCallback((open: boolean) => {
     if (!open) setDeletePresetTarget(null);
   }, []);
@@ -748,6 +972,8 @@ export default function App() {
         isMax={isMax}
         onViewChange={switchView}
         onOpenSettings={openSettings}
+        onImport={openImport}
+        onExport={handleExport}
         onMinimize={minimize}
         onToggleMaximize={handleToggleMaximize}
         onClose={close}
@@ -824,11 +1050,11 @@ export default function App() {
                   <PresetView
                     blocks={blocks}
                     showFilterEmptyHint={blocks.length === 0}
-                    showEffectEmptyHint={effects.length === 0}
+                    showEffectEmptyHint={visibleEffects.length === 0}
                     hintShift={hintShift}
                     selectedIds={selectedIds}
                     accentOf={accentOf}
-                    effects={effects}
+                    effects={visibleEffects}
                     onToggleEffect={toggleEffect}
                     onRemoveEffect={removeEffect}
                     onChangeEffectStrength={patchEffectSemantic}
@@ -859,15 +1085,15 @@ export default function App() {
                   <AdvancedView
                     blocks={blocks}
                     showFilterEmptyHint={blocks.length === 0}
-                    showEffectEmptyHint={effects.length === 0}
+                    showEffectEmptyHint={visibleEffects.length === 0}
                     hintShift={hintShift}
                     channelOn={channelOn}
                     channelNames={channelNames}
                     firstChannel={channelNames[0] ?? "L"}
                     activeChannel={effActiveChannel}
-                    onChannelChange={setActiveChannel}
+                    onChannelChange={handleChannelChange}
                     selectedIds={selectedIds}
-                    effects={effects}
+                    effects={visibleEffects}
                     onToggleEffect={toggleEffect}
                     onRemoveEffect={removeEffect}
                     onChangeEffectParam={patchEffectParam}
@@ -886,20 +1112,22 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            {selGeom && selectedIds.length > 0 && (
-              <SelectionToolbar
-                selectedCount={selectedIds.length}
-                channelOn={channelOn}
-                channelNames={channelNames}
-                activeChannel={effActiveChannel}
-                copyOpen={copyOpen}
-                toolbarRef={toolbarElRef}
-                onToggleCopy={handleToggleCopy}
-                onCopyToChannel={copySelectedToChannel}
-                onSave={openSavePreset}
-                onDelete={deleteSelectedCards}
-              />
-            )}
+            <AnimatePresence>
+              {selGeom && selectedIds.length > 0 && !toolbarHidden && (
+                <SelectionToolbar
+                  selectedCount={selectedIds.length}
+                  channelOn={channelOn}
+                  channelNames={channelNames}
+                  activeChannel={effActiveChannel}
+                  copyOpen={copyOpen}
+                  toolbarRef={toolbarElRef}
+                  onToggleCopy={handleToggleCopy}
+                  onCopyToChannel={copySelectedToChannel}
+                  onSave={openSavePreset}
+                  onDelete={deleteSelectedCards}
+                />
+              )}
+            </AnimatePresence>
             {marquee && (
               <div
                 className="marquee-box"
@@ -961,6 +1189,14 @@ export default function App() {
         }
         onConfirm={confirmDeletePreset}
       />
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        devices={installedDevices}
+        selectedGuid={importDeviceGuid}
+        onSelectDevice={setImportDeviceGuid}
+        onImport={handleImport}
+      />
       <InstallDialog
         open={installOpen}
         onOpenChange={setInstallOpen}
@@ -993,7 +1229,7 @@ export default function App() {
         activeContent={effectsDragApi.activeKey ? effectsDragApi.renderOverlay(effectsDragApi.activeKey, effectsDragApi.overlayNum) : null}
         classForKey={effectOverlayClassForKey}
       />
-      {notice && <Toast message={notice} />}
+      <AnimatePresence>{notice && <Toast message={notice} />}</AnimatePresence>
     </div>
   );
 }

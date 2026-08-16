@@ -43,6 +43,38 @@ fn read_config(guid: String) -> Result<String, String> {
     }
 }
 
+/// 读取导入文件内容（前端拖拽导入时使用）。
+#[tauri::command]
+fn read_import_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+/// 导出当前设备 config.toml 到用户选择的路径。
+#[tauri::command]
+fn export_config(guid: String, path: String) -> Result<(), String> {
+    let src = format!(r"C:\ProgramData\VxAPO\{guid}\config.toml");
+    let content = std::fs::read_to_string(&src).map_err(|e| e.to_string())?;
+    std::fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// 在 Windows 资源管理器中选中导出文件。
+#[tauri::command]
+fn open_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg("/select,")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+    }
+    Ok(())
+}
+
 /// 设备列表（CLI list --json，UI 设计规范 05）；Rust 侧反序列化，
 /// 前端直接拿到强类型数组，避免字符串二次解析。
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -263,9 +295,13 @@ fn read_progress(tag: String) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             write_config,
             read_config,
+            read_import_file,
+            export_config,
+            open_in_explorer,
             list_devices,
             uninstall_device,
             install_device,
