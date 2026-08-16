@@ -2281,12 +2281,17 @@ input[type="number"]::-webkit-outer-spin-button {
   outline-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
 }
 
-:root[data-theme="dark"] .drag-card.is-dragging.is-selected {
-  border-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
+:root[data-theme="dark"] .drag-card.is-selected:not(.is-dragging) {
+  box-shadow: var(--hover-shadow);
 }
 
+:root[data-theme="dark"] .drag-card.is-dragging.is-selected {
+  border-color: var(--border-strong);
+}
+
+:root[data-theme="dark"] .drag-card.is-dragging.sem-group,
 :root[data-theme="dark"] .drag-card.is-dragging:not(.is-selected).sem-group {
-  border-left-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
+  border-left-color: var(--border-strong);
 }
 
 /* 深色模式：曲线卡片与设备属性毛玻璃更实，避免透底发灰 */
@@ -2572,15 +2577,21 @@ input[type="number"]::-webkit-outer-spin-button {
   outline-offset: -2px;
 }
 
-/* 被框选的卡片拖拽成占位框时：不再用描边覆盖，虚线直接换成对应色 */
-.drag-card.is-dragging.is-selected {
-  outline: none;
-  border-color: var(--card-accent, var(--brand));
+/* 被框选的卡片阴影与鼠标 hover 一致 */
+.drag-card.is-selected:not(.is-dragging) {
+  box-shadow: var(--hover-shadow);
 }
 
-/* 未被框选的有组卡拖拽时，占位框左侧保留组色边（只改颜色，边框宽度不变） */
+/* 被框选的卡片拖拽成占位框时：不再用描边覆盖，虚线统一用普通灰色 */
+.drag-card.is-dragging.is-selected {
+  outline: none;
+  border-color: var(--border-strong);
+}
+
+/* 有组卡拖拽占位框的左侧组色边也恢复成普通灰色虚线 */
+.drag-card.is-dragging.sem-group,
 .drag-card.is-dragging:not(.is-selected).sem-group {
-  border-left-color: var(--card-accent);
+  border-left-color: var(--border-strong);
 }
 
 /* 选中工具栏：圆角矩形，浮动在选中网格下方，按选中宽度动态居中 */
