@@ -1145,7 +1145,16 @@ export default function App() {
             onAdd={openInstall}
           />
 
-          <div className="device-body" key={selectedGuid ?? "none"}>
+          <div className="device-body">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={selectedGuid ?? "none"}
+                className="device-page"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: "easeInOut" }}
+              >
             {installedDevices.length === 0 ? (
               <div className="no-device">
                 <img className="no-device-logo" src={logoUrl} alt="" draggable={false} />
@@ -1312,6 +1321,8 @@ export default function App() {
             </div>
               </>
             )}
+              </motion.div>
+            </AnimatePresence>
           </div>
             </main>
           </>
