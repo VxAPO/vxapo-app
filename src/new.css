@@ -879,10 +879,7 @@ button {
   border-color: rgba(71, 195, 209, 0.55);
 }
 
-/* 组卡启用描边跟随组色（无组卡保持默认青色描边） */
-.group-card.enabled.sem-group {
-  border-color: var(--card-accent, var(--brand));
-}
+/* 有组/无组启用描边统一为半透明青色；组色只用于组名/开关/标签等元素 */
 
 .group-card.disabled .enable-dot {
   color: #3d4552;
@@ -2320,9 +2317,6 @@ input[type="number"]::-webkit-outer-spin-button {
   background: var(--preset-accent-dark, var(--preset-accent, var(--brand)));
 }
 
-:root[data-theme="dark"] .group-card.enabled.sem-group {
-  border-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
-}
 
 
 :root[data-theme="dark"] .sem-group .enable-dot.on {
