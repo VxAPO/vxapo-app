@@ -224,7 +224,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       commitDragOrder(d, finalSlot);
       setTick((t) => t + 1);
       if (from) {
-        const box = (r: DOMRect) => ({ left: r.left, top: r.top, width: r.width, height: r.height });
+        const box = (r: DOMRect) => ({ left: snapPx(r.left), top: snapPx(r.top), width: snapPx(r.width), height: snapPx(r.height) });
         // 显式锁定原卡片内容隐藏，避免任何渲染时序让它在飞行动画中闪现
         const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
         if (draggedEl) draggedEl.setAttribute("data-fly-hidden", "1");
@@ -249,7 +249,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
           content,
           from: box(from),
           // 飞行副本保持原卡尺寸，只把落点坐标移过去，避免高低不同的卡互相拉伸
-          to: { left: to.left, top: to.top, width: from.width, height: from.height },
+          to: { left: snapPx(to.left), top: snapPx(to.top), width: snapPx(from.width), height: snapPx(from.height) },
         };
         setFly(nextFly);
         flyRef.current = nextFly;
@@ -314,7 +314,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     };
     setActiveKey(key);
     setOverlayNum(base.get(key)! + 1);
-    setDragSize({ width: origin.rect.width, height: origin.rect.height });
+    setDragSize({ width: snapPx(origin.rect.width), height: snapPx(origin.rect.height) });
     const tryPosition = () => {
       if (overlayRef.current) {
         positionOverlay(x, y);

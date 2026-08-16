@@ -2241,6 +2241,11 @@ input[type="number"]::-webkit-outer-spin-button {
   box-shadow: var(--hover-shadow), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
+:root[data-theme="dark"] .drag-card.is-dragging,
+:root[data-theme="dark"] .drag-card.is-dragging:hover {
+  box-shadow: none;
+}
+
 :root[data-theme="dark"] .gs-thumb::after {
   border-color: #1d1f22;
   box-shadow: 0 1px 3px rgba(var(--shadow-ink), 0.55);

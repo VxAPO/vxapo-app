@@ -74,18 +74,16 @@ function FlyPath({
     };
   });
   // 中间帧取整对齐像素网格，让徽标文字渲染与网格卡片一致；最后一帧保持精确落点
-  const roundedPts = pts.map((p, i) =>
-    i === N - 1 ? p : { left: snapPx(p.left), top: snapPx(p.top) },
-  );
+  const roundedPts = pts.map((p) => ({ left: snapPx(p.left), top: snapPx(p.top) }));
   const moveTimes = pts.map((_, i) => (i / (N - 1)) * 0.72);
   const widths = pts.map(
     (_, i) => fly.from.width + (fly.to.width - fly.from.width) * (i / (N - 1)),
   );
-  const roundedWidths = widths.map((w, i) => (i === N - 1 ? w : snapPx(w)));
+  const roundedWidths = widths.map((w) => snapPx(w));
   const heights = pts.map(
     (_, i) => fly.from.height + (fly.to.height - fly.from.height) * (i / (N - 1)),
   );
-  const roundedHeights = heights.map((h, i) => (i === N - 1 ? h : snapPx(h)));
+  const roundedHeights = heights.map((h) => snapPx(h));
   const strong = "0 10px 28px rgba(0, 0, 0, 0.18)";
   // 阴影淡出：只收扩散（模糊/偏移缩到 0），透明度保持不变，
   // 最后是 0 半径的不可见阴影，看起来像“收缩消失”而非“褪色”
