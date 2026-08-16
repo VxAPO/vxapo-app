@@ -785,8 +785,10 @@ export default function App() {
     window.clearTimeout(viewAnimTimerRef.current);
     viewAnimTimerRef.current = window.setTimeout(() => {
       setViewAnimating(false);
-      setToolbarHidden(false);
       setSelGeomTick((v) => v + 1);
+      // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
+      // 再从旧位置沿贝塞尔曲线飞到新位置。
+      window.setTimeout(() => setToolbarHidden(false), 0);
     }, 360);
   }, []);
 
