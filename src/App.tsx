@@ -157,6 +157,7 @@ export default function App() {
   const [viewAnimating, setViewAnimating] = useState(false);
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [viewTransitionH, setViewTransitionH] = useState<number | null>(null);
+  const [viewCollapsing, setViewCollapsing] = useState(false);
   const viewAnimTimerRef = useRef<number | undefined>(undefined);
   const viewTransitionPendingRef = useRef(false);
   const viewEnterDoneRef = useRef(false);
@@ -782,12 +783,15 @@ export default function App() {
   const finishViewAnim = useCallback(() => {
     window.clearTimeout(viewAnimTimerRef.current);
     viewTransitionPendingRef.current = false;
-    setViewTransitionH(null);
+    // 平移结束后动画收窄：minHeight 从旧高过渡到 0（内容自然高度）。
+    setViewTransitionH(0);
+    setViewCollapsing(true);
     setViewAnimating(false);
     setSelGeomTick((v) => v + 1);
     // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
     // 再从旧位置沿贝塞尔曲线飞到新位置。
     window.setTimeout(() => setToolbarHidden(false), 0);
+    window.setTimeout(() => setViewCollapsing(false), 360);
   }, []);
 
   const tryFinishViewAnim = useCallback(() => {
@@ -803,8 +807,9 @@ export default function App() {
     if (body) {
       viewScrollTopRef.current = body.scrollTop;
       // 平移期间让内容高度保持为旧页面高度；新视图挂载后由 minHeight 取
-      // max(旧高, 新高)，平移完成后再收窄。
+      // max(旧高, 新高)，平移完成后再动画收窄。
       oldViewHRef.current = body.scrollHeight;
+      setViewCollapsing(false);
       setViewTransitionH(body.scrollHeight);
     }
     setViewAnimating(true);
@@ -1096,7 +1101,10 @@ export default function App() {
               {loadErr && <div className="hint-row show err">{loadErr}</div>}
             <div
               className="view-stack"
-              style={viewTransitionH != null ? { minHeight: viewTransitionH } : undefined}
+              style={{
+                minHeight: viewTransitionH ?? undefined,
+                transition: viewCollapsing ? "min-height 0.32s ease" : "none",
+              }}
             >
             <AnimatePresence mode="popLayout" initial={false} onExitComplete={handleViewExitComplete}>
               {!loadErr && view === "preset" && (
