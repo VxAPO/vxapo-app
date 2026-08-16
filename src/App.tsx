@@ -157,6 +157,9 @@ export default function App() {
   const [viewAnimating, setViewAnimating] = useState(false);
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const viewAnimTimerRef = useRef<number | undefined>(undefined);
+  const viewTransitionPendingRef = useRef(false);
+  const viewEnterDoneRef = useRef(false);
+  const viewExitDoneRef = useRef(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
@@ -766,6 +769,7 @@ export default function App() {
 
   const finishViewAnim = useCallback(() => {
     window.clearTimeout(viewAnimTimerRef.current);
+    viewTransitionPendingRef.current = false;
     setViewAnimating(false);
     setSelGeomTick((v) => v + 1);
     // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
@@ -773,22 +777,41 @@ export default function App() {
     window.setTimeout(() => setToolbarHidden(false), 0);
   }, []);
 
+  const tryFinishViewAnim = useCallback(() => {
+    if (!viewTransitionPendingRef.current) return;
+    if (viewEnterDoneRef.current && viewExitDoneRef.current) finishViewAnim();
+  }, [finishViewAnim]);
+
   const beginViewAnim = useCallback(() => {
+    viewTransitionPendingRef.current = true;
+    viewEnterDoneRef.current = false;
+    viewExitDoneRef.current = false;
     setViewAnimating(true);
     setToolbarHidden(true);
     window.clearTimeout(viewAnimTimerRef.current);
-    // 兜底：正常情况下由 view-stage 的 onAnimationComplete 触发 finishViewAnim；
-    // 若极端卡顿导致回调未触发，1200ms 后强制收尾，避免浮窗一直不显示。
+    // 兜底：正常情况下由进场 onAnimationComplete + 退场 onExitComplete
+    // 共同触发 finishViewAnim；若极端卡顿导致回调未触发，1200ms 后强制收尾。
     viewAnimTimerRef.current = window.setTimeout(() => finishViewAnim(), 1200);
   }, [finishViewAnim]);
 
   const handlePresetStageComplete = useCallback(() => {
-    if (viewRef.current === "preset") finishViewAnim();
-  }, [finishViewAnim]);
+    if (viewRef.current === "preset") {
+      viewEnterDoneRef.current = true;
+      tryFinishViewAnim();
+    }
+  }, [tryFinishViewAnim]);
 
   const handleAdvancedStageComplete = useCallback(() => {
-    if (viewRef.current === "advanced") finishViewAnim();
-  }, [finishViewAnim]);
+    if (viewRef.current === "advanced") {
+      viewEnterDoneRef.current = true;
+      tryFinishViewAnim();
+    }
+  }, [tryFinishViewAnim]);
+
+  const handleViewExitComplete = useCallback(() => {
+    viewExitDoneRef.current = true;
+    tryFinishViewAnim();
+  }, [tryFinishViewAnim]);
 
   const switchView = useCallback((v: ViewMode) => {
     if (v === view) return; // 重复点击当前视图不触发进场/退场动画
@@ -1050,7 +1073,7 @@ export default function App() {
               onPointerCancel={onBodyPointerUp}
             >
               {loadErr && <div className="hint-row show err">{loadErr}</div>}
-            <AnimatePresence mode="popLayout" initial={false}>
+            <AnimatePresence mode="popLayout" initial={false} onExitComplete={handleViewExitComplete}>
               {!loadErr && view === "preset" && (
                 <motion.div
                   key="preset"
