@@ -253,10 +253,10 @@ export default function App() {
       /* 捕获失败继续走元素事件 */
     }
     const rect = body.getBoundingClientRect();
-    // marquee/toolbar 是 .tuning-scroll 的绝对定位子元素，
-    // 坐标相对滚动容器可视区（padding box），不要加 scrollTop/scrollLeft。
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // marquee/toolbar 是 .tuning-scroll 的绝对定位子元素，会随内容滚动，
+    // 因此坐标必须换算到滚动内容坐标系（可视坐标 + scrollTop/Left）。
+    const x = e.clientX - rect.left + body.scrollLeft;
+    const y = e.clientY - rect.top + body.scrollTop;
     window.cancelAnimationFrame(marqueeRafRef.current);
     marqueeRafRef.current = 0;
     pendingMarqueeRef.current = null;
@@ -269,8 +269,8 @@ export default function App() {
     const body = bodyRef.current;
     if (!s || !body) return;
     const rect = body.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = e.clientX - rect.left + body.scrollLeft;
+    const y = e.clientY - rect.top + body.scrollTop;
     pendingMarqueeRef.current = { x1: s.x, y1: s.y, x2: x, y2: y };
     if (!marqueeRafRef.current) {
       marqueeRafRef.current = requestAnimationFrame(() => {
@@ -306,8 +306,8 @@ export default function App() {
     body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
       if (el.dataset.dndGroup === "effects") return;
       const r = el.getBoundingClientRect();
-      const rx = r.left - rect.left;
-      const ry = r.top - rect.top;
+      const rx = r.left - rect.left + body.scrollLeft;
+      const ry = r.top - rect.top + body.scrollTop;
       if (rx < x2 && rx + r.width > x1 && ry < y2 && ry + r.height > y1) {
         const id = el.dataset.dndId;
         if (id) ids.push(id);
@@ -513,6 +513,7 @@ export default function App() {
       return;
     }
     const rect = body.getBoundingClientRect();
+    const contentH = body.scrollHeight;
     // 视图切换时 AnimatePresence 可能同时保留退场/进场两个 view-stage；
     // 必须只在当前 view-stage 内测量，否则会量到退场卡片的位置。
     const stage = body.querySelector<HTMLElement>(`[data-view="${viewRef.current}"]`);
@@ -525,11 +526,11 @@ export default function App() {
       // 视图切换/通道过滤动画期间选中卡片可能暂不可见：先给一个可见的默认几何，
       // 动画结束后的延迟重测会把浮窗移到正确位置，避免 selGeom 为 null 导致浮窗不显示
       setSelGeom({
-        cx: rect.width / 2,
-        minY: Math.round(rect.height * 0.3),
-        maxY: Math.round(rect.height * 0.35),
+        cx: rect.width / 2 + body.scrollLeft,
+        minY: Math.round(rect.height * 0.3 + body.scrollTop),
+        maxY: Math.round(rect.height * 0.35 + body.scrollTop),
         bodyW: rect.width,
-        bodyH: rect.height,
+        bodyH: contentH,
       });
       return;
     }
@@ -539,8 +540,8 @@ export default function App() {
     let maxY = -Infinity;
     for (const el of els) {
       const r = el.getBoundingClientRect();
-      const x = r.left - rect.left;
-      const y = r.top - rect.top;
+      const x = r.left - rect.left + body.scrollLeft;
+      const y = r.top - rect.top + body.scrollTop;
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x + r.width);
       minY = Math.min(minY, y);
@@ -551,7 +552,7 @@ export default function App() {
       minY,
       maxY,
       bodyW: rect.width,
-      bodyH: rect.height,
+      bodyH: contentH,
     });
   }, [selectedIds, blocks, selGeomTick]);
 
