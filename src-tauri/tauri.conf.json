@@ -39,8 +39,8 @@
       "icons/icon.icns"
     ],
     "resources": [
-      "../../vxapo-cli/target/release/vxapo-cli.exe",
-      "../../vxapo-driver/target/x86_64-pc-windows-msvc/release/vxapo_driver.dll"
+      "resources/vxapo-cli.exe",
+      "resources/vxapo_driver.dll"
     ]
   }
 }
