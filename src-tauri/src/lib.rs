@@ -107,10 +107,11 @@ struct Device {
 
 #[tauri::command]
 fn list_devices() -> Result<Vec<Device>, String> {
-    let out = Command::new(cli_path())
-        .args(["list", "--json"])
-        .output()
-        .map_err(|e| format!("CLI 启动失败：{e}"))?;
+    let mut cmd = Command::new(cli_path());
+    cmd.args(["list", "--json"]);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let out = cmd.output().map_err(|e| format!("CLI 启动失败：{e}"))?;
     if out.status.success() {
         let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
         serde_json::from_str(&raw).map_err(|e| format!("CLI 输出解析失败：{e}"))
