@@ -748,6 +748,8 @@ button {
   position: relative;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 视图切换时退场/进场会改变内容高度；禁用自动锚定，避免浏览器替我们改 scrollTop。 */
+  overflow-anchor: none;
   padding: 10px 12px 400px;
   display: flex;
   flex-direction: column;
