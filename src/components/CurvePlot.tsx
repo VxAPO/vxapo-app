@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import type { Block } from "../lib/model";
+import type { Block, PeqBandKind } from "../lib/model";
 import { snapPx } from "../lib/snap";
 
 /** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
@@ -50,6 +50,116 @@ export function peakingDb(freq: number, fc: number, gainDb: number, q: number, f
   return 20 * Math.log10(num / den);
 }
 
+function biquadDb(
+  freq: number,
+  fs: number,
+  b0: number,
+  b1: number,
+  b2: number,
+  a0: number,
+  a1: number,
+  a2: number,
+): number {
+  const f = Math.max(10, Math.min(fs * 0.49, freq));
+  const w = (2 * Math.PI * f) / fs;
+  const c = Math.cos(w);
+  const s = Math.sin(w);
+  const c2 = Math.cos(2 * w);
+  const s2 = Math.sin(2 * w);
+  const num = Math.hypot(b0 + b1 * c + b2 * c2, b1 * s + b2 * s2);
+  const den = Math.hypot(a0 + a1 * c + a2 * c2, a1 * s + a2 * s2);
+  return 20 * Math.log10(num / den);
+}
+
+function lowPassDb(freq: number, fc: number, q: number, fs: number): number {
+  const center = Math.max(10, Math.min(fs * 0.49, fc));
+  const qq = Math.max(0.1, Math.min(20, q));
+  const w0 = (2 * Math.PI * center) / fs;
+  const cw = Math.cos(w0);
+  const sw = Math.sin(w0);
+  const alpha = sw / (2 * qq);
+  const b0 = (1 - cw) / 2;
+  const b1 = 1 - cw;
+  const b2 = (1 - cw) / 2;
+  const a0 = 1 + alpha;
+  const a1 = -2 * cw;
+  const a2 = 1 - alpha;
+  return biquadDb(freq, fs, b0, b1, b2, a0, a1, a2);
+}
+
+function highPassDb(freq: number, fc: number, q: number, fs: number): number {
+  const center = Math.max(10, Math.min(fs * 0.49, fc));
+  const qq = Math.max(0.1, Math.min(20, q));
+  const w0 = (2 * Math.PI * center) / fs;
+  const cw = Math.cos(w0);
+  const sw = Math.sin(w0);
+  const alpha = sw / (2 * qq);
+  const b0 = (1 + cw) / 2;
+  const b1 = -(1 + cw);
+  const b2 = (1 + cw) / 2;
+  const a0 = 1 + alpha;
+  const a1 = -2 * cw;
+  const a2 = 1 - alpha;
+  return biquadDb(freq, fs, b0, b1, b2, a0, a1, a2);
+}
+
+function lowShelfDb(freq: number, fc: number, gainDb: number, q: number, fs: number): number {
+  const center = Math.max(10, Math.min(fs * 0.49, fc));
+  const qq = Math.max(0.1, Math.min(20, q));
+  const A = Math.pow(10, gainDb / 40);
+  const w0 = (2 * Math.PI * center) / fs;
+  const cw = Math.cos(w0);
+  const sw = Math.sin(w0);
+  const alpha = sw / (2 * qq);
+  const sqrtA = Math.sqrt(A);
+  const b0 = A * ((A + 1) - (A - 1) * cw + 2 * sqrtA * alpha);
+  const b1 = 2 * A * ((A - 1) - (A + 1) * cw);
+  const b2 = A * ((A + 1) - (A - 1) * cw - 2 * sqrtA * alpha);
+  const a0 = (A + 1) + (A - 1) * cw + 2 * sqrtA * alpha;
+  const a1 = -2 * ((A - 1) + (A + 1) * cw);
+  const a2 = (A + 1) + (A - 1) * cw - 2 * sqrtA * alpha;
+  return biquadDb(freq, fs, b0, b1, b2, a0, a1, a2);
+}
+
+function highShelfDb(freq: number, fc: number, gainDb: number, q: number, fs: number): number {
+  const center = Math.max(10, Math.min(fs * 0.49, fc));
+  const qq = Math.max(0.1, Math.min(20, q));
+  const A = Math.pow(10, gainDb / 40);
+  const w0 = (2 * Math.PI * center) / fs;
+  const cw = Math.cos(w0);
+  const sw = Math.sin(w0);
+  const alpha = sw / (2 * qq);
+  const sqrtA = Math.sqrt(A);
+  const b0 = A * ((A + 1) + (A - 1) * cw + 2 * sqrtA * alpha);
+  const b1 = -2 * A * ((A - 1) + (A + 1) * cw);
+  const b2 = A * ((A + 1) + (A - 1) * cw - 2 * sqrtA * alpha);
+  const a0 = (A + 1) - (A - 1) * cw + 2 * sqrtA * alpha;
+  const a1 = 2 * ((A - 1) - (A + 1) * cw);
+  const a2 = (A + 1) - (A - 1) * cw - 2 * sqrtA * alpha;
+  return biquadDb(freq, fs, b0, b1, b2, a0, a1, a2);
+}
+
+/** 按 band.kind 计算幅度响应（缺省 peaking），与 driver RBJ biquad 对齐。 */
+export function bandDb(
+  freq: number,
+  band: { fc: number; gain_db: number; q: number; kind?: PeqBandKind },
+  fs: number,
+): number {
+  switch (band.kind ?? "peaking") {
+    case "low_shelf":
+      return lowShelfDb(freq, band.fc, band.gain_db, band.q, fs);
+    case "high_shelf":
+      return highShelfDb(freq, band.fc, band.gain_db, band.q, fs);
+    case "low_pass":
+      return lowPassDb(freq, band.fc, band.q, fs);
+    case "high_pass":
+      return highPassDb(freq, band.fc, band.q, fs);
+    case "peaking":
+    default:
+      return peakingDb(freq, band.fc, band.gain_db, band.q, fs);
+  }
+}
+
 function dbY(db: number, top: number): number {
   return 24 + ((top - db) / (top + 16)) * 180;
 }
@@ -61,7 +171,7 @@ function freqPath(blocks: Block[], fs: number, w: number, top: number): string {
     let db = 0;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += peakingDb(f, band.fc, band.gain_db, band.q, fs);
+      for (const band of b.bands) db += bandDb(f, band, fs);
     }
     const clamped = Math.max(-16, Math.min(top, db));
     pts.push(`${logX(f, w).toFixed(1)} ${dbY(clamped, top).toFixed(1)}`);
@@ -148,7 +258,7 @@ function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
     let db = 0;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += peakingDb(cl, band.fc, band.gain_db, band.q, fs);
+      for (const band of b.bands) db += bandDb(cl, band, fs);
     }
     const clamped = Math.max(-16, Math.min(yTop, db));
     setHoverPt({
@@ -186,7 +296,7 @@ function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
       let db = 0;
       for (const b of blocks) {
         if (!b.enabled) continue;
-        for (const band of b.bands) db += peakingDb(cl, band.fc, band.gain_db, band.q, fs);
+        for (const band of b.bands) db += bandDb(cl, band, fs);
       }
       return Math.max(-16, Math.min(yTop, db));
     };

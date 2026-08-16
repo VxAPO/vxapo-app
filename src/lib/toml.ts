@@ -38,7 +38,9 @@ export function buildToml(
     out.push(`enabled = ${b.enabled}`, "crossover_hz = 200");
     if (channel?.mode) out.push(`channels = ${str([b.channel ?? channel.first])}`);
     for (const band of b.bands) {
-      out.push("", "[[effects.bands]]", `fc = ${num(band.fc)}`, `gain_db = ${num(band.gain_db)}`, `q = ${num(band.q)}`);
+      out.push("", "[[effects.bands]]");
+      if (band.kind && band.kind !== "peaking") out.push(`type = ${str(band.kind)}`);
+      out.push(`fc = ${num(band.fc)}`, `gain_db = ${num(band.gain_db)}`, `q = ${num(band.q)}`);
     }
     out.push("");
   }
@@ -68,12 +70,16 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
   const effects: EffectItem[] = [];
   let current: Block | null = null;
   let currentEffect: EffectItem | null = null;
+  let inBand = false;
+  let pendingBandType: Band["kind"] | undefined;
   const lineRe = /^\s*([A-Za-z0-9_.-]+)\s*=\s*(.+?)\s*$/;
 
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (line.startsWith("[[effects.bands]]")) {
       if (!current) continue;
+      inBand = true;
+      pendingBandType = undefined;
       continue;
     }
     if (line.startsWith("[[effects]]")) {
@@ -81,6 +87,8 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
       if (currentEffect) effects.push(currentEffect);
       current = { enabled: true, bands: [] };
       currentEffect = null;
+      inBand = false;
+      pendingBandType = undefined;
       continue;
     }
     const m = lineRe.exec(line);
@@ -90,7 +98,10 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
     const unquote = (v: string) => (v.startsWith('"') ? JSON.parse(v) : v);
     if (key === "type") {
       const t = unquote(value);
-      if (t !== "peq") {
+      if (inBand && current) {
+        const kinds: Band["kind"][] = ["peaking", "low_shelf", "high_shelf", "low_pass", "high_pass"];
+        pendingBandType = kinds.includes(t as Band["kind"]) ? (t as Band["kind"]) : undefined;
+      } else if (t !== "peq") {
         current = null;
         if (KNOWN_EFFECT_TYPES.includes(t)) currentEffect = { type: t, enabled: true };
       }
@@ -128,7 +139,8 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
         break;
       }
       case "fc":
-        current.bands.push({ fc: Number(value), gain_db: 0, q: 1 });
+        current.bands.push({ fc: Number(value), gain_db: 0, q: 1, ...(pendingBandType ? { kind: pendingBandType } : {}) });
+        pendingBandType = undefined;
         break;
       case "gain_db":
         if (current.bands.length) current.bands[current.bands.length - 1].gain_db = Number(value);
@@ -190,5 +202,5 @@ export function countBands(blocks: Block[]): number {
 }
 
 export function cloneBand(b: Band): Band {
-  return { fc: b.fc, gain_db: b.gain_db, q: b.q };
+  return { fc: b.fc, gain_db: b.gain_db, q: b.q, ...(b.kind ? { kind: b.kind } : {}) };
 }

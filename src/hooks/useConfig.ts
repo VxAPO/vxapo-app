@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { friendlyError, readConfig, writeConfig } from "../lib/api";
-import type { Block, EffectItem, PresetLibraryEntry } from "../lib/model";
+import type { Block, EffectItem, PeqBandKind, PresetLibraryEntry } from "../lib/model";
 import { buildToml, parseConfigWithTail, type ChannelCtx } from "../lib/toml";
 import { applySemanticStrength, defaultEffectParams, effectsEqual } from "../lib/effects";
 import {
@@ -168,14 +168,14 @@ export function useConfig(
           name: b.name ?? p.name,
           enabled: true,
           channel: channelCtx.mode ? channelCtx.active : undefined,
-          bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q }],
+          bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q, ...(b.kind ? { kind: b.kind } : {}) }],
         })),
       ];
     });
     return group;
   }, [channelCtx.mode, channelCtx.active, channelBandCounts, totalBands, blocks, notify, markDirty]);
 
-  const addBand = useCallback((channel?: string) => {
+  const addBand = useCallback((kind: PeqBandKind = "peaking", channel?: string) => {
     const current = channelCtx.mode ? (channelBandCounts[channelCtx.active] ?? 0) : totalBands;
     if (current >= 31) {
       notify("该声道最多 31 段，已达到上限");
@@ -188,7 +188,17 @@ export function useConfig(
         id: crypto.randomUUID(),
         enabled: true,
         channel: channelCtx.mode ? (channel ?? channelCtx.active) : undefined,
-        bands: [{ fc: 1000, gain_db: 0, q: 1 }],
+        bands: [
+          kind === "low_shelf"
+            ? { fc: 200, gain_db: 0, q: 0.707, kind }
+            : kind === "high_shelf"
+              ? { fc: 6000, gain_db: 0, q: 0.707, kind }
+              : kind === "low_pass"
+                ? { fc: 1000, gain_db: 0, q: 0.707, kind }
+                : kind === "high_pass"
+                  ? { fc: 80, gain_db: 0, q: 0.707, kind }
+                  : { fc: 1000, gain_db: 0, q: 1, kind: "peaking" },
+        ],
       },
     ]);
   }, [channelCtx.mode, channelCtx.active, channelBandCounts, totalBands, notify, markDirty]);

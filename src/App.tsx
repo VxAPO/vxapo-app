@@ -4,7 +4,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
-import type { Block, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
+import type { Block, PeqBandKind, PresetLibraryEntry, SideSection, ViewMode } from "./lib/model";
 import { LIBRARY } from "./data/library";
 import { accentStyle, buildSemanticUnits, presetAccent } from "./lib/blocks";
 import { channelLabel, channelNamesFor } from "./lib/channels";
@@ -16,7 +16,7 @@ import { useDragSort } from "./hooks/useDragSort";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
 import { useWindowControls } from "./hooks/useWindowControls";
-import { peakingDb } from "./components/CurvePlot";
+import { bandDb } from "./components/CurvePlot";
 import AdvancedView from "./components/AdvancedView";
 import BandParamCard from "./components/BandParamCard";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -75,7 +75,7 @@ function curveMax(freqs: number[], blocks: Block[], delta: number, fs: number): 
     let db = 0;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += peakingDb(f, band.fc, band.gain_db + delta, band.q, fs);
+      for (const band of b.bands) db += bandDb(f, { ...band, gain_db: band.gain_db + delta }, fs);
     }
     if (db > m) m = db;
   }
@@ -693,7 +693,10 @@ export default function App() {
     },
     [channelOn],
   );
-  const handleAddBand = useCallback(() => addBand(effActiveChannel), [addBand, effActiveChannel]);
+  const handleAddBand = useCallback(
+    (kind: PeqBandKind) => addBand(kind, effActiveChannel),
+    [addBand, effActiveChannel],
+  );
   const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
   const normalizeGain = useCallback(() => {
     if (Math.abs(peakGain) < 0.05) {

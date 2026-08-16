@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { Block } from "./model";
+import type { Block, PeqBandKind } from "./model";
 
 export const PERCEPTUAL_RANGES: [number, number, string][] = [
   [20, 40, "极低频下潜感"],
@@ -366,7 +366,7 @@ export function buildSemanticUnits(blocks: Block[]): { key: string; blocks: Bloc
   return units;
 }
 
-export type BandPatch = Partial<{ fc: number; gain_db: number; q: number }>;
+export type BandPatch = Partial<{ fc: number; gain_db: number; q: number; kind: PeqBandKind }>;
 
 export interface BlockGroup {
   label: string;

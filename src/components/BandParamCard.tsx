@@ -51,7 +51,7 @@ function BandParamCard({
         >
           {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
         </button>
-        <span className="b-type">PEAK</span>
+        <span className="b-type">{band.kind === "low_shelf" ? "LS" : band.kind === "high_shelf" ? "HS" : band.kind === "low_pass" ? "LP" : band.kind === "high_pass" ? "HP" : "PEAK"}</span>
         <span className="grow" />
       </div>
       <div className="band-params">

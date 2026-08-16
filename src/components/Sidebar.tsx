@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { X } from "lucide-react";
-import type { EffectItem, PresetLibraryEntry, SideSection } from "../lib/model";
+import type { EffectItem, PeqBandKind, PresetLibraryEntry, SideSection } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
 import { EFFECT_DEFS } from "../lib/effects";
 import { snapPx } from "../lib/snap";
@@ -22,7 +22,7 @@ interface SidebarProps {
   onApplyPreset: (p: PresetLibraryEntry) => void;
   onDeletePreset: (p: PresetLibraryEntry) => void;
   onAddEffect: (type: string) => void;
-  onAddBand: () => void;
+  onAddBand: (kind: PeqBandKind) => void;
   channelOn: boolean;
   onToggleChannel: () => void;
 }
@@ -197,23 +197,23 @@ function Sidebar({
         {side === "advanced" && (
         <div className="adv-list">
           <div className="adv-cat">滤波器</div>
-          <button className="adv-pill" type="button" onClick={onAddBand}>
+          <button className="adv-pill" type="button" onClick={() => onAddBand("peaking")}>
             <Plus size={14} className="adv-plus" />
             <span>峰值滤波器</span>
           </button>
-          <button className="adv-pill disabled" type="button" disabled>
+          <button className="adv-pill" type="button" onClick={() => onAddBand("high_shelf")}>
             <Plus size={14} className="adv-plus" />
             <span>高架滤波器</span>
           </button>
-          <button className="adv-pill disabled" type="button" disabled>
+          <button className="adv-pill" type="button" onClick={() => onAddBand("low_shelf")}>
             <Plus size={14} className="adv-plus" />
             <span>低架滤波器</span>
           </button>
-          <button className="adv-pill disabled" type="button" disabled>
+          <button className="adv-pill" type="button" onClick={() => onAddBand("low_pass")}>
             <Plus size={14} className="adv-plus" />
             <span>低通滤波器</span>
           </button>
-          <button className="adv-pill disabled" type="button" disabled>
+          <button className="adv-pill" type="button" onClick={() => onAddBand("high_pass")}>
             <Plus size={14} className="adv-plus" />
             <span>高通滤波器</span>
           </button>

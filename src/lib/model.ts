@@ -3,10 +3,14 @@
 export type ViewMode = "preset" | "advanced";
 export type SideSection = "preset" | "custom" | "advanced";
 
+export type PeqBandKind = "peaking" | "low_shelf" | "high_shelf" | "low_pass" | "high_pass";
+
 export interface Band {
   fc: number;
   gain_db: number;
   q: number;
+  /** 滤波器类型，缺省 peaking；TOML 中写为 [[effects.bands]].type */
+  kind?: PeqBandKind;
 }
 
 /** 一个块 = 一个 [[effects]] type="peq"；name/group 仅供 APP（driver 忽略）。 */
