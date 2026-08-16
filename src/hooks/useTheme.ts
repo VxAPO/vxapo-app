@@ -18,8 +18,15 @@ export function useTheme() {
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!mql) return;
     const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
+    try {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    } catch {
+      // 旧 WebView2 可能只有 addListener
+      (mql as unknown as { addListener: (fn: (e: MediaQueryListEvent) => void) => void }).addListener(onChange);
+      return () =>
+        (mql as unknown as { removeListener: (fn: (e: MediaQueryListEvent) => void) => void }).removeListener(onChange);
+    }
   }, []);
 
   const themeApplied = theme === "system" ? (systemDark ? "dark" : "light") : theme;
