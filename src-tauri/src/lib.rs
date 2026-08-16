@@ -329,7 +329,7 @@ pub fn run() {
                 } else {
                     (0xf0u8, 0xf3u8, 0xf6u8)
                 };
-                let _ = win.set_background_color(tauri::window::Color(r, g, b, 255));
+                let _ = win.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
             }
             Ok(())
         })
