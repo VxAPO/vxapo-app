@@ -1,4 +1,5 @@
 import { Fragment, memo } from "react";
+import { t } from "../lib/i18n";
 import type { Block, EffectItem } from "../lib/model";
 import type { BandPatch } from "../lib/blocks";
 import { channelLabel } from "../lib/channels";
@@ -92,7 +93,7 @@ function AdvancedView({
             className="hint-row show"
             style={{ transform: `translateX(${hintShift}px)` }}
           >
-            从侧栏添加调音
+            {t("add.tuning")}
           </div>
         )}
         <div className="cards device-cards">
@@ -128,7 +129,7 @@ function AdvancedView({
             className="hint-row show"
             style={{ transform: `translateX(${hintShift}px)` }}
           >
-            从侧栏添加调音
+            {t("add.tuning")}
           </div>
         )}
         <div className="cards device-cards">

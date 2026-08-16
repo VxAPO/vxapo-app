@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
+import { t } from "../lib/i18n";
 import type { BandPatch } from "../lib/blocks";
 import GainSlider from "./GainSlider";
 
@@ -37,7 +38,7 @@ function BandParamCard({
 
   return (
     <>
-      <button className="close-x" type="button" aria-label="删除" onClick={() => onRemoveBlock(bi)}>
+      <button className="close-x" type="button" aria-label={t("aria.delete")} onClick={() => onRemoveBlock(bi)}>
         <X size={12} strokeWidth={2.5} />
       </button>
       <div className="b-head">
@@ -45,8 +46,8 @@ function BandParamCard({
           className={`enable-dot ${b.enabled ? "on" : ""}`}
           type="button"
           aria-pressed={b.enabled}
-          aria-label={b.enabled ? "停用该段" : "启用该段"}
-          title={b.enabled ? "点击停用该段" : "点击启用该段"}
+          aria-label={b.enabled ? t("disable.filter") : t("enable.filter")}
+          title={b.enabled ? t("disable.filter") : t("enable.filter")}
           onClick={() => onPatchBlock(bi, { enabled: !b.enabled })}
         >
           {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
@@ -56,7 +57,7 @@ function BandParamCard({
       </div>
       <div className="band-params">
         <div className="band-param-row">
-          <span className="band-param-label">中心频率</span>
+          <span className="band-param-label">{t("frequency")}</span>
           <GainSlider
             min={0}
             max={1}
@@ -77,7 +78,7 @@ function BandParamCard({
           />
         </div>
         <div className="band-param-row">
-          <span className="band-param-label">Q 值</span>
+          <span className="band-param-label">{t("q.value")}</span>
           <GainSlider
             min={0.1}
             max={12}
@@ -99,7 +100,7 @@ function BandParamCard({
           />
         </div>
         <div className="band-param-row">
-          <span className="band-param-label">增益</span>
+          <span className="band-param-label">{t("gain")}</span>
           <GainSlider
             min={-30}
             max={30}

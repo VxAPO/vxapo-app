@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
+import { t } from "../lib/i18n";
 import { semanticName, type BandPatch } from "../lib/blocks";
 import GainSlider from "./GainSlider";
 
@@ -31,7 +32,7 @@ function SemanticUnitCard({
   return (
     <>
       {!groupLabel && (
-        <button className="close-x" type="button" aria-label="删除" onClick={() => onRemoveBlock(bi)}>
+        <button className="close-x" type="button" aria-label={t("aria.delete")} onClick={() => onRemoveBlock(bi)}>
           <X size={12} strokeWidth={2.5} />
         </button>
       )}
@@ -40,8 +41,8 @@ function SemanticUnitCard({
           className={`enable-dot ${b.enabled ? "on" : ""}`}
           type="button"
           aria-pressed={b.enabled}
-          aria-label={b.enabled ? "停用该段" : "启用该段"}
-          title={b.enabled ? "点击停用该段" : "点击启用该段"}
+          aria-label={b.enabled ? t("disable.filter") : t("enable.filter")}
+          title={b.enabled ? t("disable.filter") : t("enable.filter")}
           onClick={() => onPatchBlock(bi, { enabled: !b.enabled })}
         >
           {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
@@ -52,7 +53,7 @@ function SemanticUnitCard({
           <button
             className="sem-chip"
             type="button"
-            title="删除整组"
+            title={t("delete.group")}
             onClick={() => onRemoveGroup(groupLabel)}
           >
             <span className="sem-chip-label">{groupLabel}</span>
@@ -69,7 +70,7 @@ function SemanticUnitCard({
         )}
       </div>
       <div className="fader-row semantic">
-        <span className="sem-label">弱</span>
+        <span className="sem-label">{t("weak")}</span>
         <GainSlider
           min={-6}
           max={6}
@@ -77,7 +78,7 @@ function SemanticUnitCard({
           disabled={!b.enabled}
           onValueChange={(v) => onPatchBand(bi, 0, { gain_db: v })}
         />
-        <span className="sem-label">强</span>
+        <span className="sem-label">{t("strong")}</span>
       </div>
     </>
   );

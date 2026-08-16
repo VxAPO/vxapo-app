@@ -2,6 +2,7 @@ import { memo } from "react";
 import { X } from "lucide-react";
 import type { EffectItem } from "../lib/model";
 import { defaultEffectParams, effectDef, effectParams } from "../lib/effects";
+import { t } from "../lib/i18n";
 import GainSlider from "./GainSlider";
 import VxSelect from "./VxSelect";
 
@@ -60,10 +61,10 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                     : p.options[0].value;
               return (
                 <div className="effect-param-row" key={p.key}>
-                  <span className="effect-param-label">{p.label}</span>
+                  <span className="effect-param-label">{t(p.label)}</span>
                   <VxSelect
                     value={validValue}
-                    options={p.options}
+                    options={p.options.map((o) => ({ ...o, label: t(o.label) }))}
                     ariaLabel={p.label}
                     disabled={disabled}
                     onValueChange={(v) => onChangeParam(effect.id ?? effect.type, p.key, v)}
@@ -77,7 +78,7 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
             const clamped = Math.min(p.max, Math.max(p.min, value));
             return (
               <div className="effect-param-row" key={p.key}>
-                <span className="effect-param-label">{p.label}</span>
+                <span className="effect-param-label">{t(p.label)}</span>
                 <GainSlider
                   value={clamped}
                   min={p.min}

@@ -1,4 +1,5 @@
 import { Fragment, memo } from "react";
+import { t } from "../lib/i18n";
 import type { Block, EffectItem } from "../lib/model";
 import { accentStyle, type BandPatch } from "../lib/blocks";
 import DragCard from "./DragCard";
@@ -62,7 +63,7 @@ function PresetView({
             className="hint-row show"
             style={{ transform: `translateX(${hintShift}px)` }}
           >
-            从侧栏添加调音
+            {t("add.tuning")}
           </div>
         )}
         <div className="cards device-cards">
@@ -101,7 +102,7 @@ function PresetView({
             className="hint-row show"
             style={{ transform: `translateX(${hintShift}px)` }}
           >
-            从侧栏添加调音
+            {t("add.tuning")}
           </div>
         )}
         <div className="cards device-cards">

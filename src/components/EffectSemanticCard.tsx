@@ -2,6 +2,7 @@ import { memo } from "react";
 import { X } from "lucide-react";
 import type { EffectItem } from "../lib/model";
 import { defaultEffectParams, effectDef, semanticStrength } from "../lib/effects";
+import { t } from "../lib/i18n";
 import GainSlider from "./GainSlider";
 
 interface EffectSemanticCardProps {
@@ -50,7 +51,7 @@ function EffectSemanticCard({
       {def?.desc ? <p className="effect-desc">{def.desc}</p> : null}
       <div className="effect-params">
         <div className="effect-param-row effect-strength-row">
-          <span className="effect-param-label">强度</span>
+          <span className="effect-param-label">{t("strength")}</span>
           <GainSlider
             value={strength}
             min={0}
