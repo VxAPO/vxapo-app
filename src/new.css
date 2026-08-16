@@ -2319,9 +2319,6 @@ input[type="number"]::-webkit-outer-spin-button {
   border-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
 }
 
-:root[data-theme="dark"] .sem-group {
-  border-left-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
-}
 
 :root[data-theme="dark"] .sem-group .enable-dot.on {
   background: var(--card-accent-dark, var(--card-accent, var(--brand)));
@@ -2392,9 +2389,8 @@ input[type="number"]::-webkit-outer-spin-button {
   box-sizing: border-box;
 }
 
-/* 语义视图组标识：组内卡共用左侧组色边条 */
+/* 语义视图组标识：有组卡不再骑边，组色只用于组名/开关/标签等元素 */
 .sem-group {
-  border-left: 3px solid var(--card-accent, var(--brand));
 }
 
 .sem-group .group-head {
