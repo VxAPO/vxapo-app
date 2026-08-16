@@ -311,7 +311,7 @@
 }
 
 @keyframes app-lang-fade {
-  from { opacity: 0.4; }
+  from { opacity: 0.82; }
   to { opacity: 1; }
 }
 
