@@ -169,6 +169,7 @@ export default function App() {
   const viewCollapseTimerRef = useRef<number | undefined>(undefined);
   const viewScrollTopRef = useRef(0);
   const oldViewHRef = useRef(0);
+  const viewHeightLockRef = useRef(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
@@ -793,9 +794,14 @@ export default function App() {
     window.clearTimeout(viewAnimTimerRef.current);
     window.clearTimeout(viewCollapseTimerRef.current);
     viewTransitionPendingRef.current = false;
-    // 平移结束后动画收窄：minHeight 从旧高过渡到 0（内容自然高度）。
-    setViewTransitionH(0);
-    setViewCollapsing(true);
+    // 只有锁定过高度时才执行收窄动画。
+    if (viewHeightLockRef.current) {
+      setViewTransitionH(0);
+      setViewCollapsing(true);
+    } else {
+      setViewTransitionH(null);
+      setViewCollapsing(false);
+    }
     setViewAnimating(false);
     // 平移动画结束后立即重测几何并让浮窗出场；高度收窄仍在后台继续。
     // 收窄期间若发生滚动，scroll 监听会继续重测，浮窗不会跟丢。
@@ -829,12 +835,16 @@ export default function App() {
     toolbarAnimRef.current = null;
     const body = bodyRef.current;
     if (body) {
-      viewScrollTopRef.current = body.scrollTop;
-      // 平移期间让内容高度保持为旧页面高度；新视图挂载后由 minHeight 取
-      // max(旧高, 新高)，平移完成后再动画收窄。
-      oldViewHRef.current = body.scrollHeight;
+      // 仅当旧内容确实可滚动时才锁高并收窄；否则不要硬加一段高度动画。
+      viewHeightLockRef.current = body.scrollHeight > body.clientHeight + 1;
+      if (viewHeightLockRef.current) {
+        viewScrollTopRef.current = body.scrollTop;
+        oldViewHRef.current = body.scrollHeight;
+        setViewTransitionH(body.scrollHeight);
+      } else {
+        setViewTransitionH(null);
+      }
       setViewCollapsing(false);
-      setViewTransitionH(body.scrollHeight);
     }
     setViewAnimating(true);
     setToolbarHidden(true);
@@ -990,13 +1000,23 @@ export default function App() {
 
     const updates: { id: string; channels?: string[]; gain_db: number }[] = [];
     for (const [ch, chBlocks] of groups) {
+      const preamp = effects.find(
+        (e) =>
+          e.type === "preamp" &&
+          (channelOn ? e.channels?.includes(ch) : !e.channels?.length),
+      );
+      const currentPreamp =
+        typeof preamp?.params?.gain_db === "number" ? preamp.params.gain_db : 0;
       const freqs = buildEvalFreqs(chBlocks);
-      const peak = curveMax(freqs, chBlocks, fs, 0);
-      if (Math.abs(peak) < 0.05) continue;
+      const filterPeak = curveMax(freqs, chBlocks, fs, 0);
+      // 实际显示的总峰值 = 当前基准电平 + 滤波器峰值。判断是否需要归一化
+      // 要看总峰值；但新基准电平只需抵消滤波器峰值（会整体替换旧基准）。
+      const totalPeak = currentPreamp + filterPeak;
+      if (Math.abs(totalPeak) < 0.05) continue;
       updates.push(
         channelOn
-          ? { id: `preamp:${ch}`, channels: [ch], gain_db: Math.round(-peak * 10) / 10 }
-          : { id: "preamp:all", gain_db: Math.round(-peak * 10) / 10 },
+          ? { id: `preamp:${ch}`, channels: [ch], gain_db: Math.round(-filterPeak * 10) / 10 }
+          : { id: "preamp:all", gain_db: Math.round(-filterPeak * 10) / 10 },
       );
     }
     if (!updates.length) {
@@ -1030,7 +1050,7 @@ export default function App() {
         `已将基准电平设为 ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB，峰值补偿到 0 dB`,
       );
     }
-  }, [blocks, channelOn, channelNames, fs, markDirty, notify]);
+  }, [blocks, channelOn, channelNames, effects, fs, markDirty, notify]);
   const closeDeletePreset = useCallback((open: boolean) => {
     if (!open) setDeletePresetTarget(null);
   }, []);
