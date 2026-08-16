@@ -18,12 +18,12 @@
         "minWidth": 800,
         "minHeight": 600,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
         "center": true,
         "resizable": true,
         "maximized": true,
         "dragDropEnabled": true,
-        "visible": false
+        "shadow": false
       }
     ],
     "security": {
