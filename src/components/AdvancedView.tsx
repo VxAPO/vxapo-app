@@ -69,22 +69,24 @@ function AdvancedView({
   return (
     <>
       <div className="tuning-section">
-        <div className="section-title">滤波器</div>
-        {channelOn && (
-          <div className="col-head">
-            <span className="ch-name">{channelNames.length} 声道</span>
-            {channelNames.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={`ch-pill${c === activeChannel ? " active" : ""}`}
-                onClick={() => onChannelChange(c)}
-              >
-                {channelLabel(c)}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="section-head">
+          <div className="section-title">滤波器</div>
+          {channelOn && (
+            <div className="col-head">
+              <span className="ch-name">{channelNames.length} 声道</span>
+              {channelNames.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`ch-pill${c === activeChannel ? " active" : ""}`}
+                  onClick={() => onChannelChange(c)}
+                >
+                  {channelLabel(c)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {showFilterEmptyHint && (
           <div
             className="hint-row show"

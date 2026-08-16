@@ -1145,7 +1145,7 @@ export default function App() {
             onAdd={openInstall}
           />
 
-          <div className="device-body">
+          <div className="device-body" key={selectedGuid ?? "none"}>
             {installedDevices.length === 0 ? (
               <div className="no-device">
                 <img className="no-device-logo" src={logoUrl} alt="" draggable={false} />
