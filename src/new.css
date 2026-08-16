@@ -1,5 +1,16 @@
 /* VxAPO App — 新壳样式（UI 设计规范 02/03/04） */
 
+/* 全局明暗主题颜色过渡：只过渡颜色类属性，不影响布局/位移类动画 */
+* {
+  transition:
+    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    fill 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    stroke 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 :root[data-theme="light"] {
   --frame: #f0f3f6;
   --content: #f7f9fc;

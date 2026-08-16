@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useRef, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ThemeMode } from "../lib/model";
@@ -27,16 +27,25 @@ function SettingsDialog({
   const themeThumbWidth = ((240 - 6 - 4) / 3 / 240) * 100;
   const themeThumbLeft = ((3 + themeIndex * ((240 - 6 - 4) / 3 + 2)) / 240) * 100;
 
-  // 点击切换后短暂锁住 hover 背景，避免旧按钮的 hover 胶囊与 thumb 平移动画重叠。
+  // 点击切换后锁住 hover 背景，直到指针移动/离开后才恢复；
+  // 避免旧按钮的 hover 胶囊与 thumb 平移动画重叠或动画结束后“残留”。
   const [themeHoverLock, setThemeHoverLock] = useState(false);
-  const hoverLockTimerRef = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(hoverLockTimerRef.current), []);
+  const hoverLockUntilRef = useRef(0);
 
   const handleThemeChange = (value: ThemeMode) => {
     setThemeHoverLock(true);
+    hoverLockUntilRef.current = Date.now() + 400;
     onThemeChange(value);
-    window.clearTimeout(hoverLockTimerRef.current);
-    hoverLockTimerRef.current = window.setTimeout(() => setThemeHoverLock(false), 360);
+  };
+
+  const handleThemePointerMove = () => {
+    if (themeHoverLock && Date.now() > hoverLockUntilRef.current) {
+      setThemeHoverLock(false);
+    }
+  };
+
+  const handleThemePointerLeave = () => {
+    setThemeHoverLock(false);
   };
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -56,7 +65,11 @@ function SettingsDialog({
                 <span className="vx-setting-name">主题</span>
                 <span className="vx-setting-desc">界面明暗模式</span>
               </div>
-              <div className={`seg theme-seg${themeHoverLock ? " no-hover" : ""}`}>
+              <div
+                className={`seg theme-seg${themeHoverLock ? " no-hover" : ""}`}
+                onMouseMove={handleThemePointerMove}
+                onMouseLeave={handleThemePointerLeave}
+              >
                 <span
                   className="theme-seg-thumb"
                   aria-hidden
