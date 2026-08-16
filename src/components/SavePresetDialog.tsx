@@ -51,7 +51,7 @@ function SavePresetDialog({
   }, [open, blocks, defaultName]);
 
   const save = () => {
-    onSave(name.trim() || "自定义预设", desc.trim(), color, descs.map((d) => d.trim()));
+    onSave(name.trim() || t("preset.name.placeholder"), desc.trim(), color, descs.map((d) => d.trim()));
   };
 
   return (

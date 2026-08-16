@@ -185,7 +185,7 @@ export default function App() {
   const [selGeom, setSelGeom] = useState<{ cx: number; minY: number; maxY: number; bodyW: number; bodyH: number } | null>(null);
   const [savePresetOpen, setSavePresetOpen] = useState(false);
   const [savePresetBlocks, setSavePresetBlocks] = useState<Block[]>([]);
-  const [savePresetDefaultName, setSavePresetDefaultName] = useState("自定义预设");
+  const [savePresetDefaultName, setSavePresetDefaultName] = useState(t("preset.name.placeholder"));
   const [deletePresetTarget, setDeletePresetTarget] = useState<PresetLibraryEntry | null>(null);
   const [presetMeta, setPresetMeta] = useState(loadPresetMeta);
   const toolbarElRef = useRef<HTMLDivElement | null>(null);
@@ -429,7 +429,7 @@ export default function App() {
     const picked = blocks.filter((b) => selectedIds.includes(b.id ?? ""));
     if (!picked.length) return;
     setSavePresetBlocks(picked);
-    setSavePresetDefaultName(`自定义预设 ${customPresets.length + 1}`);
+    setSavePresetDefaultName(`${t("preset.name.placeholder")} ${customPresets.length + 1}`);
     setSavePresetOpen(true);
   }, [blocks, selectedIds, customPresets]);
 
@@ -466,7 +466,7 @@ export default function App() {
   const handleSavePreset = useCallback((name: string, desc: string, color: string, descriptions: string[]) => {
     const entry: PresetLibraryEntry = {
       id: `custom-${Date.now()}`,
-      group: "自定义",
+      group: t("custom"),
       name,
       desc,
       color,
