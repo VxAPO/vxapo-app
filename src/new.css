@@ -170,6 +170,43 @@ button {
   font-weight: 600;
 }
 
+/* 设置主题滑块：胶囊 thumb + hover 背景 + 平移动画 + 颜色过渡 */
+.theme-seg {
+  position: relative;
+  display: flex;
+  width: 240px;
+  flex: none;
+}
+
+.theme-seg button {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  justify-content: center;
+  background: transparent;
+  transition: color 0.25s ease, background-color 0.25s ease;
+}
+
+.theme-seg button:hover {
+  background: var(--hover);
+}
+
+.theme-seg button[aria-pressed="true"] {
+  background: transparent;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.theme-seg-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  z-index: 0;
+  border-radius: 9999px;
+  background: var(--accent-bg);
+  transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.28s ease;
+}
+
 .seg button:disabled {
   opacity: 0.35;
   cursor: not-allowed;

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ThemeMode } from "../lib/model";
@@ -22,6 +22,10 @@ function SettingsDialog({
   theme,
   onThemeChange,
 }: SettingsDialogProps) {
+  const themeIndex = THEME_OPTIONS.findIndex((o) => o.value === theme);
+  // 容器固定 240px，内边距 3px*2，gap 2px*2，三个等宽按钮
+  const themeThumbWidth = ((240 - 6 - 4) / 3 / 240) * 100;
+  const themeThumbLeft = ((3 + themeIndex * ((240 - 6 - 4) / 3 + 2)) / 240) * 100;
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -40,7 +44,12 @@ function SettingsDialog({
                 <span className="vx-setting-name">主题</span>
                 <span className="vx-setting-desc">界面明暗模式</span>
               </div>
-              <div className="seg">
+              <div className="seg theme-seg">
+                <span
+                  className="theme-seg-thumb"
+                  aria-hidden
+                  style={{ left: `${themeThumbLeft}%`, width: `${themeThumbWidth}%` } as CSSProperties}
+                />
                 {THEME_OPTIONS.map((o) => (
                   <button
                     key={o.value}
