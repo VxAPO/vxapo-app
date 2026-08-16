@@ -1065,24 +1065,31 @@ export default function App() {
       />
 
       <div className="main">
-        <Sidebar
-          disabled={installedDevices.length === 0}
-          side={side}
-          onSideChange={setSide}
-          library={LIBRARY}
-          customPresets={customPresets}
-          usedPresets={usedPresetList}
-          effects={effects}
-          onApplyPreset={handleApplyPreset}
-          onDeletePreset={setDeletePresetTarget}
-          onAddEffect={addEffect}
-          onAddBand={handleAddBand}
-          channelOn={channelOn}
-          activeChannel={effActiveChannel}
-          onToggleChannel={toggleChannel}
-        />
+        {loading ? (
+          <>
+            <aside className="sidebar app-loading-sidebar" />
+            <main className="content app-loading-content" />
+          </>
+        ) : (
+          <>
+            <Sidebar
+              disabled={installedDevices.length === 0}
+              side={side}
+              onSideChange={setSide}
+              library={LIBRARY}
+              customPresets={customPresets}
+              usedPresets={usedPresetList}
+              effects={effects}
+              onApplyPreset={handleApplyPreset}
+              onDeletePreset={setDeletePresetTarget}
+              onAddEffect={addEffect}
+              onAddBand={handleAddBand}
+              channelOn={channelOn}
+              activeChannel={effActiveChannel}
+              onToggleChannel={toggleChannel}
+            />
 
-        <main className="content">
+            <main className="content">
           <DeviceTabs
             devices={installedDevices}
             selectedGuid={selectedGuid}
@@ -1094,13 +1101,7 @@ export default function App() {
           />
 
           <div className="device-body">
-            {loading ? (
-              <div className="app-loading" aria-label="正在加载设备">
-                <img className="app-loading-logo" src={logoUrl} alt="" draggable={false} />
-                <div className="app-loading-spinner" />
-                <span className="app-loading-text">正在加载设备…</span>
-              </div>
-            ) : installedDevices.length === 0 ? (
+            {installedDevices.length === 0 ? (
               <div className="no-device">
                 <img className="no-device-logo" src={logoUrl} alt="" draggable={false} />
                 <button
@@ -1267,7 +1268,9 @@ export default function App() {
               </>
             )}
           </div>
-        </main>
+            </main>
+          </>
+        )}
       </div>
 
       <SettingsDialog

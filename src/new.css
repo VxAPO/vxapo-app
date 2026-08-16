@@ -739,45 +739,21 @@ button {
   overflow: hidden;
 }
 
-.app-loading {
+.app-loading-sidebar {
+  width: clamp(210px, 15vw, 260px);
+  flex: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 26px;
+}
+
+.app-loading-content {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  background: var(--frame);
-  user-select: none;
-}
-
-.app-loading-logo {
-  width: 96px;
-  height: 96px;
-  animation: app-loading-pulse 1.25s ease-in-out infinite;
-}
-
-.app-loading-spinner {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 3px solid color-mix(in srgb, var(--brand) 22%, transparent);
-  border-top-color: var(--brand);
-  animation: app-loading-spin 0.9s linear infinite;
-}
-
-.app-loading-text {
-  font-size: 13px;
-  color: var(--text-weak);
-  letter-spacing: 0.3px;
-}
-
-@keyframes app-loading-pulse {
-  0%, 100% { opacity: 0.45; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes app-loading-spin {
-  to { transform: rotate(360deg); }
+  min-width: 0;
+  background: var(--content);
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  overflow: hidden;
 }
 
 .no-device {
