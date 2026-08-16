@@ -109,6 +109,14 @@ export default function App() {
 
   const [channelOn, setChannelOn] = useState(false);
   const [activeChannel, setActiveChannel] = useState("L");
+  // 通道选择是逐设备状态：每个设备记住自己的开关与活动声道。
+  const channelOnRef = useRef(channelOn);
+  channelOnRef.current = channelOn;
+  const activeChannelRef = useRef(activeChannel);
+  activeChannelRef.current = activeChannel;
+  const channelModeByGuidRef = useRef<Record<string, boolean>>({});
+  const activeChannelByGuidRef = useRef<Record<string, string>>({});
+  const prevGuidRef = useRef<string | null>(selectedGuid);
   const channelNames = useMemo(
     () => channelNamesFor(selected?.channels),
     [selected?.channels],
@@ -235,6 +243,21 @@ export default function App() {
   );
 
   const yTop = Math.max(6, Math.min(30, Math.ceil((peakGain + 1) / 2) * 2));
+
+  // 设备切换时保存旧设备通道状态并恢复新设备通道状态（逐设备记忆）。
+  useEffect(() => {
+    const prev = prevGuidRef.current;
+    if (prev === selectedGuid) return;
+    if (prev) {
+      channelModeByGuidRef.current[prev] = channelOnRef.current;
+      activeChannelByGuidRef.current[prev] = activeChannelRef.current;
+    }
+    prevGuidRef.current = selectedGuid;
+    setChannelOn(selectedGuid ? (channelModeByGuidRef.current[selectedGuid] ?? false) : false);
+    setActiveChannel(selectedGuid ? (activeChannelByGuidRef.current[selectedGuid] ?? "L") : "L");
+    setSelectedIds([]);
+    setCopyOpen(false);
+  }, [selectedGuid]);
 
   // 框选过期清理：blocks 变化后移除已不存在的 id
   useEffect(() => {
