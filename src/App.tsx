@@ -98,6 +98,7 @@ export default function App() {
     setSelectedGuid,
     selected,
     devices,
+    loading,
     refresh,
     installedDevices,
     uninstallTarget,
@@ -1093,7 +1094,13 @@ export default function App() {
           />
 
           <div className="device-body">
-            {installedDevices.length === 0 ? (
+            {loading ? (
+              <div className="app-loading" aria-label="正在加载设备">
+                <img className="app-loading-logo" src={logoUrl} alt="" draggable={false} />
+                <div className="app-loading-spinner" />
+                <span className="app-loading-text">正在加载设备…</span>
+              </div>
+            ) : installedDevices.length === 0 ? (
               <div className="no-device">
                 <img className="no-device-logo" src={logoUrl} alt="" draggable={false} />
                 <button

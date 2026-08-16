@@ -11,7 +11,9 @@ export function useDevices(
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<Device | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
+  const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
+  const firstLoadRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -21,6 +23,7 @@ export function useDevices(
   }, []);
 
   const load = useCallback(() => {
+    if (firstLoadRef.current) setLoading(true);
     listDevices()
       .then((ds) => {
         if (!mountedRef.current) return;
@@ -32,6 +35,12 @@ export function useDevices(
       })
       .catch((e: unknown) => {
         if (mountedRef.current) onError(friendlyError(e));
+      })
+      .finally(() => {
+        if (mountedRef.current && firstLoadRef.current) {
+          firstLoadRef.current = false;
+          setLoading(false);
+        }
       });
   }, [onError]);
 
@@ -78,6 +87,7 @@ export function useDevices(
 
   return {
     devices,
+    loading,
     refresh,
     selectedGuid,
     setSelectedGuid,
