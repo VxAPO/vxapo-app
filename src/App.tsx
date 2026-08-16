@@ -796,14 +796,15 @@ export default function App() {
     setViewTransitionH(0);
     setViewCollapsing(true);
     setViewAnimating(false);
-    // 收窄完成后再重测几何并让浮窗出场，避免浮窗在高度动画中途挂载。
+    // 平移动画结束后立即重测几何并让浮窗出场；高度收窄仍在后台继续。
+    // 收窄期间若发生滚动，scroll 监听会继续重测，浮窗不会跟丢。
+    setSelGeomTick((v) => v + 1);
+    window.setTimeout(() => {
+      if (token !== viewTransitionTokenRef.current) return;
+      setToolbarHidden(false);
+    }, 0);
     viewCollapseTimerRef.current = window.setTimeout(() => {
       if (token !== viewTransitionTokenRef.current) return;
-      setSelGeomTick((v) => v + 1);
-      window.setTimeout(() => {
-        if (token !== viewTransitionTokenRef.current) return;
-        setToolbarHidden(false);
-      }, 0);
       setViewCollapsing(false);
     }, VIEW_COLLAPSE_MS);
   }, []);
