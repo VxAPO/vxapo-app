@@ -404,7 +404,10 @@ button {
   height: 2px;
   border-radius: 1px;
   background: var(--text-primary);
-  transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1), width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .cards {
@@ -953,6 +956,7 @@ button {
 .group-card.disabled .enable-dot {
   color: #3d4552;
   border-color: #3d4552;
+  transition: color 0.32s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .group-card.disabled .g-name {
@@ -1128,6 +1132,7 @@ button {
 .band-card.disabled .enable-dot {
   color: #3d4552;
   border-color: #3d4552;
+  transition: color 0.32s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .band-card.disabled .b-type {
@@ -1415,6 +1420,12 @@ input[type="number"]::-webkit-outer-spin-button {
   margin-left: -10px;
 }
 
+.curve-wrap > svg > path,
+.curve-wrap > svg > circle,
+.curve-wrap > svg > line {
+  transition: stroke 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .curve-head .t {
   font-size: 16px;
   font-weight: 700;
@@ -1458,6 +1469,7 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  transition: background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(40px) saturate(1.4);
   -webkit-backdrop-filter: blur(40px) saturate(1.4);
   pointer-events: auto;
@@ -1775,7 +1787,11 @@ input[type="number"]::-webkit-outer-spin-button {
   background: var(--brand-bg);
   border: 1px solid var(--brand);
   box-shadow: var(--card-shadow);
-  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .view-seg .seg-thumb.right {
