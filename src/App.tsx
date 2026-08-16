@@ -160,6 +160,7 @@ export default function App() {
   const viewTransitionPendingRef = useRef(false);
   const viewEnterDoneRef = useRef(false);
   const viewExitDoneRef = useRef(false);
+  const viewScrollTopRef = useRef(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
@@ -471,6 +472,18 @@ export default function App() {
       if (raf) window.cancelAnimationFrame(raf);
     };
   }, [selectedIds.length > 0]);
+
+  // 视图切换期间用 minHeight 锁住旧内容高度，避免 AnimatePresence popLayout
+  // 把退场视图脱离文档流后 scrollHeight 骤降，浏览器把 scrollTop clamp 掉；
+  // 动画结束、新视图稳定后，在 paint 前恢复原滚动位置。
+  useLayoutEffect(() => {
+    if (viewAnimating) return;
+    const body = bodyRef.current;
+    if (body && body.style.minHeight) {
+      body.style.minHeight = "";
+      body.scrollTop = viewScrollTopRef.current;
+    }
+  }, [viewAnimating]);
 
   // 工具栏高度变化（如复制到声道菜单展开）时重新避让，避免被顶部/底部裁剪
   useLayoutEffect(() => {
@@ -786,6 +799,12 @@ export default function App() {
     viewTransitionPendingRef.current = true;
     viewEnterDoneRef.current = false;
     viewExitDoneRef.current = false;
+    const body = bodyRef.current;
+    if (body) {
+      viewScrollTopRef.current = body.scrollTop;
+      // 锁住旧 scrollHeight，防止 popLayout 把退场视图移出文档流后 scrollTop 被 clamp。
+      body.style.minHeight = `${body.scrollHeight}px`;
+    }
     setViewAnimating(true);
     setToolbarHidden(true);
     window.clearTimeout(viewAnimTimerRef.current);
