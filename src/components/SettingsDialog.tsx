@@ -2,7 +2,7 @@ import { memo, useRef, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ThemeMode } from "../lib/model";
-import { getLang, setLang, t } from "../lib/i18n";
+import { setLang, t, useI18n } from "../lib/i18n";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -23,6 +23,7 @@ function SettingsDialog({
   theme,
   onThemeChange,
 }: SettingsDialogProps) {
+  const lang = useI18n();
   const themeIndex = THEME_OPTIONS.findIndex((o) => o.value === theme);
   // 容器固定 240px，内边距 3px*2，gap 2px*2，三个等宽按钮
   const themeThumbWidth = ((240 - 6 - 4) / 3 / 240) * 100;
@@ -95,14 +96,14 @@ function SettingsDialog({
                 <span className="vx-setting-desc">{t("language.desc")}</span>
               </div>
               <div className="seg theme-seg" style={{ width: 240 }}>
-                {(["zh", "en"] as const).map((lang) => (
+                {(["zh", "en"] as const).map((l) => (
                   <button
-                    key={lang}
+                    key={l}
                     type="button"
-                    aria-pressed={getLang() === lang}
-                    onClick={() => setLang(lang)}
+                    aria-pressed={lang === l}
+                    onClick={() => setLang(l)}
                   >
-                    {t(lang === "zh" ? "language.zh" : "language.en")}
+                    {t(l === "zh" ? "language.zh" : "language.en")}
                   </button>
                 ))}
               </div>
