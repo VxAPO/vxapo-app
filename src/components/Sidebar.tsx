@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { X } from "lucide-react";
 import type { EffectItem, PeqBandKind, PresetLibraryEntry, SideSection } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
-import { t } from "../lib/i18n";
+import { t, useI18n } from "../lib/i18n";
 import { EFFECT_DEFS } from "../lib/effects";
 import { snapPx } from "../lib/snap";
 
@@ -45,6 +45,7 @@ function Sidebar({
   activeChannel,
   onToggleChannel,
 }: SidebarProps) {
+  const lang = useI18n();
   const [sideW, setSideW] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem("vxapo.sidebarWidth"));
@@ -144,8 +145,8 @@ function Sidebar({
                 key={p.id}
                 style={presetCardStyle(accent)}
               >
-                <p className="p-name"><span className="p-group">{p.group}</span> · {p.name}</p>
-                <p className="p-desc">{p.desc}</p>
+                <p className="p-name"><span className="p-group">{lang === "en" ? (p.group_en ?? p.group) : p.group}</span> · {lang === "en" ? (p.name_en ?? p.name) : p.name}</p>
+                <p className="p-desc">{lang === "en" ? (p.desc_en ?? p.desc) : p.desc}</p>
                 <div className="row">
                   <span className="sub">{p.bands.length} {t("bands")}</span>
                   <button
@@ -185,8 +186,8 @@ function Sidebar({
                 >
                   <X size={12} strokeWidth={2.5} />
                 </button>
-                <p className="p-name"><span className="p-group">{p.group}</span> · {p.name}</p>
-                {p.desc ? <p className="p-desc">{p.desc}</p> : null}
+                <p className="p-name"><span className="p-group">{lang === "en" ? (p.group_en ?? p.group) : p.group}</span> · {lang === "en" ? (p.name_en ?? p.name) : p.name}</p>
+                {p.desc ? <p className="p-desc">{lang === "en" ? (p.desc_en ?? p.desc) : p.desc}</p> : null}
                 <div className="row">
                   <span className="sub">{p.bands.length} {t("bands")}</span>
                   <button className="add" type="button" onClick={() => onApplyPreset(p)}>{t("install")}</button>

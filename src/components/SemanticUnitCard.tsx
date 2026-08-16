@@ -47,7 +47,7 @@ function SemanticUnitCard({
         >
           {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
         </button>
-        <span className="g-name">{semanticName(b)}</span>
+        <span className="g-name">{t(semanticName(b))}</span>
         <span className="grow" />
         {groupLabel ? (
           <button

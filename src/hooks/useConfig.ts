@@ -11,7 +11,7 @@ import {
   type BandPatch,
 } from "../lib/blocks";
 import { useInterval } from "./useInterval";
-import { t } from "../lib/i18n";
+import { getLang, t } from "../lib/i18n";
 
 function effectId(e: EffectItem): string {
   return e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`;
@@ -165,8 +165,11 @@ export function useConfig(
       notify(t("notify.maxBands", { current, add: p.bands.length }));
       return undefined;
     }
+    const lang = getLang();
+    const groupBase = lang === "en" ? (p.group_en ?? p.group) : p.group;
+    const nameBase = lang === "en" ? (p.name_en ?? p.name) : p.name;
     const groups = new Set(blocks.map((b) => b.group).filter((g): g is string => !!g));
-    const group = nextGroupName(p.group, groups);
+    const group = nextGroupName(groupBase, groups);
     markDirty();
     setBlocks((prev) => {
       return [
@@ -174,7 +177,7 @@ export function useConfig(
         ...p.bands.map((b) => ({
           id: crypto.randomUUID(),
           group,
-          name: b.name ?? p.name,
+          name: (lang === "en" ? (b.name_en ?? b.name) : b.name) ?? nameBase,
           enabled: true,
           channel: channelCtx.mode ? channelCtx.active : undefined,
           bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q, ...(b.kind ? { kind: b.kind } : {}) }],

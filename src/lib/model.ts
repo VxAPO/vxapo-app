@@ -46,9 +46,13 @@ export interface PresetLibraryEntry {
   group: string;
   name: string;
   desc: string;
+  /** 英文显示名（缺省回退中文） */
+  group_en?: string;
+  name_en?: string;
+  desc_en?: string;
   /** 感知配色（自定义预设可自选，缺省按频段推导） */
   color?: string;
-  bands: (Band & { name?: string })[];
+  bands: (Band & { name?: string; name_en?: string })[];
 }
 
 export interface PresetMetaEntry {
@@ -62,13 +66,14 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-function isNamedBand(v: unknown): v is Band & { name?: string } {
+function isNamedBand(v: unknown): v is Band & { name?: string; name_en?: string } {
   return (
     isRecord(v) &&
     typeof v.fc === "number" &&
     typeof v.gain_db === "number" &&
     typeof v.q === "number" &&
-    (v.name === undefined || typeof v.name === "string")
+    (v.name === undefined || typeof v.name === "string") &&
+    (v.name_en === undefined || typeof v.name_en === "string")
   );
 }
 
@@ -80,6 +85,9 @@ export function isPresetLibraryEntry(v: unknown): v is PresetLibraryEntry {
     typeof v.name === "string" &&
     typeof v.desc === "string" &&
     (v.color === undefined || typeof v.color === "string") &&
+    (v.group_en === undefined || typeof v.group_en === "string") &&
+    (v.name_en === undefined || typeof v.name_en === "string") &&
+    (v.desc_en === undefined || typeof v.desc_en === "string") &&
     Array.isArray(v.bands) &&
     v.bands.every(isNamedBand)
   );
