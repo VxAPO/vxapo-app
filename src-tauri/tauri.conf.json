@@ -40,7 +40,7 @@
     ],
     "resources": [
       "../../vxapo-cli/target/release/vxapo-cli.exe",
-      "../../vxapo-driver/target/release/vxapo_driver.dll"
+      "../../vxapo-driver/target/x86_64-pc-windows-msvc/release/vxapo_driver.dll"
     ]
   }
 }
