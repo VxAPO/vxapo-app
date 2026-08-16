@@ -483,27 +483,11 @@ export default function App() {
     return () => ro.disconnect();
   }, [selectedIds.length > 0]);
 
-  // 视图/通道切换有 320ms 平移动画，期间旧几何保持不动；动画结束后再重测（360ms 留缓冲），避免测到中间态
-  const lastViewRef = useRef(view);
-  const lastChannelOnRef = useRef(channelOn);
-  const lastActiveRef = useRef(effActiveChannel);
   // selGeom 延迟重测用：避免把 view 加入 effect 依赖后在动画中途就测量。
   const viewRef = useRef(view);
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
-  useEffect(() => {
-    const changed =
-      lastViewRef.current !== view ||
-      lastChannelOnRef.current !== channelOn ||
-      lastActiveRef.current !== effActiveChannel;
-    lastViewRef.current = view;
-    lastChannelOnRef.current = channelOn;
-    lastActiveRef.current = effActiveChannel;
-    if (!changed) return;
-    const t = window.setTimeout(() => setSelGeomTick((v) => v + 1), 360);
-    return () => window.clearTimeout(t);
-  }, [view, channelOn, effActiveChannel]);
 
   // 选中工具栏几何：按选中卡片包围盒宽度取水平中心，下边距按网格行高动态计算
   useEffect(() => {
@@ -780,18 +764,31 @@ export default function App() {
     [effects],
   );
 
+  const finishViewAnim = useCallback(() => {
+    window.clearTimeout(viewAnimTimerRef.current);
+    setViewAnimating(false);
+    setSelGeomTick((v) => v + 1);
+    // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
+    // 再从旧位置沿贝塞尔曲线飞到新位置。
+    window.setTimeout(() => setToolbarHidden(false), 0);
+  }, []);
+
   const beginViewAnim = useCallback(() => {
     setViewAnimating(true);
     setToolbarHidden(true);
     window.clearTimeout(viewAnimTimerRef.current);
-    viewAnimTimerRef.current = window.setTimeout(() => {
-      setViewAnimating(false);
-      setSelGeomTick((v) => v + 1);
-      // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
-      // 再从旧位置沿贝塞尔曲线飞到新位置。
-      window.setTimeout(() => setToolbarHidden(false), 0);
-    }, 360);
-  }, []);
+    // 兜底：正常情况下由 view-stage 的 onAnimationComplete 触发 finishViewAnim；
+    // 若极端卡顿导致回调未触发，1200ms 后强制收尾，避免浮窗一直不显示。
+    viewAnimTimerRef.current = window.setTimeout(() => finishViewAnim(), 1200);
+  }, [finishViewAnim]);
+
+  const handlePresetStageComplete = useCallback(() => {
+    if (viewRef.current === "preset") finishViewAnim();
+  }, [finishViewAnim]);
+
+  const handleAdvancedStageComplete = useCallback(() => {
+    if (viewRef.current === "advanced") finishViewAnim();
+  }, [finishViewAnim]);
 
   const switchView = useCallback((v: ViewMode) => {
     if (v === view) return; // 重复点击当前视图不触发进场/退场动画
@@ -804,7 +801,9 @@ export default function App() {
 
   const toggleChannel = useCallback(() => {
     markDirty();
-    beginViewAnim();
+    // 只有通道切换会伴随视图切到 advanced 时才需要 view-stage 动画；
+    // 已处于 advanced 时直接清空选择即可，不触发视图退场/进场。
+    if (view !== "advanced") beginViewAnim(); else setCopyOpen(false);
     setCopyOpen(false);
     const first = channelNames[0] ?? "L";
     if (!channelOn) {
@@ -852,7 +851,7 @@ export default function App() {
     setSegDir("right");
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
-  }, [channelOn, channelNames, markDirty, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
+  }, [channelOn, channelNames, view, markDirty, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
 
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const openInstall = useCallback(() => setInstallOpen(true), []);
@@ -1057,6 +1056,7 @@ export default function App() {
                   key="preset"
                   data-view="preset"
                   className="view-stage"
+                  onAnimationComplete={handlePresetStageComplete}
                   initial={{ x: "-100%" }}
                   animate={{ x: 0 }}
                   exit={{ x: "-100%" }}
@@ -1093,6 +1093,7 @@ export default function App() {
                   key="advanced"
                   data-view="advanced"
                   className="view-stage"
+                  onAnimationComplete={handleAdvancedStageComplete}
                   initial={{ x: "100%" }}
                   animate={{ x: 0 }}
                   exit={{ x: "100%" }}
