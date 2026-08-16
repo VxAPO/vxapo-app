@@ -14,10 +14,10 @@ ReactDOM.createRoot(rootEl).render(
 
 // 窗口初始为不可见，前端渲染完成后再通知 Rust 显示，避免白屏一闪
 if ("__TAURI_INTERNALS__" in window) {
-  requestAnimationFrame(() => {
+  // 等首帧稳定后再显示窗口，避免 WebView 首帧未提交导致白闪
+  window.setTimeout(() => {
     invoke("show_main_window").catch(() => {
-      // 万一命令失败，窗口仍保持不可见会无法操作；这里不再吞掉错误。
       console.error("show_main_window failed");
     });
-  });
+  }, 120);
 }
