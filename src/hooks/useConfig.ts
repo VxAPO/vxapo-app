@@ -11,6 +11,7 @@ import {
   type BandPatch,
 } from "../lib/blocks";
 import { useInterval } from "./useInterval";
+import { t } from "../lib/i18n";
 
 function effectId(e: EffectItem): string {
   return e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`;
@@ -161,7 +162,7 @@ export function useConfig(
   const applyPreset = useCallback((p: PresetLibraryEntry): string | undefined => {
     const current = channelCtx.mode ? (channelBandCounts[channelCtx.active] ?? 0) : totalBands;
     if (current + p.bands.length > 31) {
-      notify(`最多 31 段，当前 ${current} 段，添加 ${p.bands.length} 段将超限`);
+      notify(t("notify.maxBands", { current, add: p.bands.length }));
       return undefined;
     }
     const groups = new Set(blocks.map((b) => b.group).filter((g): g is string => !!g));
@@ -186,7 +187,7 @@ export function useConfig(
   const addBand = useCallback((kind: PeqBandKind = "peaking", channel?: string) => {
     const current = channelCtx.mode ? (channelBandCounts[channelCtx.active] ?? 0) : totalBands;
     if (current >= 31) {
-      notify("该声道最多 31 段，已达到上限");
+      notify(t("notify.maxBandsChannel"));
       return;
     }
     markDirty();
