@@ -7,6 +7,10 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
+  build: {
+    // Tauri 桌面应用无需像 Web 端那样强制拆包，提高阈值避免 500KB 警告
+    chunkSizeWarningLimit: 700,
+  },
   server: {
     port: 1420,
     strictPort: true,
