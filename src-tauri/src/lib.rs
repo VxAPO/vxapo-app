@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 use std::sync::OnceLock;
+use tauri::Manager;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -12,6 +13,32 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// vxapo-cli 路径：env VXAPO_CLI 优先，缺省开发机固定路径。
 static CLI_PATH: OnceLock<String> = OnceLock::new();
+
+fn system_uses_dark_mode() -> bool {
+    #[cfg(windows)]
+    {
+        let out = Command::new("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "/v",
+                "AppsUseLightTheme",
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        if let Ok(o) = out {
+            if o.status.success() {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                return stdout.contains("0x0") && !stdout.contains("0x1");
+            }
+        }
+        false
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
 
 fn cli_path() -> &'static str {
     CLI_PATH.get_or_init(|| {
@@ -295,6 +322,17 @@ fn read_progress(tag: String) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            if let Some(win) = app.get_webview_window("main") {
+                let (r, g, b) = if system_uses_dark_mode() {
+                    (0x16u8, 0x18u8, 0x1bu8)
+                } else {
+                    (0xf0u8, 0xf3u8, 0xf6u8)
+                };
+                let _ = win.set_background_color(tauri::window::Color(r, g, b, 255));
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
