@@ -793,12 +793,13 @@ export default function App() {
   }, []);
 
   const switchView = useCallback((v: ViewMode) => {
+    if (v === view) return; // 重复点击当前视图不触发进场/退场动画
     beginViewAnim();
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
     setSegDir(v === "advanced" ? "right" : "left");
     setView(v);
-  }, [blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
+  }, [view, beginViewAnim, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
 
   const toggleChannel = useCallback(() => {
     markDirty();
