@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Copy, Minus, SlidersHorizontal, Square, Tags, X } from "lucide-react";
 import type { ViewMode } from "../lib/model";
+import { t } from "../lib/i18n";
 import logoUrl from "../assets/VxAPO_icon_v4.svg";
 
 interface TopBarProps {
@@ -35,29 +36,29 @@ function TopBar({
   return (
     <div className="topbar" data-tauri-drag-region>
       <img className="logo" src={logoUrl} alt="VxAPO" draggable={false} />
-      <button className="pill" type="button" onClick={onOpenSettings}>设置</button>
-      <button className="pill" type="button" disabled={noDevices} onClick={onImport}>导入</button>
-      <button className="pill" type="button" disabled={noDevices} onClick={onExport}>导出</button>
+      <button className="pill" type="button" onClick={onOpenSettings}>{t("settings")}</button>
+      <button className="pill" type="button" disabled={noDevices} onClick={onImport}>{t("import")}</button>
+      <button className="pill" type="button" disabled={noDevices} onClick={onExport}>{t("export")}</button>
       <span className="spacer" data-tauri-drag-region />
       <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label="视图切换">
         <span className={`seg-thumb ${view === "advanced" ? "right" : ""}`} />
         <button type="button" disabled={channelOn || noDevices} aria-pressed={view === "preset"} onClick={() => onViewChange("preset")}>
           <Tags size={13} />
-          语义视图
+          {t("view.semantic")}
         </button>
         <button type="button" disabled={noDevices} aria-pressed={view === "advanced"} onClick={() => onViewChange("advanced")}>
           <SlidersHorizontal size={13} />
-          参数视图
+          {t("view.params")}
         </button>
       </div>
       <span className="spacer" data-tauri-drag-region />
-      <button className="pill winbtn" type="button" aria-label="最小化" onClick={onMinimize}>
+      <button className="pill winbtn" type="button" aria-label={t("minimize")} onClick={onMinimize}>
         <Minus size={16} />
       </button>
-      <button className="pill winbtn" type="button" aria-label={isMax ? "还原" : "最大化"} onClick={onToggleMaximize}>
+      <button className="pill winbtn" type="button" aria-label={isMax ? t("restore") : t("maximize")} onClick={onToggleMaximize}>
         {isMax ? <Copy size={14} /> : <Square size={13} />}
       </button>
-      <button className="pill winbtn close" type="button" aria-label="关闭" onClick={onClose}>
+      <button className="pill winbtn close" type="button" aria-label={t("close.window")} onClick={onClose}>
         <X size={16} />
       </button>
     </div>

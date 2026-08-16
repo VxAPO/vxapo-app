@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { accentHoverColor, presetAccent, semanticName } from "../lib/blocks";
+import { t } from "../lib/i18n";
 
 interface SavePresetDialogProps {
   open: boolean;
@@ -59,32 +60,32 @@ function SavePresetDialog({
         <Dialog.Overlay className="vx-dialog-overlay" />
         <Dialog.Content className="vx-dialog-content vx-dialog-wide" aria-describedby={undefined}>
           <div className="vx-dialog-head">
-            <Dialog.Title className="vx-dialog-title">保存为自定义预设</Dialog.Title>
+            <Dialog.Title className="vx-dialog-title">{t("preset.saveTitle")}</Dialog.Title>
             <Dialog.Close className="vx-dialog-close" aria-label="关闭">
               <X size={16} />
             </Dialog.Close>
           </div>
           <div className="vx-dialog-body">
             <label className="vx-field">
-              <span className="vx-field-label">预设名称</span>
+              <span className="vx-field-label">{t("preset.name")}</span>
               <input
                 className="vx-text-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="自定义预设"
+                placeholder={t("preset.name.placeholder")}
               />
             </label>
             <label className="vx-field">
-              <span className="vx-field-label">预设简介</span>
+              <span className="vx-field-label">{t("preset.desc")}</span>
               <input
                 className="vx-text-input"
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
-                placeholder="例如：适合 FPS 的脚步与枪声增强"
+                placeholder={t("preset.desc.placeholder")}
               />
             </label>
             <div className="vx-field">
-              <span className="vx-field-label">配色</span>
+              <span className="vx-field-label">{t("preset.color")}</span>
               <div className="preset-swatches">
                 {SWATCHES.map((c) => (
                   <button
@@ -99,7 +100,7 @@ function SavePresetDialog({
               </div>
             </div>
             <div className="vx-field">
-              <span className="vx-field-label">每段语义描述</span>
+              <span className="vx-field-label">{t("preset.bandDesc")}</span>
               <div className="preset-band-list">
                 {blocks.map((b, i) => {
                   const band = b.bands[0];

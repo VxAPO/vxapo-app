@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { Device } from "../lib/model";
+import { t } from "../lib/i18n";
 
 interface DeviceTabsProps {
   devices: Device[];
@@ -29,8 +30,8 @@ function DeviceTabs({
             <button
               className={`tab-dot ${tuningOn(d.guid) ? "on" : ""}`}
               type="button"
-              aria-label={tuningOn(d.guid) ? "关闭该设备调音" : "开启该设备调音"}
-              title={tuningOn(d.guid) ? "调音已开启，点击关闭" : "调音已关闭，点击开启"}
+              aria-label={tuningOn(d.guid) ? t("disable.filter") : t("enable.filter")}
+              title={tuningOn(d.guid) ? t("disable.filter") : t("enable.filter")}
               onClick={() => onToggleTuning(d.guid)}
             />
             <button className="tab-btn" type="button" onClick={() => onSelect(d.guid)}>
@@ -39,7 +40,7 @@ function DeviceTabs({
             <button
               className="tab-close"
               type="button"
-              aria-label={`卸载 ${d.name}`}
+              aria-label={`${t("uninstall")} ${d.name}`}
               onClick={() => onUninstall(d)}
             >
               <X size={14} strokeWidth={2.5} />
@@ -51,8 +52,8 @@ function DeviceTabs({
         <button
           className="tab-add"
           type="button"
-          aria-label="新设备安装"
-          title="安装新设备"
+          aria-label={t("install.title")}
+          title={t("install.title")}
           onClick={onAdd}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">

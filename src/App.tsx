@@ -17,6 +17,7 @@ import { useDevices } from "./hooks/useDevices";
 import { useDragSort } from "./hooks/useDragSort";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
+import { I18nProvider } from "./lib/i18n";
 import { useWindowControls } from "./hooks/useWindowControls";
 import { bandDb } from "./components/CurvePlot";
 import AdvancedView from "./components/AdvancedView";
@@ -1093,6 +1094,7 @@ export default function App() {
   );
 
   return (
+    <I18nProvider>
     <div className="app-shell-new">
       <TopBar
         view={view}
@@ -1393,5 +1395,6 @@ export default function App() {
       />
       <AnimatePresence>{notice && <Toast message={notice} />}</AnimatePresence>
     </div>
+    </I18nProvider>
   );
 }

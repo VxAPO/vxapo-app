@@ -4,6 +4,7 @@ import { Plus, X } from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Device } from "../lib/model";
 import { readImportFile } from "../lib/api";
+import { t } from "../lib/i18n";
 import VxSelect from "./VxSelect";
 
 interface ImportDialogProps {
@@ -43,19 +44,19 @@ function ImportDialog({
           (async () => {
             try {
               if (!path.toLowerCase().endsWith(".toml")) {
-                setError("只能导入 .toml 文件");
+                setError(t("import.invalid"));
                 return;
               }
               const text = await readImportFile(path);
               if (!text.trim()) {
-                setError("文件内容为空");
+                setError(t("import.empty"));
                 return;
               }
               setFileName(path.split(/[\\/]/).pop() ?? path);
               setFileText(text);
               setError("");
             } catch {
-              setError("文件读取失败");
+              setError(t("import.readError"));
             }
           })();
         });
@@ -80,20 +81,20 @@ function ImportDialog({
   const readFile = useCallback((file: File) => {
     setError("");
     if (!file.name.toLowerCase().endsWith(".toml")) {
-      setError("只能导入 .toml 文件");
+      setError(t("import.invalid"));
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result ?? "");
       if (!text.trim()) {
-        setError("文件内容为空");
+        setError(t("import.empty"));
         return;
       }
       setFileName(file.name);
       setFileText(text);
     };
-    reader.onerror = () => setError("文件读取失败");
+    reader.onerror = () => setError(t("import.readError"));
     reader.readAsText(file);
   }, []);
 
@@ -134,30 +135,30 @@ function ImportDialog({
         <Dialog.Overlay className="vx-dialog-overlay" />
         <Dialog.Content className="vx-dialog-content vx-dialog-wide" aria-describedby={undefined}>
           <div className="vx-dialog-head">
-            <Dialog.Title className="vx-dialog-title">导入配置</Dialog.Title>
+            <Dialog.Title className="vx-dialog-title">{t("import.title")}</Dialog.Title>
             <Dialog.Close className="vx-dialog-close" aria-label="关闭">
               <X size={16} />
             </Dialog.Close>
           </div>
           <div className="vx-dialog-body">
             <label className="vx-field">
-              <span className="vx-field-label">目标设备</span>
+              <span className="vx-field-label">{t("import.target")}</span>
               <VxSelect
                 value={selectedGuid ?? ""}
                 options={devices.map((d) => ({ value: d.guid, label: d.name }))}
                 onValueChange={onSelectDevice}
                 ariaLabel="目标设备"
-                placeholder="选择已安装设备"
+                placeholder={t("import.selectDevice")}
               />
             </label>
 
             <div className="vx-field">
-              <span className="vx-field-label">配置文件</span>
+              <span className="vx-field-label">{t("import.file")}</span>
               {fileText ? (
                 <div className="import-preview">
                   <div className="import-preview-head">
                     <span className="import-preview-name">{fileName}</span>
-                    <button className="import-reset" type="button" onClick={onReset} aria-label="重新选择">
+                    <button className="import-reset" type="button" onClick={onReset} aria-label={t("import.chooseFile")}>
                       <X size={14} />
                     </button>
                   </div>
@@ -177,7 +178,7 @@ function ImportDialog({
                   tabIndex={0}
                 >
                   <Plus size={20} className="import-plus" />
-                  <span>点击或拖拽 .toml 文件到此处</span>
+                  <span>{t("import.drop")}</span>
                   <input ref={inputRef} type="file" accept=".toml" hidden onChange={onPick} />
                 </div>
               )}
@@ -186,8 +187,8 @@ function ImportDialog({
             {error ? <div className="hint-row show err">{error}</div> : null}
 
             <div className="vx-dialog-actions">
-              <Dialog.Close className="vx-btn ghost" type="button">取消</Dialog.Close>
-              <button className="vx-btn primary" type="button" onClick={submit}>导入</button>
+              <Dialog.Close className="vx-btn ghost" type="button">{t("cancel")}</Dialog.Close>
+              <button className="vx-btn primary" type="button" onClick={submit}>{t("import")}</button>
             </div>
           </div>
         </Dialog.Content>

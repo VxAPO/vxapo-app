@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { X } from "lucide-react";
 import type { EffectItem, PeqBandKind, PresetLibraryEntry, SideSection } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
+import { t } from "../lib/i18n";
 import { EFFECT_DEFS } from "../lib/effects";
 import { snapPx } from "../lib/snap";
 
@@ -124,7 +125,7 @@ function Sidebar({
         <div className="labels">
           {SECTIONS.map((s) => (
             <button key={s} type="button" aria-pressed={side === s} onClick={() => onSideChange(s)}>
-              {s === "preset" ? "预设" : s === "custom" ? "自定义" : "高级"}
+              {s === "preset" ? t("preset") : s === "custom" ? t("custom") : t("advanced")}
             </button>
           ))}
         </div>
@@ -153,7 +154,7 @@ function Sidebar({
                     disabled={used}
                     onClick={() => onApplyPreset(p)}
                   >
-                    {used ? "已添加" : "添加"}
+                    {used ? t("effect.added") : t("install")}
                   </button>
                 </div>
               </div>
@@ -166,7 +167,7 @@ function Sidebar({
         <div className="cards">
           {customPresets.length === 0 ? (
             <div className="preset-card preset-empty">
-              <p className="p-desc">暂无自定义预设，框选卡片后可保存</p>
+              <p className="p-desc">{t("empty.customPreset")}</p>
             </div>
           ) : (
             customPresets.map((p) => (
@@ -178,8 +179,8 @@ function Sidebar({
                 <button
                   className="preset-del"
                   type="button"
-                  aria-label="删除预设"
-                  title="删除预设"
+                  aria-label={t("delete")}
+                  title={t("delete")}
                   onClick={() => onDeletePreset(p)}
                 >
                   <X size={12} strokeWidth={2.5} />
@@ -188,7 +189,7 @@ function Sidebar({
                 {p.desc ? <p className="p-desc">{p.desc}</p> : null}
                 <div className="row">
                   <span className="sub">{p.bands.length} 段</span>
-                  <button className="add" type="button" onClick={() => onApplyPreset(p)}>添加</button>
+                  <button className="add" type="button" onClick={() => onApplyPreset(p)}>{t("install")}</button>
                 </div>
               </div>
             ))
@@ -198,28 +199,28 @@ function Sidebar({
 
         {side === "advanced" && (
         <div className="adv-list">
-          <div className="adv-cat">滤波器</div>
+          <div className="adv-cat">{t("filters")}</div>
           <button className="adv-pill" type="button" onClick={() => onAddBand("peaking")}>
             <Plus size={14} className="adv-plus" />
-            <span>峰值滤波器</span>
+            <span>{t("peak.filter")}</span>
           </button>
           <button className="adv-pill" type="button" onClick={() => onAddBand("high_shelf")}>
             <Plus size={14} className="adv-plus" />
-            <span>高架滤波器</span>
+            <span>{t("filter.highShelf")}</span>
           </button>
           <button className="adv-pill" type="button" onClick={() => onAddBand("low_shelf")}>
             <Plus size={14} className="adv-plus" />
-            <span>低架滤波器</span>
+            <span>{t("filter.lowShelf")}</span>
           </button>
           <button className="adv-pill" type="button" onClick={() => onAddBand("low_pass")}>
             <Plus size={14} className="adv-plus" />
-            <span>低通滤波器</span>
+            <span>{t("filter.lowPass")}</span>
           </button>
           <button className="adv-pill" type="button" onClick={() => onAddBand("high_pass")}>
             <Plus size={14} className="adv-plus" />
-            <span>高通滤波器</span>
+            <span>{t("filter.highPass")}</span>
           </button>
-          <div className="adv-cat">效果器</div>
+          <div className="adv-cat">{t("effects")}</div>
           {EFFECT_DEFS.map((e) => {
             const added =
               e.type === "preamp" && channelOn
@@ -234,7 +235,7 @@ function Sidebar({
                 onClick={() => onAddEffect(e.type)}
               >
                 <Plus size={14} className="adv-plus" />
-                <span>{added ? `${e.name}（已添加）` : e.name}</span>
+                <span>{added ? `${e.name}${t("effect.added")}` : e.name}</span>
               </button>
             );
           })}
@@ -245,7 +246,7 @@ function Sidebar({
             onClick={onToggleChannel}
           >
             <Plus size={14} className="adv-plus" />
-            <span>通道选择器</span>
+            <span>{t("channel.selector")}</span>
           </button>
         </div>
         )}

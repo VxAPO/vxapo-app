@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../lib/model";
 import { channelLabel } from "../lib/channels";
+import { t } from "../lib/i18n";
 import CurvePlot from "./CurvePlot";
 import VxSelect from "./VxSelect";
 
@@ -68,7 +69,7 @@ function CurvePanel({
   return (
     <div className="curve-wrap" ref={curveRef}>
       <div className="curve-head">
-        <span className="t">频响曲线</span>
+        <span className="t">{t("freqResponse")}</span>
         <VxSelect
           value={curveChannel}
           options={channelOptions}

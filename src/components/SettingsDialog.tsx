@@ -2,6 +2,7 @@ import { memo, useRef, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ThemeMode } from "../lib/model";
+import { getLang, setLang, t } from "../lib/i18n";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -10,10 +11,10 @@ interface SettingsDialogProps {
   onThemeChange: (theme: ThemeMode) => void;
 }
 
-const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
-  { value: "light", label: "浅色" },
-  { value: "dark", label: "深色" },
-  { value: "system", label: "跟随系统" },
+const THEME_OPTIONS: { value: ThemeMode; key: string }[] = [
+  { value: "light", key: "theme.light" },
+  { value: "dark", key: "theme.dark" },
+  { value: "system", key: "theme.system" },
 ];
 
 function SettingsDialog({
@@ -53,8 +54,8 @@ function SettingsDialog({
         <Dialog.Overlay className="vx-dialog-overlay" />
         <Dialog.Content className="vx-dialog-content" aria-describedby={undefined}>
           <div className="vx-dialog-head">
-            <Dialog.Title className="vx-dialog-title">设置</Dialog.Title>
-            <Dialog.Close className="vx-dialog-close" aria-label="关闭设置">
+            <Dialog.Title className="vx-dialog-title">{t("settings")}</Dialog.Title>
+            <Dialog.Close className="vx-dialog-close" aria-label={t("close.settings")}>
               <X size={16} />
             </Dialog.Close>
           </div>
@@ -62,8 +63,8 @@ function SettingsDialog({
           <div className="vx-dialog-body">
             <div className="vx-setting-row">
               <div className="vx-setting-info">
-                <span className="vx-setting-name">主题</span>
-                <span className="vx-setting-desc">界面明暗模式</span>
+                <span className="vx-setting-name">{t("theme")}</span>
+                <span className="vx-setting-desc">{t("theme.desc")}</span>
               </div>
               <div
                 className={`seg theme-seg${themeHoverLock ? " no-hover" : ""}`}
@@ -82,7 +83,7 @@ function SettingsDialog({
                     aria-pressed={theme === o.value}
                     onClick={() => handleThemeChange(o.value)}
                   >
-                    {o.label}
+                    {t(o.key)}
                   </button>
                 ))}
               </div>
@@ -90,10 +91,21 @@ function SettingsDialog({
 
             <div className="vx-setting-row">
               <div className="vx-setting-info">
-                <span className="vx-setting-name">语言</span>
-                <span className="vx-setting-desc">当前仅简体中文</span>
+                <span className="vx-setting-name">{t("language")}</span>
+                <span className="vx-setting-desc">{t("language.desc")}</span>
               </div>
-              <span className="vx-setting-value">简体中文</span>
+              <div className="seg theme-seg" style={{ width: 240 }}>
+                {(["zh", "en"] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    aria-pressed={getLang() === lang}
+                    onClick={() => setLang(lang)}
+                  >
+                    {t(lang === "zh" ? "language.zh" : "language.en")}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </Dialog.Content>

@@ -1,0 +1,300 @@
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+
+export type Lang = "zh" | "en";
+
+const STORAGE_KEY = "vxapo.lang";
+
+const zh: Record<string, string> = {
+  "app.title": "VxAPO",
+  "settings": "设置",
+  "import": "导入",
+  "export": "导出",
+  "theme": "主题",
+  "theme.desc": "界面明暗模式",
+  "theme.light": "浅色",
+  "theme.dark": "深色",
+  "theme.system": "跟随系统",
+  "language": "语言",
+  "language.desc": "界面显示语言",
+  "language.zh": "简体中文",
+  "language.en": "English",
+  "close.settings": "关闭设置",
+  "close": "关闭",
+  "cancel": "取消",
+  "confirm": "确认",
+  "save": "保存",
+  "delete": "删除",
+  "install": "安装",
+  "uninstall": "卸载",
+  "preset": "预设",
+  "custom": "自定义",
+  "advanced": "高级",
+  "view.semantic": "语义视图",
+  "view.params": "参数视图",
+  "minimize": "最小化",
+  "maximize": "最大化",
+  "restore": "还原",
+  "close.window": "关闭",
+  "devices": "设备",
+  "device.properties": "设备属性",
+  "device.name": "设备名",
+  "device.type": "类型",
+  "device.playback": "播放设备",
+  "device.capture": "捕获设备",
+  "device.channels": "通道数",
+  "device.sampleRate": "采样率",
+  "device.bitDepth": "位深",
+  "device.volume": "音量",
+  "peakGain": "峰值增益",
+  "normalize": "归一化",
+  "normalize.title": "生成基准电平并把峰值补偿到 0 dB",
+  "normalize.title.disabled": "峰值增益已接近 0 dB，无需归一化",
+  "bands": "段数",
+  "filters": "滤波器",
+  "freqResponse": "频响曲线",
+  "effects": "效果器",
+  "channels": "声道",
+  "channel.selector": "通道选择器",
+  "copy.toChannel": "复制到声道",
+  "save.preset": "保存为自定义预设",
+  "delete.selected": "删除",
+  "selected.count": "已选 {count} 段",
+  "add.tuning": "从侧栏添加调音",
+  "add.effect": "从侧栏添加效果器",
+  "empty.customPreset": "暂无自定义预设，框选卡片后可保存",
+  "preset.name": "预设名称",
+  "preset.desc": "预设简介",
+  "preset.name.placeholder": "自定义预设",
+  "preset.desc.placeholder": "例如：适合 FPS 的脚步与枪声增强",
+  "preset.color": "配色",
+  "preset.bandDesc": "每段语义描述",
+  "preset.saveTitle": "保存为自定义预设",
+  "import.title": "导入配置",
+  "import.target": "目标设备",
+  "import.file": "配置文件",
+  "import.drop": "点击或拖拽 .toml 文件到此处",
+  "import.invalid": "只能导入 .toml 文件",
+  "import.empty": "文件内容为空",
+  "import.readError": "文件读取失败",
+  "import.selectDevice": "请选择目标设备",
+  "import.chooseFile": "请先选择要导入的 TOML 文件",
+  "import.success": "导入成功",
+  "import.fail": "导入失败",
+  "import.fail.unknown": "导入失败：TOML 中包含无法识别的内容",
+  "export.fail": "导出失败",
+  "install.title": "安装 VxAPO",
+  "uninstall.title": "卸载 VxAPO",
+  "uninstall.confirm": "确定要卸载该设备的 VxAPO 调音吗？",
+  "no.device": "点击加号安装 VxAPO",
+  "peak.filter": "峰值滤波器",
+  "filter.highShelf": "高架滤波器",
+  "filter.lowShelf": "低架滤波器",
+  "filter.lowPass": "低通滤波器",
+  "filter.highPass": "高通滤波器",
+  "effect.added": "（已添加）",
+  "effect.wide": "声场加宽",
+  "effect.aural": "谐波激励器",
+  "effect.reverb": "混响",
+  "effect.maximizer": "自动增益",
+  "effect.loudness": "等响补偿",
+  "effect.preamp": "基准电平",
+  "effect.preamp.desc": "整链增益补偿，用于把峰值拉回 0 dB",
+  "effect.wide.desc": "拓宽立体声声像，空间感更强",
+  "effect.aural.desc": "谐波激励，提升细节与空气感",
+  "effect.reverb.desc": "增加空间混响，声音更润",
+  "effect.maximizer.desc": "自动调整增益，保持稳定响度",
+  "effect.loudness.desc": "等响度曲线补偿，小音量更平衡",
+  "filter": "滤波器",
+  "frequency": "中心频率",
+  "q.value": "Q 值",
+  "gain": "增益",
+  "strength": "强度",
+  "weak": "弱",
+  "strong": "强",
+  "disable.filter": "停用该段",
+  "enable.filter": "启用该段",
+  "delete.filter": "删除",
+  "delete.group": "删除整组",
+  "aria.close": "关闭",
+  "aria.delete": "删除",
+  "aria.save": "保存",
+  "aria.import": "导入",
+  "aria.export": "导出",
+  "aria.selectDevice": "选择设备",
+};
+
+const en: Record<string, string> = {
+  "app.title": "VxAPO",
+  "settings": "Settings",
+  "import": "Import",
+  "export": "Export",
+  "theme": "Theme",
+  "theme.desc": "Light / dark mode",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+  "theme.system": "System",
+  "language": "Language",
+  "language.desc": "Display language",
+  "language.zh": "简体中文",
+  "language.en": "English",
+  "close.settings": "Close settings",
+  "close": "Close",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "save": "Save",
+  "delete": "Delete",
+  "install": "Install",
+  "uninstall": "Uninstall",
+  "preset": "Presets",
+  "custom": "Custom",
+  "advanced": "Advanced",
+  "view.semantic": "Semantic",
+  "view.params": "Parametric",
+  "minimize": "Minimize",
+  "maximize": "Maximize",
+  "restore": "Restore",
+  "close.window": "Close",
+  "devices": "Devices",
+  "device.properties": "Device Properties",
+  "device.name": "Name",
+  "device.type": "Type",
+  "device.playback": "Playback",
+  "device.capture": "Capture",
+  "device.channels": "Channels",
+  "device.sampleRate": "Sample Rate",
+  "device.bitDepth": "Bit Depth",
+  "device.volume": "Volume",
+  "peakGain": "Peak Gain",
+  "normalize": "Normalize",
+  "normalize.title": "Create preamp and compensate peak to 0 dB",
+  "normalize.title.disabled": "Peak gain is already near 0 dB",
+  "bands": "Bands",
+  "filters": "Filters",
+  "freqResponse": "Frequency Response",
+  "effects": "Effects",
+  "channels": "Channels",
+  "channel.selector": "Channel selector",
+  "copy.toChannel": "Copy to channel",
+  "save.preset": "Save as preset",
+  "delete.selected": "Delete",
+  "selected.count": "{count} selected",
+  "add.tuning": "Add tuning from sidebar",
+  "add.effect": "Add effect from sidebar",
+  "empty.customPreset": "No custom presets yet. Select cards to save one.",
+  "preset.name": "Preset name",
+  "preset.desc": "Preset description",
+  "preset.name.placeholder": "Custom preset",
+  "preset.desc.placeholder": "e.g. FPS footsteps and gunshots",
+  "preset.color": "Color",
+  "preset.bandDesc": "Per-band description",
+  "preset.saveTitle": "Save as custom preset",
+  "import.title": "Import Config",
+  "import.target": "Target device",
+  "import.file": "Config file",
+  "import.drop": "Click or drag a .toml file here",
+  "import.invalid": "Only .toml files are supported",
+  "import.empty": "File is empty",
+  "import.readError": "Failed to read file",
+  "import.selectDevice": "Please select a target device",
+  "import.chooseFile": "Please choose a TOML file first",
+  "import.success": "Import succeeded",
+  "import.fail": "Import failed",
+  "import.fail.unknown": "Import failed: TOML contains unsupported content",
+  "export.fail": "Export failed",
+  "install.title": "Install VxAPO",
+  "uninstall.title": "Uninstall VxAPO",
+  "uninstall.confirm": "Uninstall VxAPO from this device?",
+  "no.device": "Click plus to install VxAPO",
+  "peak.filter": "Peaking filter",
+  "filter.highShelf": "High shelf filter",
+  "filter.lowShelf": "Low shelf filter",
+  "filter.lowPass": "Low pass filter",
+  "filter.highPass": "High pass filter",
+  "effect.added": " (added)",
+  "effect.wide": "Stereo Widener",
+  "effect.aural": "Aural Exciter",
+  "effect.reverb": "Reverb",
+  "effect.maximizer": "Auto Gain",
+  "effect.loudness": "Loudness EQ",
+  "effect.preamp": "Preamp",
+  "effect.preamp.desc": "Whole-chain gain compensation to pull peak back to 0 dB",
+  "effect.wide.desc": "Wider stereo image",
+  "effect.aural.desc": "Adds harmonics and air",
+  "effect.reverb.desc": "Adds space and smoothness",
+  "effect.maximizer.desc": "Keeps output level stable",
+  "effect.loudness.desc": "Loudness compensation for low volume",
+  "filter": "Filter",
+  "frequency": "Frequency",
+  "q.value": "Q",
+  "gain": "Gain",
+  "strength": "Strength",
+  "weak": "Weak",
+  "strong": "Strong",
+  "disable.filter": "Disable band",
+  "enable.filter": "Enable band",
+  "delete.filter": "Delete",
+  "delete.group": "Delete group",
+  "aria.close": "Close",
+  "aria.delete": "Delete",
+  "aria.save": "Save",
+  "aria.import": "Import",
+  "aria.export": "Export",
+  "aria.selectDevice": "Select device",
+};
+
+function readInitialLang(): Lang {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    if (v === "en" || v === "zh") return v;
+  } catch {
+    /* ignore */
+  }
+  return "zh";
+}
+
+let currentLang: Lang = readInitialLang();
+const listeners = new Set<() => void>();
+
+export function getLang(): Lang {
+  return currentLang;
+}
+
+export function setLang(lang: Lang) {
+  if (lang === currentLang) return;
+  currentLang = lang;
+  try {
+    localStorage.setItem(STORAGE_KEY, lang);
+  } catch {
+    /* ignore */
+  }
+  listeners.forEach((l) => l());
+}
+
+export function t(key: string, vars?: Record<string, string | number>): string {
+  const map = currentLang === "en" ? en : zh;
+  let text = map[key] ?? zh[key] ?? key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      text = text.split(`{${k}}`).join(String(v));
+    }
+  }
+  return text;
+}
+
+const I18nContext = createContext<Lang>("zh");
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState(currentLang);
+  useEffect(() => {
+    const listener = () => setLangState(currentLang);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+  return <I18nContext.Provider value={lang}>{children}</I18nContext.Provider>;
+}
+
+export function useI18n() {
+  return useContext(I18nContext);
+}

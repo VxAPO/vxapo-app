@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { Device } from "../lib/model";
+import { t } from "../lib/i18n";
 
 interface DevicePropsCardProps {
   device: Device | null;
@@ -21,29 +22,29 @@ function DevicePropsCard({
   const canNormalize = Math.abs(peakGain) > 0.05;
   return (
     <div className="dev-props-card">
-      <div className="dev-props-title">设备属性</div>
-      <div className="dev-prop"><span>设备名</span><b className="dev-name">{selected?.name ?? "—"}</b></div>
-      <div className="dev-prop"><span>类型</span><b>{selected?.kind === "capture" ? "捕获设备" : selected?.kind === "playback" ? "播放设备" : "—"}</b></div>
-      <div className="dev-prop"><span>通道数</span><b>{selected?.channels ?? "—"}</b></div>
-      <div className="dev-prop"><span>采样率</span><b>{selected?.sample_rate != null ? `${selected.sample_rate} Hz` : "—"}</b></div>
-      <div className="dev-prop"><span>位深</span><b>{selected?.bit_depth != null ? `${selected.bit_depth} bit` : "—"}</b></div>
-      <div className="dev-prop"><span>音量</span><b>{selected?.volume != null ? `${Math.round(selected.volume * 100)}%` : "—"}</b></div>
+      <div className="dev-props-title">{t("device.properties")}</div>
+      <div className="dev-prop"><span>{t("device.name")}</span><b className="dev-name">{selected?.name ?? "—"}</b></div>
+      <div className="dev-prop"><span>{t("device.type")}</span><b>{selected?.kind === "capture" ? t("device.capture") : selected?.kind === "playback" ? t("device.playback") : "—"}</b></div>
+      <div className="dev-prop"><span>{t("device.channels")}</span><b>{selected?.channels ?? "—"}</b></div>
+      <div className="dev-prop"><span>{t("device.sampleRate")}</span><b>{selected?.sample_rate != null ? `${selected.sample_rate} Hz` : "—"}</b></div>
+      <div className="dev-prop"><span>{t("device.bitDepth")}</span><b>{selected?.bit_depth != null ? `${selected.bit_depth} bit` : "—"}</b></div>
+      <div className="dev-prop"><span>{t("device.volume")}</span><b>{selected?.volume != null ? `${Math.round(selected.volume * 100)}%` : "—"}</b></div>
       <div className="dev-prop">
-        <span>峰值增益</span>
+        <span>{t("peakGain")}</span>
         <span className="dev-prop-right">
           <b>{peakGain > 0 ? "+" : ""}{peakGain.toFixed(1)} dB</b>
           <button
             className="dev-prop-btn"
             type="button"
             disabled={!canNormalize}
-            title={canNormalize ? "生成基准电平并把峰值补偿到 0 dB" : "峰值增益已接近 0 dB，无需归一化"}
+            title={canNormalize ? t("normalize.title") : t("normalize.title.disabled")}
             onClick={onNormalize}
           >
-            归一化
+            {t("normalize")}
           </button>
         </span>
       </div>
-      <div className="dev-prop"><span>段数</span><b>{channelOn && channelCounts.length ? channelCounts.join(" | ") : totalBands}</b></div>
+      <div className="dev-prop"><span>{t("bands")}</span><b>{channelOn && channelCounts.length ? channelCounts.join(" | ") : totalBands}</b></div>
     </div>
   );
 }

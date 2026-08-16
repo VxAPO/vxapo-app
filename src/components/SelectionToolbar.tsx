@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, Copy, Save, Trash2 } from "lucide-react";
 import { channelLabel } from "../lib/channels";
+import { t } from "../lib/i18n";
 
 interface SelectionToolbarProps {
   selectedCount: number;
@@ -38,7 +39,7 @@ export default function SelectionToolbar({
       exit={{ opacity: 0, x: "-50%", scale: 0.92, y: 6 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
     >
-      <div className="sel-toolbar-label">已选 {selectedCount} 段</div>
+      <div className="sel-toolbar-label">{t("selected.count", { count: selectedCount })}</div>
       <div className="sel-toolbar-actions">
         {channelOn && (
           <div className="sel-copy">
@@ -48,7 +49,7 @@ export default function SelectionToolbar({
               onClick={onToggleCopy}
             >
               <Copy size={14} strokeWidth={2.2} />
-              <span>复制到声道</span>
+              <span>{t("copy.toChannel")}</span>
               <ChevronDown size={14} />
             </button>
             {copyOpen && (
@@ -71,11 +72,11 @@ export default function SelectionToolbar({
         )}
         <button className="sel-action save" type="button" onClick={onSave}>
           <Save size={14} strokeWidth={2.2} />
-          <span>保存为自定义预设</span>
+          <span>{t("save.preset")}</span>
         </button>
         <button className="sel-action delete" type="button" onClick={onDelete}>
           <Trash2 size={14} strokeWidth={2.2} />
-          <span>删除</span>
+          <span>{t("delete.selected")}</span>
         </button>
       </div>
     </motion.div>
