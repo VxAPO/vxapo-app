@@ -42,6 +42,8 @@ import UninstallDialog from "./components/UninstallDialog";
 
 /** 底部悬浮条预留高度：保证最后一行卡片能完全滚到悬浮条上方 */
 const BOTTOM_BAR_PAD = 400;
+/** 视图切换后内容高度收窄动画时长（ms） */
+const VIEW_COLLAPSE_MS = 600;
 
 /** 峰值评估频率点：全局对数扫描 + 频段中心 + 高 Q 邻域细化 + 相邻中心中点 */
 function buildEvalFreqs(blocks: Block[]): number[] {
@@ -787,11 +789,12 @@ export default function App() {
     setViewTransitionH(0);
     setViewCollapsing(true);
     setViewAnimating(false);
-    setSelGeomTick((v) => v + 1);
-    // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
-    // 再从旧位置沿贝塞尔曲线飞到新位置。
-    window.setTimeout(() => setToolbarHidden(false), 0);
-    window.setTimeout(() => setViewCollapsing(false), 360);
+    // 收窄完成后再重测几何并让浮窗出场，避免浮窗在高度动画中途挂载。
+    window.setTimeout(() => {
+      setSelGeomTick((v) => v + 1);
+      window.setTimeout(() => setToolbarHidden(false), 0);
+      setViewCollapsing(false);
+    }, VIEW_COLLAPSE_MS);
   }, []);
 
   const tryFinishViewAnim = useCallback(() => {
@@ -1103,7 +1106,7 @@ export default function App() {
               className="view-stack"
               style={{
                 minHeight: viewTransitionH ?? undefined,
-                transition: viewCollapsing ? "min-height 0.32s ease" : "none",
+                transition: viewCollapsing ? `min-height ${VIEW_COLLAPSE_MS}ms ease` : "none",
               }}
             >
             <AnimatePresence mode="popLayout" initial={false} onExitComplete={handleViewExitComplete}>
