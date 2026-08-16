@@ -1,5 +1,5 @@
 import * as Select from "@radix-ui/react-select";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 export interface VxSelectOption {
@@ -26,8 +26,23 @@ export default function VxSelect({
   placeholder,
   icon,
 }: VxSelectProps) {
+  // Radix Select 在 React 19 下有受控值被空字符串重置的已知问题：
+  // 用本地状态承接点击结果，并忽略空字符串回调，保证选择稳定落盘
+  const [internal, setInternal] = useState(value);
+  useEffect(() => {
+    setInternal(value);
+  }, [value]);
+
   return (
-    <Select.Root value={value} onValueChange={onValueChange} disabled={disabled}>
+    <Select.Root
+      value={internal}
+      onValueChange={(v) => {
+        if (v === "") return;
+        setInternal(v);
+        onValueChange(v);
+      }}
+      disabled={disabled}
+    >
       <Select.Trigger className={`vx-select${disabled ? " disabled" : ""}`} aria-label={ariaLabel}>
         {icon}
         <Select.Value placeholder={placeholder} />

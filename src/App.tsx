@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { arrayMove } from "@dnd-kit/sortable";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
@@ -39,6 +40,48 @@ import UninstallDialog from "./components/UninstallDialog";
 /** 底部悬浮条预留高度：保证最后一行卡片能完全滚到悬浮条上方 */
 const BOTTOM_BAR_PAD = 400;
 
+/** 峰值评估频率点：全局对数扫描 + 频段中心 + 高 Q 邻域细化 + 相邻中心中点 */
+function buildEvalFreqs(blocks: Block[]): number[] {
+  const enabledBands = blocks.filter((b) => b.enabled).flatMap((b) => b.bands);
+  const freqs = new Set<number>();
+  for (let i = 0; i <= 480; i++) freqs.add(20 * Math.pow(1000, i / 480));
+  if (!enabledBands.length) return [...freqs];
+  const centers = enabledBands
+    .map((band) => ({
+      fc: Math.min(20000, Math.max(20, band.fc)),
+      q: Math.min(20, Math.max(0.1, band.q)),
+    }))
+    .sort((a, b) => a.fc - b.fc);
+  for (const { fc, q } of centers) {
+    freqs.add(fc);
+    if (q > 3) {
+      // 半功率半宽 ≈ fc 附近 log10(1 + 1/(2q)) decades，细化覆盖 ±2 倍半宽
+      const half = Math.log10(1 + 1 / (2 * q));
+      const lo = Math.max(20, fc * Math.pow(10, -2 * half));
+      const hi = Math.min(20000, fc * Math.pow(10, 2 * half));
+      for (let i = 1; i < 24; i++) freqs.add(lo * Math.pow(hi / lo, i / 24));
+    }
+  }
+  for (let i = 1; i < centers.length; i++) {
+    freqs.add(Math.sqrt(centers[i - 1].fc * centers[i].fc));
+  }
+  return [...freqs];
+}
+
+/** 所有启用频段在给定统一平移量下，整条曲线（含各段 Q 响应）的真实峰值（dB） */
+function curveMax(freqs: number[], blocks: Block[], delta: number, fs: number): number {
+  let m = -Infinity;
+  for (const f of freqs) {
+    let db = 0;
+    for (const b of blocks) {
+      if (!b.enabled) continue;
+      for (const band of b.bands) db += peakingDb(f, band.fc, band.gain_db + delta, band.q, fs);
+    }
+    if (db > m) m = db;
+  }
+  return m;
+}
+
 export default function App() {
   const { notice, notify } = useToast();
   const [loadErr, setLoadErr] = useState("");
@@ -65,6 +108,7 @@ export default function App() {
     [selected?.channels],
   );
   const effActiveChannel = channelNames.includes(activeChannel) ? activeChannel : (channelNames[0] ?? "L");
+  const firstChannel = channelNames[0] ?? "L";
 
   const {
     blocks,
@@ -133,20 +177,20 @@ export default function App() {
     saveStored("vxapo.presetMeta", presetMeta);
   }, [presetMeta]);
 
-  const peakGain = useMemo(() => {
-    let m = 0;
-    const fs = selected?.sample_rate ?? 48000;
-    for (let i = 0; i <= 480; i++) {
-      const f = 20 * Math.pow(1000, i / 480);
-      let db = 0;
-      for (const b of blocks) {
-        if (!b.enabled) continue;
-        for (const band of b.bands) db += peakingDb(f, band.fc, band.gain_db, band.q, fs);
-      }
-      if (db > m) m = db;
-    }
-    return m;
-  }, [blocks, selected?.sample_rate]);
+  // 峰值增益跟随当前可见调音链：通道模式只算当前选中声道，非通道模式算整条链
+  const visibleBlocks = useMemo(
+    () =>
+      channelOn
+        ? blocks.filter((b) => (b.channel ?? firstChannel) === effActiveChannel)
+        : blocks,
+    [blocks, channelOn, firstChannel, effActiveChannel],
+  );
+  const evalFreqs = useMemo(() => buildEvalFreqs(visibleBlocks), [visibleBlocks]);
+  const fs = selected?.sample_rate ?? 48000;
+  const peakGain = useMemo(
+    () => curveMax(evalFreqs, visibleBlocks, 0, fs),
+    [evalFreqs, visibleBlocks, fs],
+  );
 
   const yTop = Math.max(6, Math.min(30, Math.ceil((peakGain + 1) / 2) * 2));
 
@@ -162,6 +206,9 @@ export default function App() {
     if (t.closest("[data-dnd-id], button, input, select, .bottom-row, .gs-root, [role='slider']")) return;
     const body = bodyRef.current;
     if (!body) return;
+    // Portal（下拉选项等）不在滚动容器的 DOM 树内，不能从这里开始框选/捕获指针，
+    // 否则会把下拉选项的 pointerup 吸走，导致选项点不中
+    if (!body.contains(t)) return;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -237,9 +284,11 @@ export default function App() {
     const segEl = document.querySelector<HTMLElement>(".view-seg");
     if (!scrollEl || !segEl) return;
     const update = () => {
-      const s = scrollEl.getBoundingClientRect();
+      const sRect = scrollEl.getBoundingClientRect();
       const v = segEl.getBoundingClientRect();
-      setHintShift(snapPx(v.left + v.width / 2 - (s.left + s.width / 2)));
+      // 提示行实际居中在滚动内容区（clientWidth 已排除滚动条），不能拿 border-box 中心算
+      const sCenter = sRect.left + scrollEl.clientLeft + scrollEl.clientWidth / 2;
+      setHintShift(snapPx(v.left + v.width / 2 - sCenter));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -646,6 +695,65 @@ export default function App() {
   );
   const handleAddBand = useCallback(() => addBand(effActiveChannel), [addBand, effActiveChannel]);
   const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
+  const normalizeGain = useCallback(() => {
+    if (Math.abs(peakGain) < 0.05) {
+      notify("当前峰值增益已接近 0 dB，无需归一化");
+      return;
+    }
+    markDirty();
+    const first = channelNames[0] ?? "L";
+    // 通道模式下按声道分组分别求解；非通道模式整条链作为一组
+    const groups = new Map<string, Block[]>();
+    for (const b of blocks) {
+      const ch = channelOn ? (b.channel ?? first) : "all";
+      const list = groups.get(ch);
+      if (list) list.push(b);
+      else groups.set(ch, [b]);
+    }
+    const deltas = new Map<string, number>();
+    for (const [ch, chBlocks] of groups) {
+      const freqs = buildEvalFreqs(chBlocks);
+      const chPeak = curveMax(freqs, chBlocks, 0, fs);
+      if (Math.abs(chPeak) < 0.05) continue;
+      // 统一平移量不能简单取峰值相反数：偏离频段中心的位置受 Q 影响，
+      // 只有按真实曲线二分求解，补偿后该组曲线的峰值才会精确落在 0 dB。
+      let lo = -chPeak - 12;
+      let hi = -chPeak + 12;
+      for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2;
+        if (curveMax(freqs, chBlocks, mid, fs) > 0) hi = mid;
+        else lo = mid;
+      }
+      deltas.set(ch, (lo + hi) / 2);
+    }
+    if (!deltas.size) {
+      notify("当前峰值增益已接近 0 dB，无需归一化");
+      return;
+    }
+    setBlocks((prev) =>
+      prev.map((b) => {
+        const ch = channelOn ? (b.channel ?? first) : "all";
+        const delta = deltas.get(ch);
+        if (delta == null) return b;
+        return {
+          ...b,
+          bands: b.bands.map((band) => ({
+            ...band,
+            gain_db: Math.round((band.gain_db + delta) * 10) / 10,
+          })),
+        };
+      }),
+    );
+    if (channelOn) {
+      const summary = [...deltas.entries()]
+        .map(([ch, d]) => `${channelLabel(ch)} ${d > 0 ? "+" : ""}${d.toFixed(1)} dB`)
+        .join("，");
+      notify(`已按声道分别归一化：${summary}`);
+    } else {
+      const d = [...deltas.values()][0];
+      notify(`已将峰值增益补偿到 0 dB（统一${d > 0 ? "提升" : "衰减"} ${Math.abs(d).toFixed(1)} dB）`);
+    }
+  }, [blocks, channelOn, channelNames, fs, peakGain, markDirty, notify]);
   const closeDeletePreset = useCallback((open: boolean) => {
     if (!open) setDeletePresetTarget(null);
   }, []);
@@ -734,60 +842,80 @@ export default function App() {
               onPointerCancel={onBodyPointerUp}
             >
               {loadErr && <div className="hint-row show err">{loadErr}</div>}
-            {!loadErr && view === "preset" && (
-              <PresetView
-                blocks={blocks}
-                showFilterEmptyHint={blocks.length === 0}
-                showEffectEmptyHint={effects.length === 0}
-                hintShift={hintShift}
-                selectedIds={selectedIds}
-                accentOf={accentOf}
-                effects={effects}
-                onToggleEffect={toggleEffect}
-                onRemoveEffect={removeEffect}
-                onChangeEffectStrength={patchEffectSemantic}
-                activeKey={blocksDragApi.activeKey}
-                flyKey={blocksDragApi.fly?.key ?? null}
-                virtualIndexOf={blocksDragApi.virtualIndexOf}
-                onDragStart={blocksDragApi.startDrag}
-                effectActiveKey={effectsDragApi.activeKey}
-                effectFlyKey={effectsDragApi.fly?.key ?? null}
-                effectOnDragStart={effectsDragApi.startDrag}
-                onRemoveBlock={removeBlock}
-                onRemoveGroup={removeGroup}
-                onPatchBlock={patchBlock}
-                onPatchBand={patchBand}
-              />
-            )}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {!loadErr && view === "preset" && (
+                <motion.div
+                  key="preset"
+                  className="view-stage"
+                  initial={{ x: "-100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "-100%" }}
+                  transition={{ duration: 0.32, ease: "easeInOut" }}
+                >
+                  <PresetView
+                    blocks={blocks}
+                    showFilterEmptyHint={blocks.length === 0}
+                    showEffectEmptyHint={effects.length === 0}
+                    hintShift={hintShift}
+                    selectedIds={selectedIds}
+                    accentOf={accentOf}
+                    effects={effects}
+                    onToggleEffect={toggleEffect}
+                    onRemoveEffect={removeEffect}
+                    onChangeEffectStrength={patchEffectSemantic}
+                    activeKey={blocksDragApi.activeKey}
+                    flyKey={blocksDragApi.fly?.key ?? null}
+                    virtualIndexOf={blocksDragApi.virtualIndexOf}
+                    onDragStart={blocksDragApi.startDrag}
+                    effectActiveKey={effectsDragApi.activeKey}
+                    effectFlyKey={effectsDragApi.fly?.key ?? null}
+                    effectOnDragStart={effectsDragApi.startDrag}
+                    onRemoveBlock={removeBlock}
+                    onRemoveGroup={removeGroup}
+                    onPatchBlock={patchBlock}
+                    onPatchBand={patchBand}
+                  />
+                </motion.div>
+              )}
 
-            {!loadErr && view === "advanced" && (
-              <AdvancedView
-                blocks={blocks}
-                showFilterEmptyHint={blocks.length === 0}
-                showEffectEmptyHint={effects.length === 0}
-                hintShift={hintShift}
-                channelOn={channelOn}
-                channelNames={channelNames}
-                firstChannel={channelNames[0] ?? "L"}
-                activeChannel={effActiveChannel}
-                onChannelChange={setActiveChannel}
-                selectedIds={selectedIds}
-                effects={effects}
-                onToggleEffect={toggleEffect}
-                onRemoveEffect={removeEffect}
-                onChangeEffectParam={patchEffectParam}
-                activeKey={blocksDragApi.activeKey}
-                flyKey={blocksDragApi.fly?.key ?? null}
-                virtualIndexOf={blocksDragApi.virtualIndexOf}
-                onDragStart={blocksDragApi.startDrag}
-                effectActiveKey={effectsDragApi.activeKey}
-                effectFlyKey={effectsDragApi.fly?.key ?? null}
-                effectOnDragStart={effectsDragApi.startDrag}
-                onRemoveBlock={removeBlock}
-                onPatchBlock={patchBlock}
-                onPatchBand={patchBand}
-              />
-            )}
+              {!loadErr && view === "advanced" && (
+                <motion.div
+                  key="advanced"
+                  className="view-stage"
+                  initial={{ x: "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "100%" }}
+                  transition={{ duration: 0.32, ease: "easeInOut" }}
+                >
+                  <AdvancedView
+                    blocks={blocks}
+                    showFilterEmptyHint={blocks.length === 0}
+                    showEffectEmptyHint={effects.length === 0}
+                    hintShift={hintShift}
+                    channelOn={channelOn}
+                    channelNames={channelNames}
+                    firstChannel={channelNames[0] ?? "L"}
+                    activeChannel={effActiveChannel}
+                    onChannelChange={setActiveChannel}
+                    selectedIds={selectedIds}
+                    effects={effects}
+                    onToggleEffect={toggleEffect}
+                    onRemoveEffect={removeEffect}
+                    onChangeEffectParam={patchEffectParam}
+                    activeKey={blocksDragApi.activeKey}
+                    flyKey={blocksDragApi.fly?.key ?? null}
+                    virtualIndexOf={blocksDragApi.virtualIndexOf}
+                    onDragStart={blocksDragApi.startDrag}
+                    effectActiveKey={effectsDragApi.activeKey}
+                    effectFlyKey={effectsDragApi.fly?.key ?? null}
+                    effectOnDragStart={effectsDragApi.startDrag}
+                    onRemoveBlock={removeBlock}
+                    onPatchBlock={patchBlock}
+                    onPatchBand={patchBand}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {selGeom && selectedIds.length > 0 && (
               <SelectionToolbar
@@ -822,6 +950,7 @@ export default function App() {
                 totalBands={totalBands}
                 channelOn={channelOn}
                 channelCounts={channelCounts}
+                onNormalize={normalizeGain}
               />
               <CurvePanel
                 blocks={blocks}

@@ -117,6 +117,7 @@ function Sidebar({
       style={{ width: sideW }}
     >
       <div className={`sidebar-scroll${disabled ? " disabled" : ""}`}>
+        <div className="sidebar-scroll-inner">
         <div className="side-seg">
         <div className="labels">
           {SECTIONS.map((s) => (
@@ -243,6 +244,7 @@ function Sidebar({
           </button>
         </div>
         )}
+        </div>
       </div>
       <div
         className={`sidebar-resizer${resizing ? " dragging" : ""}`}

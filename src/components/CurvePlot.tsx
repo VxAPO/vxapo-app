@@ -216,11 +216,22 @@ function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
     const denom = Math.sqrt(1 + slope * slope);
     const gV = R;
     const gH = (R * Math.abs(slope)) / denom;
-    // 水平避让：两个斜率方向严格水平翻转——正斜率右移 gH，负斜率左移 gH
-    const left = Math.max(
-      plotLeft,
-      Math.min(cx + (slope >= 0 ? 1 : -1) * gH, plotRight - tipW),
-    );
+    // 水平避让：悬浮窗以左上角为基准，左右两侧都使用固定频率停止点。
+    // 右侧最远停到 12 kHz（等效于 20k 线左侧的固定间距 + 悬浮窗宽度）；
+    // 左侧有 Y 轴刻度留白，不需要避让到 20 Hz，停在 23 Hz 即可。
+    const sign = slope >= 0 ? 1 : -1;
+    const base = cx + sign * gH;
+    const minLeft = sx + logX(23, curveW) * scaleX;
+    const maxLeft = sx + logX(12000, curveW) * scaleX;
+    const left = Math.max(minLeft, Math.min(base, maxLeft));
+    let hSide: "left" | "center" | "right";
+    if (base <= minLeft) {
+      hSide = "left";
+    } else if (base >= maxLeft) {
+      hSide = "right";
+    } else {
+      hSide = "center";
+    }
     const top = Math.max(
       6,
       Math.min(
@@ -228,8 +239,6 @@ function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
         wrap.height - 6 - tipH,
       ),
     );
-    const hSide: "left" | "center" | "right" =
-      cx + tipW > plotRight ? "right" : cx < plotLeft ? "left" : "center";
     return { top, left, above, hSide };
   })();
 

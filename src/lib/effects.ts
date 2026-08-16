@@ -92,9 +92,9 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
 };
 
 const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
-  wide: { intensity: 0.354331 },
-  aural: { tune_hz: 1760, drive: 1.76993, odd: 1.5, even: 0, wet: 1, dry: 0 },
-  reverb: { room_size: 1, decay: 0.565664, damping: 0.40829, pre_delay_ms: 0, wet: 0.3, dry: 0.9 },
+  wide: { intensity: 0.3543 },
+  aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0, wet: 1, dry: 0 },
+  reverb: { room_size: 1, decay: 0.5657, damping: 0.4083, pre_delay_ms: 0, wet: 0.3, dry: 0.9 },
   maximizer: {
     gain_boost_db: 6,
     max_output_db: -0.3,
@@ -124,7 +124,7 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 export function semanticStrength(type: string, params: Record<string, number | string>): number {
   switch (type) {
     case "wide":
-      return clamp01(asNum(params.intensity, 0.354331));
+      return clamp01(asNum(params.intensity, 0.3543));
     case "aural":
       return clamp01(asNum(params.wet, 1));
     case "reverb":

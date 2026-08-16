@@ -1,8 +1,8 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
-import { presetAccent, semanticName } from "../lib/blocks";
+import { accentHoverColor, presetAccent, semanticName } from "../lib/blocks";
 
 interface SavePresetDialogProps {
   open: boolean;
@@ -91,20 +91,11 @@ function SavePresetDialog({
                     key={c}
                     type="button"
                     className={`preset-swatch${color === c ? " active" : ""}`}
-                    style={{ background: c }}
+                    style={{ background: c, "--swatch-hover": accentHoverColor(c) ?? c } as CSSProperties}
                     aria-label={`配色 ${c}`}
                     onClick={() => setColor(c)}
                   />
                 ))}
-                <label className="preset-swatch custom" title="自定义颜色">
-                  <span className="preset-swatch-plus">＋</span>
-                  <input
-                    type="color"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    aria-label="自定义颜色"
-                  />
-                </label>
               </div>
             </div>
             <div className="vx-field">

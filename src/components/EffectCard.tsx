@@ -45,11 +45,21 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
           {defs.map((p) => {
             const raw = params[p.key];
             if (p.options) {
+              // 驱动可能写入数字索引（0-3）或未知字符串：规整成合法选项值，
+              // 保证 Radix Select 的受控值始终可选中
+              const optionValues = p.options.map((o) => o.value);
+              const rawValue = raw ?? p.options[0].value;
+              const validValue =
+                typeof rawValue === "number"
+                  ? p.options[rawValue]?.value ?? p.options[0].value
+                  : optionValues.includes(String(rawValue))
+                    ? String(rawValue)
+                    : p.options[0].value;
               return (
                 <div className="effect-param-row" key={p.key}>
                   <span className="effect-param-label">{p.label}</span>
                   <VxSelect
-                    value={String(raw ?? p.options[0].value)}
+                    value={validValue}
                     options={p.options}
                     ariaLabel={p.label}
                     disabled={disabled}

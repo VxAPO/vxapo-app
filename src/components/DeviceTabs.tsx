@@ -34,7 +34,7 @@ function DeviceTabs({
               onClick={() => onToggleTuning(d.guid)}
             />
             <button className="tab-btn" type="button" onClick={() => onSelect(d.guid)}>
-              {d.name}
+              <span className="tab-name">{d.name}</span>
             </button>
             <button
               className="tab-close"
