@@ -22,7 +22,7 @@ if ("__TAURI_INTERNALS__" in window) {
       invoke("show_main_window").catch(() => {
         console.error("show_main_window failed");
       });
-    }, 80);
+    }, 220);
   if (document.readyState === "complete") show();
   else window.addEventListener("load", show, { once: true });
 }

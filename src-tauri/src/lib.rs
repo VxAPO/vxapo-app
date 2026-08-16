@@ -100,6 +100,12 @@ fn read_import_file(path: String) -> Result<String, String> {
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {
+        let (r, g, b) = if system_uses_dark_mode() {
+            (0x16u8, 0x18u8, 0x1bu8)
+        } else {
+            (0xf0u8, 0xf3u8, 0xf6u8)
+        };
+        let _ = win.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
         win.show().map_err(|e| e.to_string())?;
     }
     Ok(())
