@@ -307,6 +307,12 @@
   padding: 0 10px 10px;
   gap: 0;
   box-sizing: border-box;
+  animation: app-lang-fade 0.18s ease-out;
+}
+
+@keyframes app-lang-fade {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
 }
 
 button {
@@ -445,8 +451,10 @@ button {
   z-index: 0;
   border-radius: 9999px;
   background: var(--accent-bg);
-  /* 不做平移动画：thumb 直接落到目标位置；只保留背景色过渡。 */
-  transition: background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    left 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .seg button:disabled {
@@ -2655,15 +2663,20 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .fader-row.semantic .sem-label {
-  width: 30px;
+  flex: none;
 }
 
-.fader-row.semantic .sem-label:last-child {
+.fader-row.semantic .sem-label:first-child {
   text-align: right;
 }
 
+.fader-row.semantic .sem-label:last-child {
+  text-align: left;
+}
+
 .fader-row.semantic {
-  padding: 0 6px;
+  padding: 0;
+  gap: 16px;
   box-sizing: border-box;
 }
 
@@ -2789,6 +2802,10 @@ input[type="number"]::-webkit-outer-spin-button {
   font-weight: 700;
 }
 
+:root[data-lang="en"] .effect-name {
+  font-size: 12px;
+}
+
 .effect-desc {
   font-size: 11px;
   color: var(--text-weak);
@@ -2821,7 +2838,11 @@ input[type="number"]::-webkit-outer-spin-button {
   color: var(--text-weak);
 }
 
-.effect-strength-row .effect-param-label,
+.effect-strength-row .effect-param-label {
+  width: 48px;
+  flex: none;
+}
+
 .effect-strength-row .g-val {
   width: 36px;
 }
@@ -2873,7 +2894,7 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .band-param-label {
   flex: none;
-  width: 56px;
+  width: 64px;
   font-size: 12px;
   color: var(--text-weak);
   white-space: nowrap;

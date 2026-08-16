@@ -50,8 +50,8 @@ function EffectSemanticCard({
       </div>
       {def?.desc ? <p className="effect-desc">{t(def.desc)}</p> : null}
       <div className="effect-params">
-        <div className="effect-param-row effect-strength-row">
-          <span className="effect-param-label">{t("strength")}</span>
+        <div className="fader-row semantic">
+          <span className="sem-label">{t("weak")}</span>
           <GainSlider
             value={strength}
             min={0}
@@ -61,7 +61,7 @@ function EffectSemanticCard({
             ariaLabel={t("strength")}
             onValueChange={(v) => onStrengthChange(effect.id ?? effect.type, v)}
           />
-          <span className="g-val">{Math.round(strength * 100)}%</span>
+          <span className="sem-label">{t("strong")}</span>
         </div>
       </div>
     </>

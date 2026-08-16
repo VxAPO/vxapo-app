@@ -28,6 +28,8 @@ function SettingsDialog({
   // 容器固定 240px，内边距 3px*2，gap 2px*2，三个等宽按钮
   const themeThumbWidth = ((240 - 6 - 4) / 3 / 240) * 100;
   const themeThumbLeft = ((3 + themeIndex * ((240 - 6 - 4) / 3 + 2)) / 240) * 100;
+  const langThumbWidth = ((240 - 6 - 2) / 2 / 240) * 100;
+  const langThumbLeft = lang === "zh" ? (3 / 240) * 100 : ((3 + (240 - 6 - 2) / 2 + 2) / 240) * 100;
 
   // 点击切换后锁住 hover 背景，直到指针移动/离开后才恢复；
   // 避免旧按钮的 hover 胶囊与 thumb 平移动画重叠或动画结束后“残留”。
@@ -96,6 +98,11 @@ function SettingsDialog({
                 <span className="vx-setting-desc">{t("language.desc")}</span>
               </div>
               <div className="seg theme-seg" style={{ width: 240 }}>
+                <span
+                  className="theme-seg-thumb"
+                  aria-hidden
+                  style={{ left: `${langThumbLeft}%`, width: `${langThumbWidth}%` } as CSSProperties}
+                />
                 {(["zh", "en"] as const).map((l) => (
                   <button
                     key={l}

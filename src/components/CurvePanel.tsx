@@ -28,7 +28,13 @@ function CurvePanel({
   channelNames,
   firstChannel,
 }: CurvePanelProps) {
-  const [curveW, setCurveW] = useState(640);
+  const [curveW, setCurveW] = useState(() => {
+    try {
+      return Math.max(660, Math.floor((window.innerWidth || 800) - 220));
+    } catch {
+      return 660;
+    }
+  });
   const curveRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef(0);
   const visibleBlocks = useMemo(

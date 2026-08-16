@@ -655,7 +655,7 @@ export default function App() {
       }
     };
     toolbarAnimRef.current = { raf: requestAnimationFrame(step), start, ctrl, to: toolbarTarget, t0 };
-  }, [toolbarTarget]);
+  }, [toolbarTarget, toolbarHidden]);
 
   useEffect(
     () => () => {
@@ -858,10 +858,12 @@ export default function App() {
     toolbarAnimRef.current = null;
     const body = bodyRef.current;
     if (body) {
+      // 无论旧内容是否可滚动，都记录当前滚动位置；
+      // 低→高切换时旧 scrollTop 为 0，恢复后仍停在新视图顶部。
+      viewScrollTopRef.current = body.scrollTop;
       // 仅当旧内容确实可滚动时才锁高并收窄；否则不要硬加一段高度动画。
       viewHeightLockRef.current = body.scrollHeight > body.clientHeight + 1;
       if (viewHeightLockRef.current) {
-        viewScrollTopRef.current = body.scrollTop;
         // 只取 view-stack 的内容高度，而不是整个滚动容器的 scrollHeight；
         // 这样过渡期间的滚动条长度是 max(旧内容, 新内容)，不会先变短再变长。
         const stack = body.querySelector<HTMLElement>(".view-stack");
