@@ -47,12 +47,15 @@ fn cli_path() -> &'static str {
         }
         #[cfg(not(debug_assertions))]
         {
-            // release：优先找 App exe 同目录的 vxapo-cli.exe（安装包部署布局）
+            // release：优先找 App exe 同目录的 vxapo-cli.exe；
+            // Tauri bundle.resources 可能放到 exe 同级或 resources 子目录。
             if let Ok(exe) = std::env::current_exe() {
                 if let Some(dir) = exe.parent() {
-                    let cli = dir.join("vxapo-cli.exe");
-                    if cli.exists() {
-                        return cli.display().to_string();
+                    let candidates = [dir.join("vxapo-cli.exe"), dir.join("resources").join("vxapo-cli.exe")];
+                    for cli in candidates {
+                        if cli.exists() {
+                            return cli.display().to_string();
+                        }
                     }
                 }
             }

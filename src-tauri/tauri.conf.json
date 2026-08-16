@@ -31,10 +31,16 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/icon.ico",
       "icons/icon.icns"
+    ],
+    "resources": [
+      "../../vxapo-cli/target/release/vxapo-cli.exe",
+      "../../vxapo-driver/target/release/vxapo_driver.dll"
     ]
   }
 }

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ThemeMode } from "../lib/model";
 
 const THEME_TRANSITION_MS = 420;
@@ -7,8 +7,18 @@ function currentSystemDark(): boolean {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
 }
 
+function readStoredTheme(): ThemeMode {
+  try {
+    const v = localStorage.getItem("vxapo.theme");
+    if (v === "light" || v === "dark" || v === "system") return v;
+  } catch {
+    /* ignore */
+  }
+  return "system";
+}
+
 export function useTheme() {
-  const [theme, setTheme] = useState<ThemeMode>("system");
+  const [theme, setTheme] = useState<ThemeMode>(readStoredTheme);
   const [systemDark, setSystemDark] = useState(currentSystemDark);
   const prevAppliedRef = useRef<string | null>(null);
   const transitionTimerRef = useRef<number | undefined>(undefined);
@@ -53,6 +63,14 @@ export function useTheme() {
       root.classList.remove("theme-transition");
     }, THEME_TRANSITION_MS);
   }, [themeApplied]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("vxapo.theme", theme);
+    } catch {
+      /* ignore */
+    }
+  }, [theme]);
 
   return { theme, setTheme };
 }
