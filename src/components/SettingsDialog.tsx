@@ -108,14 +108,7 @@ function SettingsDialog({
                     key={l}
                     type="button"
                     aria-pressed={lang === l}
-                    onClick={() => {
-                      try {
-                        sessionStorage.setItem("vxapo.settingsOpen", "1");
-                      } catch {
-                        /* ignore */
-                      }
-                      setLang(l);
-                    }}
+                    onClick={() => setLang(l)}
                   >
                     {t(l === "zh" ? "language.zh" : "language.en")}
                   </button>

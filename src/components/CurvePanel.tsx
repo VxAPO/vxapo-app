@@ -30,7 +30,7 @@ function CurvePanel({
 }: CurvePanelProps) {
   const [curveW, setCurveW] = useState(() => {
     try {
-      return Math.max(660, Math.floor((window.innerWidth || 800) - 220));
+      return Math.max(660, Math.floor((window.innerWidth || 800) - 320));
     } catch {
       return 660;
     }

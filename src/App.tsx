@@ -158,13 +158,7 @@ export default function App() {
   const [view, setView] = useState<ViewMode>("preset");
   const [side, setSide] = useState<SideSection>("preset");
   const [segDir, setSegDir] = useState<"left" | "right">("right");
-  const [settingsOpen, setSettingsOpen] = useState(() => {
-    try {
-      return sessionStorage.getItem("vxapo.settingsOpen") === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importDeviceGuid, setImportDeviceGuid] = useState<string | null>(null);
@@ -189,15 +183,6 @@ export default function App() {
   const marqueeRafRef = useRef(0);
   const pendingMarqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [selGeom, setSelGeom] = useState<{ cx: number; minY: number; maxY: number; bodyW: number; bodyH: number } | null>(null);
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem("vxapo.settingsOpen") === "1") {
-        sessionStorage.removeItem("vxapo.settingsOpen");
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
   const [savePresetOpen, setSavePresetOpen] = useState(false);
   const [savePresetBlocks, setSavePresetBlocks] = useState<Block[]>([]);
   const [savePresetDefaultName, setSavePresetDefaultName] = useState(t("preset.name.placeholder"));
