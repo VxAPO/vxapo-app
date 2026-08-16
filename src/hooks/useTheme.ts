@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ThemeMode } from "../lib/model";
 
-const THEME_TRANSITION_MS = 400;
+const THEME_TRANSITION_MS = 420;
 
 export function useTheme() {
   const [theme, setTheme] = useState<ThemeMode>("system");
