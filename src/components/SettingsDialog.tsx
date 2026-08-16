@@ -108,7 +108,10 @@ function SettingsDialog({
                     key={l}
                     type="button"
                     aria-pressed={lang === l}
-                    onClick={() => setLang(l)}
+                    onClick={() => {
+                      onOpenChange(false);
+                      setLang(l);
+                    }}
                   >
                     {t(l === "zh" ? "language.zh" : "language.en")}
                   </button>
