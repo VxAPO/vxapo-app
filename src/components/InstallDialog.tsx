@@ -4,6 +4,7 @@ import { Headphones, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { friendlyError, installDevice, isInstalled, readProgress } from "../lib/api";
 import type { Device } from "../lib/model";
+import { t } from "../lib/i18n";
 
 interface InstallDialogProps {
   open: boolean;
@@ -67,8 +68,8 @@ function InstallDialog({
         <Dialog.Overlay className="vx-dialog-overlay" />
         <Dialog.Content className="vx-dialog-content install-dialog" aria-describedby={undefined}>
           <div className="vx-dialog-head">
-            <Dialog.Title className="vx-dialog-title">安装新设备</Dialog.Title>
-            <Dialog.Close className="vx-dialog-close" aria-label="关闭安装页面">
+            <Dialog.Title className="vx-dialog-title">{t("install.title")}</Dialog.Title>
+            <Dialog.Close className="vx-dialog-close" aria-label={t("close.settings")}>
               <X size={16} />
             </Dialog.Close>
           </div>
@@ -76,7 +77,7 @@ function InstallDialog({
             {candidates.length === 0 ? (
               <div className="install-empty">
                 <Headphones size={22} />
-                <p>未检测到可安装的设备</p>
+                <p>{t("install.empty")}</p>
               </div>
             ) : (
               <div className="install-list">
@@ -87,8 +88,8 @@ function InstallDialog({
                       <div className="install-item-info">
                         <span className="install-item-name">{d.name}</span>
                         <span className="install-item-sub">
-                          {d.kind === "capture" ? "捕获设备" : d.kind === "playback" ? "播放设备" : "音频设备"}
-                          {d.channels ? ` · ${d.channels} 通道` : ""}
+                          {d.kind === "capture" ? t("device.capture") : d.kind === "playback" ? t("device.playback") : t("device.type")}
+                          {d.channels ? ` · ${d.channels} ${t("device.channels")}` : ""}
                           {d.sample_rate ? ` · ${d.sample_rate} Hz` : ""}
                         </span>
                       </div>
@@ -99,14 +100,14 @@ function InstallDialog({
                         onClick={() => void handleInstall(d)}
                       >
                         {busy ? <span className="vx-spinner" aria-hidden="true" /> : <Plus size={14} />}
-                        {busy ? "安装中…" : "安装"}
+                        {busy ? t("install.inProgress") : t("install")}
                       </button>
                     </div>
                   );
                 })}
               </div>
             )}
-            <p className="install-hint">安装时会弹出系统权限确认，完成后设备会出现在顶部标签页。</p>
+            <p className="install-hint">{t("install.hint")}</p>
             {progress && <pre className="op-progress">{progress}</pre>}
           </div>
         </Dialog.Content>

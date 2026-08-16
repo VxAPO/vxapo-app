@@ -17,7 +17,7 @@ import { useDevices } from "./hooks/useDevices";
 import { useDragSort } from "./hooks/useDragSort";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
-import { I18nProvider } from "./lib/i18n";
+import { I18nProvider, t } from "./lib/i18n";
 import { useWindowControls } from "./hooks/useWindowControls";
 import { bandDb } from "./components/CurvePlot";
 import AdvancedView from "./components/AdvancedView";
@@ -92,7 +92,7 @@ export default function App() {
   const { notice, notify } = useToast();
   const [loadErr, setLoadErr] = useState("");
   const onError = useCallback((msg: string) => setLoadErr(msg), []);
-  const handleUninstalled = useCallback((name: string) => notify(`已卸载 ${name}`), [notify]);
+  const handleUninstalled = useCallback((name: string) => notify(t("notify.uninstalled", { name })), [notify]);
 
   const {
     selectedGuid,
@@ -393,7 +393,7 @@ export default function App() {
     if (!ids.length || !channelOn) return;
     const count = ids.length;
     if ((channelBandCounts[ch] ?? 0) + count > 31) {
-      notify(`目标声道最多 31 段，复制 ${count} 段将超限`);
+      notify(t("notify.copyLimit", { count }));
       return;
     }
     markDirty();
@@ -411,7 +411,7 @@ export default function App() {
     setSelectedIds([]);
     setActiveChannel(ch);
     setCopyOpen(false);
-    notify(`已复制 ${count} 段到${channelLabel(ch)}`);
+    notify(t("notify.copied", { count, ch: channelLabel(ch) }));
   }, [selectedIds, channelOn, channelBandCounts, markDirty, notify]);
 
   useEffect(() => {
@@ -451,7 +451,7 @@ export default function App() {
 
   const handleApplyPreset = useCallback((p: PresetLibraryEntry) => {
     if (usedPresetIds.has(p.id)) {
-      notify("该预设已添加过一次");
+      notify(t("notify.presetAdded"));
       return;
     }
     const label = applyPreset(p);
@@ -478,14 +478,14 @@ export default function App() {
     setCustomPresets((prev) => [...prev, entry]);
     setSavePresetOpen(false);
     setSelectedIds([]);
-    notify("已保存自定义预设");
+    notify(t("notify.presetSaved"));
   }, [savePresetBlocks, notify]);
 
   const confirmDeletePreset = useCallback(() => {
     if (!deletePresetTarget) return;
     setCustomPresets((prev) => prev.filter((p) => p.id !== deletePresetTarget.id));
     setDeletePresetTarget(null);
-    notify("已删除自定义预设");
+    notify(t("notify.presetDeleted"));
   }, [deletePresetTarget, notify]);
 
   // 滚动时实时重测选中卡片几何，避免浮窗与卡片脱节。
@@ -973,25 +973,25 @@ export default function App() {
       try {
         const parsed = parseConfigWithTail(content);
         if (parsed.tail.trim()) {
-          notify("导入失败：TOML 中包含无法识别的内容");
+          notify(t("import.fail.unknown"));
           return;
         }
         await writeConfig(guid, content);
         setSelectedGuid(guid);
         setImportOpen(false);
-        notify("导入成功");
+        notify(t("import.success"));
       } catch (e) {
-        notify(`导入失败：${friendlyError(e)}`);
+        notify(`${t("import.fail")}：${friendlyError(e)}`);
       }
     },
     [notify, setSelectedGuid],
   );
   const handleExport = useCallback(() => {
     if (!selectedGuid) return;
-    exportConfig(selectedGuid).catch((e: unknown) => notify(`导出失败：${friendlyError(e)}`));
+    exportConfig(selectedGuid).catch((e: unknown) => notify(`${t("export.fail")}：${friendlyError(e)}`));
   }, [selectedGuid, notify]);
   const handleToggleMaximize = useCallback(() => void toggleMaximize(), [toggleMaximize]);
-  const handleInstalled = useCallback((name: string) => notify(`已安装 ${name}`), [notify]);
+  const handleInstalled = useCallback((name: string) => notify(t("notify.installed", { name })), [notify]);
   const handleCurveChannelChange = useCallback(
     (v: string) => {
       if (channelOn) setActiveChannel(v);
@@ -1046,7 +1046,7 @@ export default function App() {
       );
     }
     if (!updates.length) {
-      notify("当前峰值增益已接近 0 dB，无需归一化");
+      notify(t("normalize.title.disabled"));
       return;
     }
     markDirty();
@@ -1069,7 +1069,7 @@ export default function App() {
       const summary = updates
         .map((u) => `${u.channels?.[0]} ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB`)
         .join("，");
-      notify(`已按声道设置基准电平：${summary}`);
+      notify(t("notify.normalizedByChannel", { summary }));
     } else {
       const u = updates[0];
       notify(
