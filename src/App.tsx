@@ -1170,7 +1170,7 @@ export default function App() {
                       <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="butt" />
                     </svg>
                   </span>
-                  <span className="no-device-tip">点击加号安装 VxAPO</span>
+                  <span className="no-device-tip">{t("no.device")}</span>
                 </button>
               </div>
             ) : (
@@ -1347,9 +1347,9 @@ export default function App() {
       <ConfirmDialog
         open={deletePresetTarget !== null}
         onOpenChange={closeDeletePreset}
-        title="删除自定义预设"
+        title={t("notify.presetDeleted")}
         message={
-          deletePresetTarget ? `确定删除“${deletePresetTarget.name}”吗？删除后不可恢复。` : ""
+          deletePresetTarget ? t("confirm.deletePreset", { name: deletePresetTarget.name }) : ""
         }
         onConfirm={confirmDeletePreset}
       />

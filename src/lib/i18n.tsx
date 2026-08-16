@@ -52,6 +52,8 @@ const zh: Record<string, string> = {
   "bands": "段数",
   "filters": "滤波器",
   "freqResponse": "频响曲线",
+  "allChannels": "全部声道",
+  "aria.sidebarWidth": "调整侧边栏宽度",
   "effects": "效果器",
   "channels": "声道",
   "channel.selector": "通道选择器",
@@ -160,6 +162,7 @@ const zh: Record<string, string> = {
   "notify.presetDeleted": "已删除自定义预设",
   "notify.normalizedByChannel": "已按声道设置基准电平：{summary}",
   "notify.normalized": "已将基准电平设为 {db} dB，峰值补偿到 0 dB",
+  "confirm.deletePreset": "确定删除“{name}”吗？删除后不可恢复。",
 };
 
 const en: Record<string, string> = {
@@ -210,6 +213,8 @@ const en: Record<string, string> = {
   "bands": "Bands",
   "filters": "Filters",
   "freqResponse": "Frequency Response",
+  "allChannels": "All channels",
+  "aria.sidebarWidth": "Resize sidebar",
   "effects": "Effects",
   "channels": "Channels",
   "channel.selector": "Channel selector",
@@ -318,6 +323,7 @@ const en: Record<string, string> = {
   "notify.presetDeleted": "Custom preset deleted",
   "notify.normalizedByChannel": "Preamp set per channel: {summary}",
   "notify.normalized": "Preamp set to {db} dB, peak compensated to 0 dB",
+  "confirm.deletePreset": "Delete \"{name}\"? This cannot be undone.",
 };
 
 function readInitialLang(): Lang {

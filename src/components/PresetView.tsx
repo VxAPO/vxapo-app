@@ -57,7 +57,7 @@ function PresetView({
   return (
     <>
       <div className="tuning-section">
-        <div className="section-title">滤波器</div>
+        <div className="section-title">{t("filters")}</div>
         {showFilterEmptyHint && (
           <div
             className="hint-row show"
@@ -96,7 +96,7 @@ function PresetView({
         </div>
       </div>
       <div className="tuning-section">
-        <div className="section-title">效果器</div>
+        <div className="section-title">{t("effects")}</div>
         {showEffectEmptyHint && (
           <div
             className="hint-row show"

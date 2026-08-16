@@ -64,7 +64,7 @@ function BandParamCard({
             step={0.001}
             value={fcToPos(band.fc)}
             disabled={disabled}
-            ariaLabel="中心频率"
+            ariaLabel={t("frequency")}
             onValueChange={(p) => onPatchBand(bi, 0, { fc: posToFc(p) })}
           />
           <input
@@ -73,7 +73,7 @@ function BandParamCard({
             min={FC_MIN}
             max={FC_MAX}
             value={band.fc}
-            aria-label="中心频率数值"
+            aria-label={t("frequency")}
             onChange={(e) => onPatchBand(bi, 0, { fc: Number(e.target.value) })}
           />
         </div>
@@ -85,7 +85,7 @@ function BandParamCard({
             step={0.01}
             value={Math.min(12, Math.max(0.1, band.q))}
             disabled={disabled}
-            ariaLabel="Q 值"
+            ariaLabel={t("q.value")}
             onValueChange={(v) => onPatchBand(bi, 0, { q: v })}
           />
           <input
@@ -95,7 +95,7 @@ function BandParamCard({
             max={12}
             step={0.01}
             value={band.q}
-            aria-label="Q 值数值"
+            aria-label={t("q.value")}
             onChange={(e) => onPatchBand(bi, 0, { q: Number(e.target.value) })}
           />
         </div>
@@ -107,7 +107,7 @@ function BandParamCard({
             step={0.1}
             value={Math.min(30, Math.max(-30, band.gain_db))}
             disabled={disabled}
-            ariaLabel="增益"
+            ariaLabel={t("gain")}
             onValueChange={(v) => onPatchBand(bi, 0, { gain_db: v })}
           />
           <input
@@ -117,7 +117,7 @@ function BandParamCard({
             max={30}
             step={0.1}
             value={band.gain_db}
-            aria-label="增益数值"
+            aria-label={t("gain")}
             onChange={(e) => onPatchBand(bi, 0, { gain_db: Number(e.target.value) })}
           />
         </div>

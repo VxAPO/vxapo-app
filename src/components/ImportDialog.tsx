@@ -119,11 +119,11 @@ function ImportDialog({
 
   const submit = () => {
     if (!selectedGuid) {
-      setError("请选择目标设备");
+      setError(t("import.selectDevice"));
       return;
     }
     if (!fileText.trim()) {
-      setError("请先选择要导入的 TOML 文件");
+      setError(t("import.chooseFile"));
       return;
     }
     onImport(selectedGuid, fileText);
@@ -136,7 +136,7 @@ function ImportDialog({
         <Dialog.Content className="vx-dialog-content vx-dialog-wide" aria-describedby={undefined}>
           <div className="vx-dialog-head">
             <Dialog.Title className="vx-dialog-title">{t("import.title")}</Dialog.Title>
-            <Dialog.Close className="vx-dialog-close" aria-label="关闭">
+            <Dialog.Close className="vx-dialog-close" aria-label={t("close")}>
               <X size={16} />
             </Dialog.Close>
           </div>
@@ -147,7 +147,7 @@ function ImportDialog({
                 value={selectedGuid ?? ""}
                 options={devices.map((d) => ({ value: d.guid, label: d.name }))}
                 onValueChange={onSelectDevice}
-                ariaLabel="目标设备"
+                ariaLabel={t("import.target")}
                 placeholder={t("import.selectDevice")}
               />
             </label>

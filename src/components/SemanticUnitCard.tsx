@@ -64,7 +64,7 @@ function SemanticUnitCard({
             type="number"
             className="num fc-num"
             value={b.bands[0]?.fc ?? 1000}
-            aria-label="频率"
+            aria-label={t("frequency")}
             onChange={(e) => onPatchBand(bi, 0, { fc: Number(e.target.value) })}
           />
         )}

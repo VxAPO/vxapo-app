@@ -42,7 +42,7 @@ function CurvePanel({
     () =>
       channelOn
         ? channelNames.map((c) => ({ value: c, label: channelLabel(c) }))
-        : [{ value: "all", label: "全部声道" }],
+        : [{ value: "all", label: t("allChannels") }],
     [channelOn, channelNames],
   );
 
@@ -74,7 +74,7 @@ function CurvePanel({
           value={curveChannel}
           options={channelOptions}
           onValueChange={onCurveChannelChange}
-          ariaLabel="声道"
+          ariaLabel={t("channels")}
         />
       </div>
       <CurvePlot

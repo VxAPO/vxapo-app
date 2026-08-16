@@ -71,10 +71,10 @@ function AdvancedView({
     <>
       <div className="tuning-section">
         <div className="section-head">
-          <div className="section-title">滤波器</div>
+          <div className="section-title">{t("filters")}</div>
           {channelOn && (
             <div className="col-head">
-              <span className="ch-name">{channelNames.length} 声道</span>
+              <span className="ch-name">{channelNames.length} {t("channels")}</span>
               {channelNames.map((c) => (
                 <button
                   key={c}
@@ -123,7 +123,7 @@ function AdvancedView({
         </div>
       </div>
       <div className="tuning-section">
-        <div className="section-title">效果器</div>
+        <div className="section-title">{t("effects")}</div>
         {showEffectEmptyHint && (
           <div
             className="hint-row show"

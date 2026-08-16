@@ -27,8 +27,8 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
           className={`effect-dot${effect.enabled ? " on" : ""}`}
           type="button"
           aria-pressed={effect.enabled}
-          aria-label={effect.enabled ? "停用效果器" : "启用效果器"}
-          title={effect.enabled ? "点击停用效果器" : "点击启用效果器"}
+          aria-label={effect.enabled ? t("disable.filter") : t("enable.filter")}
+          title={effect.enabled ? t("disable.filter") : t("enable.filter")}
           onClick={() => onToggle(effect.id ?? effect.type)}
         />
         <span className="effect-name">{def?.name ?? effect.type}</span>
@@ -38,7 +38,7 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
         <button
           className="close-x"
           type="button"
-          aria-label="删除效果器"
+          aria-label={t("aria.delete")}
           onClick={() => onRemove(effect.id ?? effect.type)}
         >
           <X size={12} strokeWidth={2.5} />

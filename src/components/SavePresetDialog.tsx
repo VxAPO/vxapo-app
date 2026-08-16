@@ -61,7 +61,7 @@ function SavePresetDialog({
         <Dialog.Content className="vx-dialog-content vx-dialog-wide" aria-describedby={undefined}>
           <div className="vx-dialog-head">
             <Dialog.Title className="vx-dialog-title">{t("preset.saveTitle")}</Dialog.Title>
-            <Dialog.Close className="vx-dialog-close" aria-label="关闭">
+            <Dialog.Close className="vx-dialog-close" aria-label={t("close")}>
               <X size={16} />
             </Dialog.Close>
           </div>
@@ -93,7 +93,7 @@ function SavePresetDialog({
                     type="button"
                     className={`preset-swatch${color === c ? " active" : ""}`}
                     style={{ background: c, "--swatch-hover": accentHoverColor(c) ?? c } as CSSProperties}
-                    aria-label={`配色 ${c}`}
+                    aria-label={`${t("preset.color")} ${c}`}
                     onClick={() => setColor(c)}
                   />
                 ))}
@@ -115,7 +115,7 @@ function SavePresetDialog({
                         onChange={(e) =>
                           setDescs((prev) => prev.map((d, j) => (j === i ? e.target.value : d)))
                         }
-                        placeholder="语义描述"
+                        placeholder={t("preset.bandDesc")}
                       />
                     </div>
                   );
@@ -124,8 +124,8 @@ function SavePresetDialog({
             </div>
           </div>
           <div className="vx-dialog-actions">
-            <Dialog.Close className="vx-btn ghost" type="button">取消</Dialog.Close>
-            <button className="vx-btn primary" type="button" onClick={save}>保存</button>
+            <Dialog.Close className="vx-btn ghost" type="button">{t("cancel")}</Dialog.Close>
+            <button className="vx-btn primary" type="button" onClick={save}>{t("save")}</button>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

@@ -147,7 +147,7 @@ function Sidebar({
                 <p className="p-name"><span className="p-group">{p.group}</span> · {p.name}</p>
                 <p className="p-desc">{p.desc}</p>
                 <div className="row">
-                  <span className="sub">{p.bands.length} 段</span>
+                  <span className="sub">{p.bands.length} {t("bands")}</span>
                   <button
                     className="add"
                     type="button"
@@ -188,7 +188,7 @@ function Sidebar({
                 <p className="p-name"><span className="p-group">{p.group}</span> · {p.name}</p>
                 {p.desc ? <p className="p-desc">{p.desc}</p> : null}
                 <div className="row">
-                  <span className="sub">{p.bands.length} 段</span>
+                  <span className="sub">{p.bands.length} {t("bands")}</span>
                   <button className="add" type="button" onClick={() => onApplyPreset(p)}>{t("install")}</button>
                 </div>
               </div>
@@ -239,7 +239,7 @@ function Sidebar({
               </button>
             );
           })}
-          <div className="adv-cat">通道</div>
+          <div className="adv-cat">{t("channels")}</div>
           <button
             className={`adv-pill ${channelOn ? "active" : ""}`}
             type="button"
@@ -256,7 +256,7 @@ function Sidebar({
         className={`sidebar-resizer${resizing ? " dragging" : ""}`}
         role="separator"
         aria-orientation="vertical"
-        aria-label="调整侧边栏宽度"
+        aria-label={t("aria.sidebarWidth")}
         onPointerDown={onResizeDown}
         onPointerMove={onResizeMove}
         onPointerUp={onResizeEnd}
