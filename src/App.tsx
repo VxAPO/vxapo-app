@@ -156,6 +156,7 @@ export default function App() {
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [viewAnimating, setViewAnimating] = useState(false);
   const [toolbarHidden, setToolbarHidden] = useState(false);
+  const [viewSpacerH, setViewSpacerH] = useState<number | null>(null);
   const viewAnimTimerRef = useRef<number | undefined>(undefined);
   const viewTransitionPendingRef = useRef(false);
   const viewEnterDoneRef = useRef(false);
@@ -473,14 +474,11 @@ export default function App() {
     };
   }, [selectedIds.length > 0]);
 
-  // 视图切换期间用 minHeight 锁住旧内容高度，避免 AnimatePresence popLayout
-  // 把退场视图脱离文档流后 scrollHeight 骤降，浏览器把 scrollTop clamp 掉；
   // 动画结束、新视图稳定后，在 paint 前恢复原滚动位置。
   useLayoutEffect(() => {
     if (viewAnimating) return;
     const body = bodyRef.current;
-    if (body && body.style.minHeight) {
-      body.style.minHeight = "";
+    if (body && viewScrollTopRef.current > 0) {
       body.scrollTop = viewScrollTopRef.current;
     }
   }, [viewAnimating]);
@@ -783,6 +781,7 @@ export default function App() {
   const finishViewAnim = useCallback(() => {
     window.clearTimeout(viewAnimTimerRef.current);
     viewTransitionPendingRef.current = false;
+    setViewSpacerH(null);
     setViewAnimating(false);
     setSelGeomTick((v) => v + 1);
     // 等 selGeom 按新视图重测完成后再显示浮窗，避免浮窗先按旧几何挂载、
@@ -802,8 +801,9 @@ export default function App() {
     const body = bodyRef.current;
     if (body) {
       viewScrollTopRef.current = body.scrollTop;
-      // 锁住旧 scrollHeight，防止 popLayout 把退场视图移出文档流后 scrollTop 被 clamp。
-      body.style.minHeight = `${body.scrollHeight}px`;
+      // 用 spacer 锁住旧 scrollHeight，防止 popLayout 把退场视图移出文档流后
+      // scrollHeight 骤降，浏览器把 scrollTop clamp 掉。
+      setViewSpacerH(body.scrollHeight);
     }
     setViewAnimating(true);
     setToolbarHidden(true);
@@ -1170,6 +1170,7 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
+            {viewSpacerH !== null && <div aria-hidden style={{ height: viewSpacerH }} />}
 
             <AnimatePresence>
               {selGeom && selectedIds.length > 0 && !toolbarHidden && (
