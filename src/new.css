@@ -2291,6 +2291,7 @@ input[type="number"]::-webkit-outer-spin-button {
 
 :root[data-theme="dark"] .drag-card.is-dragging.sem-group,
 :root[data-theme="dark"] .drag-card.is-dragging:not(.is-selected).sem-group {
+  border-color: var(--border-strong);
   border-left-color: var(--border-strong);
 }
 
@@ -2588,9 +2589,10 @@ input[type="number"]::-webkit-outer-spin-button {
   border-color: var(--border-strong);
 }
 
-/* 有组卡拖拽占位框的左侧组色边也恢复成普通灰色虚线 */
+/* 有组卡拖拽占位框的整圈虚线都恢复成普通灰色，不继承组色 */
 .drag-card.is-dragging.sem-group,
 .drag-card.is-dragging:not(.is-selected).sem-group {
+  border-color: var(--border-strong);
   border-left-color: var(--border-strong);
 }
 

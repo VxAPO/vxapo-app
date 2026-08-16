@@ -43,7 +43,7 @@ import UninstallDialog from "./components/UninstallDialog";
 /** 底部悬浮条预留高度：保证最后一行卡片能完全滚到悬浮条上方 */
 const BOTTOM_BAR_PAD = 400;
 /** 视图切换后内容高度收窄动画时长（ms） */
-const VIEW_COLLAPSE_MS = 700;
+const VIEW_COLLAPSE_MS = 800;
 
 /** 峰值评估频率点：全局对数扫描 + 频段中心 + 高 Q 邻域细化 + 相邻中心中点 */
 function buildEvalFreqs(blocks: Block[]): number[] {
@@ -1106,7 +1106,7 @@ export default function App() {
               className="view-stack"
               style={{
                 minHeight: viewTransitionH ?? undefined,
-                transition: viewCollapsing ? `min-height ${VIEW_COLLAPSE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)` : "none",
+                transition: viewCollapsing ? `min-height ${VIEW_COLLAPSE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)` : "none",
               }}
             >
             <AnimatePresence mode="popLayout" initial={false} onExitComplete={handleViewExitComplete}>
