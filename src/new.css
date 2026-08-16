@@ -158,6 +158,70 @@
   initial-value: #ffffff;
 }
 
+
+:root[data-theme="light"] {
+  --frame: #f0f3f6;
+  --content: #f7f9fc;
+  --card: #f7f9fc;
+  --surface-inset: rgb(52 63 81 / 2%);
+  --text-primary: #3d4552;
+  --text-secondary: #3d4552;
+  --text-weak: #69707c;
+  --border: #d9dee7;
+  --border-strong: #b3bbc8;
+  --hover: #e3e8ef;
+  --track: #e3e7ee;
+  --theme-hover-bg: #c2cbd8;
+  --brand: #47c3d1;
+  --brand-deep: #009aa2;
+  --brand-soft: rgba(71, 195, 209, 0.1);
+  --brand-bg: #e2f5f7;
+  --danger: #dc3d43;
+  --danger-soft: rgba(220, 61, 67, 0.1);
+  --on-accent: #ffffff;
+  --accent-bg: #3b3c3f;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.02), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --thumb: #ffffff;
+  --ring-hover: rgba(15, 23, 42, 0.14);
+  --hover-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 4px 10px rgba(15, 23, 42, 0.08);
+  --scrollbar: #d9dce4;
+  --scrollbar-hover: #c2c7d1;
+  --disabled-fill: #b8bec9;
+}
+
+:root[data-theme="dark"] {
+  --frame: #16181b;
+  --content: #1d1f22;
+  --card: #1d1f22;
+  --surface-inset: rgba(147, 197, 253, 0.02);
+  --text-primary: #c1c6cd;
+  --text-secondary: #969ca4;
+  --text-weak: #717882;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --hover: #25292e;
+  --track: #22262a;
+  --theme-hover-bg: #363c45;
+  --brand: #00919e;
+  --brand-deep: #006265;
+  --brand-soft: rgba(71, 195, 209, 0.14);
+  --brand-bg: #1d3e44;
+  --danger: #ea5556;
+  --danger-soft: rgba(234, 85, 86, 0.15);
+  --on-accent: #c1c6cd;
+  --accent-bg: #43474e;
+  --shadow-ink: 15, 18, 23;
+  --card-shadow: 0 1px 3px rgba(var(--shadow-ink), 0.7), 0 4px 14px rgba(var(--shadow-ink), 0.4);
+  --thumb: #c5c9d0;
+  --ring-hover: rgba(255, 255, 255, 0.14);
+  --hover-shadow: 0 4px 10px rgba(var(--shadow-ink), 0.8), 0 6px 16px rgba(var(--shadow-ink), 0.55);
+  --scrollbar: #3f4348;
+  --scrollbar-hover: #4f5358;
+  --disabled-fill: #32363b;
+  --tab-inactive: #2f3135;
+  --tab-active: #45474c;
+}
+
 /* 切换主题的瞬间给整页元素加颜色过渡，结束后移除，避免日常全局过渡的卡顿 */
 .theme-transition {
   transition:
