@@ -164,6 +164,8 @@ export default function App() {
   const viewTransitionPendingRef = useRef(false);
   const viewEnterDoneRef = useRef(false);
   const viewExitDoneRef = useRef(false);
+  const viewTransitionTokenRef = useRef(0);
+  const viewCollapseTimerRef = useRef<number | undefined>(undefined);
   const viewScrollTopRef = useRef(0);
   const oldViewHRef = useRef(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -326,7 +328,10 @@ export default function App() {
   };
 
   useEffect(() => () => window.cancelAnimationFrame(marqueeRafRef.current), []);
-  useEffect(() => () => window.clearTimeout(viewAnimTimerRef.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(viewAnimTimerRef.current);
+    window.clearTimeout(viewCollapseTimerRef.current);
+  }, []);
 
   // 空态提示行水平对齐顶栏视图切换的真实中心（左右按钮簇宽度不同，不能按窗口中心算）
   useLayoutEffect(() => {
@@ -782,30 +787,44 @@ export default function App() {
     [effects],
   );
 
-  const finishViewAnim = useCallback(() => {
+  const finishViewAnim = useCallback((token: number) => {
+    if (token !== viewTransitionTokenRef.current) return;
     window.clearTimeout(viewAnimTimerRef.current);
+    window.clearTimeout(viewCollapseTimerRef.current);
     viewTransitionPendingRef.current = false;
     // 平移结束后动画收窄：minHeight 从旧高过渡到 0（内容自然高度）。
     setViewTransitionH(0);
     setViewCollapsing(true);
     setViewAnimating(false);
     // 收窄完成后再重测几何并让浮窗出场，避免浮窗在高度动画中途挂载。
-    window.setTimeout(() => {
+    viewCollapseTimerRef.current = window.setTimeout(() => {
+      if (token !== viewTransitionTokenRef.current) return;
       setSelGeomTick((v) => v + 1);
-      window.setTimeout(() => setToolbarHidden(false), 0);
+      window.setTimeout(() => {
+        if (token !== viewTransitionTokenRef.current) return;
+        setToolbarHidden(false);
+      }, 0);
       setViewCollapsing(false);
     }, VIEW_COLLAPSE_MS);
   }, []);
 
   const tryFinishViewAnim = useCallback(() => {
     if (!viewTransitionPendingRef.current) return;
-    if (viewEnterDoneRef.current && viewExitDoneRef.current) finishViewAnim();
+    if (viewEnterDoneRef.current && viewExitDoneRef.current) {
+      finishViewAnim(viewTransitionTokenRef.current);
+    }
   }, [finishViewAnim]);
 
   const beginViewAnim = useCallback(() => {
+    const token = viewTransitionTokenRef.current + 1;
+    viewTransitionTokenRef.current = token;
     viewTransitionPendingRef.current = true;
     viewEnterDoneRef.current = false;
     viewExitDoneRef.current = false;
+    window.clearTimeout(viewAnimTimerRef.current);
+    window.clearTimeout(viewCollapseTimerRef.current);
+    if (toolbarAnimRef.current) cancelAnimationFrame(toolbarAnimRef.current.raf);
+    toolbarAnimRef.current = null;
     const body = bodyRef.current;
     if (body) {
       viewScrollTopRef.current = body.scrollTop;
@@ -817,10 +836,9 @@ export default function App() {
     }
     setViewAnimating(true);
     setToolbarHidden(true);
-    window.clearTimeout(viewAnimTimerRef.current);
     // 兜底：正常情况下由进场 onAnimationComplete + 退场 onExitComplete
     // 共同触发 finishViewAnim；若极端卡顿导致回调未触发，1200ms 后强制收尾。
-    viewAnimTimerRef.current = window.setTimeout(() => finishViewAnim(), 1200);
+    viewAnimTimerRef.current = window.setTimeout(() => finishViewAnim(token), 1200);
   }, [finishViewAnim]);
 
   const handlePresetStageComplete = useCallback(() => {
