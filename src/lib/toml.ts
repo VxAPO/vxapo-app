@@ -46,6 +46,7 @@ export function buildToml(
   }
   for (const e of effects) {
     out.push("[[effects]]", `type = ${str(e.type)}`, `enabled = ${e.enabled}`);
+    if (e.channels?.length) out.push(`channels = ${JSON.stringify(e.channels)}`);
     for (const [k, v] of Object.entries({ ...defaultEffectParams(e.type), ...(e.params ?? {}) })) {
       out.push(typeof v === "number" ? `${k} = ${num(v)}` : `${k} = ${str(String(v))}`);
     }
@@ -110,7 +111,16 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
     if (currentEffect) {
       if (key === "enabled") {
         currentEffect.enabled = value === "true";
-      } else if (key !== "type" && key !== "channels") {
+      } else if (key === "channels") {
+        try {
+          const arr: unknown = JSON.parse(value);
+          if (Array.isArray(arr)) {
+            currentEffect.channels = arr.map((c) => String(c));
+          }
+        } catch {
+          /* 忽略无法解析的 channels */
+        }
+      } else if (key !== "type") {
         const n = Number(value);
         (currentEffect.params ??= {})[key] = Number.isFinite(n) ? n : unquote(value);
       }

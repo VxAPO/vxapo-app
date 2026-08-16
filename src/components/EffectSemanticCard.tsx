@@ -32,14 +32,17 @@ function EffectSemanticCard({
           aria-pressed={effect.enabled}
           aria-label={effect.enabled ? "停用效果器" : "启用效果器"}
           title={effect.enabled ? "点击停用效果器" : "点击启用效果器"}
-          onClick={() => onToggle(effect.type)}
+          onClick={() => onToggle(effect.id ?? effect.type)}
         />
         <span className="effect-name">{def?.name ?? effect.type}</span>
+        {effect.type === "preamp" && effect.channels?.length ? (
+          <span className="effect-channel">{effect.channels.join("/")}</span>
+        ) : null}
         <button
           className="close-x"
           type="button"
           aria-label="删除效果器"
-          onClick={() => onRemove(effect.type)}
+          onClick={() => onRemove(effect.id ?? effect.type)}
         >
           <X size={12} strokeWidth={2.5} />
         </button>
@@ -55,7 +58,7 @@ function EffectSemanticCard({
             step={0.01}
             disabled={disabled}
             ariaLabel="强度"
-            onValueChange={(v) => onStrengthChange(effect.type, v)}
+            onValueChange={(v) => onStrengthChange(effect.id ?? effect.type, v)}
           />
           <span className="g-val">{Math.round(strength * 100)}%</span>
         </div>

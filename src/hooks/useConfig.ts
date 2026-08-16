@@ -12,8 +12,16 @@ import {
 } from "../lib/blocks";
 import { useInterval } from "./useInterval";
 
+function effectId(e: EffectItem): string {
+  return e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`;
+}
+
 function normalizeEffects(list: EffectItem[]): EffectItem[] {
-  return list.map((e) => ({ ...e, params: { ...defaultEffectParams(e.type), ...(e.params ?? {}) } }));
+  return list.map((e) => ({
+    ...e,
+    id: effectId(e),
+    params: { ...defaultEffectParams(e.type), ...(e.params ?? {}) },
+  }));
 }
 
 export function useConfig(
@@ -205,34 +213,47 @@ export function useConfig(
 
   const addEffect = useCallback((type: string) => {
     markDirty();
+    setEffects((prev) => {
+      const channels =
+        type === "preamp" && channelCtx.mode ? [channelCtx.active] : undefined;
+      const id = `${type}:${channels?.length ? channels.join(",") : "all"}`;
+      if (prev.some((e) => e.id === id)) return prev;
+      return [
+        ...prev,
+        {
+          id,
+          type,
+          enabled: true,
+          params: defaultEffectParams(type),
+          ...(channels ? { channels } : {}),
+        },
+      ];
+    });
+  }, [channelCtx.mode, channelCtx.active, markDirty]);
+
+  const removeEffect = useCallback((id: string) => {
+    markDirty();
+    setEffects((prev) => prev.filter((e) => e.id !== id));
+  }, [markDirty]);
+
+  const toggleEffect = useCallback((id: string) => {
+    markDirty();
+    setEffects((prev) => prev.map((e) => (e.id === id ? { ...e, enabled: !e.enabled } : e)));
+  }, [markDirty]);
+
+  const patchEffectParam = useCallback((id: string, key: string, value: number | string) => {
+    markDirty();
     setEffects((prev) =>
-      prev.some((e) => e.type === type) ? prev : [...prev, { type, enabled: true, params: defaultEffectParams(type) }],
+      prev.map((e) => (e.id === id ? { ...e, params: { ...(e.params ?? {}), [key]: value } } : e)),
     );
   }, [markDirty]);
 
-  const removeEffect = useCallback((type: string) => {
-    markDirty();
-    setEffects((prev) => prev.filter((e) => e.type !== type));
-  }, [markDirty]);
-
-  const toggleEffect = useCallback((type: string) => {
-    markDirty();
-    setEffects((prev) => prev.map((e) => (e.type === type ? { ...e, enabled: !e.enabled } : e)));
-  }, [markDirty]);
-
-  const patchEffectParam = useCallback((type: string, key: string, value: number | string) => {
-    markDirty();
-    setEffects((prev) =>
-      prev.map((e) => (e.type === type ? { ...e, params: { ...(e.params ?? {}), [key]: value } } : e)),
-    );
-  }, [markDirty]);
-
-  const patchEffectSemantic = useCallback((type: string, strength: number) => {
+  const patchEffectSemantic = useCallback((id: string, strength: number) => {
     markDirty();
     setEffects((prev) =>
       prev.map((e) =>
-        e.type === type
-          ? { ...e, params: applySemanticStrength(type, strength, { ...defaultEffectParams(type), ...(e.params ?? {}) }) }
+        e.id === id
+          ? { ...e, params: applySemanticStrength(e.type, strength, { ...defaultEffectParams(e.type), ...(e.params ?? {}) }) }
           : e,
       ),
     );

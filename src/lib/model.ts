@@ -99,10 +99,14 @@ export function isPresetMeta(v: unknown): v is PresetMeta {
 
 /** 非 peq 效果器（写入 config.toml 的 [[effects]]，driver 原生支持） */
 export interface EffectItem {
+  /** 客户端稳定 id（不写入 TOML），同类型多声道效果器（如 preamp）用 id 区分 */
+  id?: string;
   type: string;
   enabled: boolean;
   /** 参数（键与 driver 一致），没有配置的键不写 TOML */
   params?: Record<string, number | string>;
+  /** 声道作用域；缺省 = 所有声道。通道模式下 preamp 按声道生成 */
+  channels?: string[];
 }
 
 export type ThemeMode = "light" | "dark" | "system";

@@ -9,6 +9,7 @@ export interface EffectDef {
 
 /** 效果器定义与中文名 */
 export const EFFECT_DEFS: EffectDef[] = [
+  { type: "preamp", name: "基准电平", desc: "整链增益补偿，用于把峰值拉回 0 dB", color: "#c360bc" },
   { type: "wide", name: "声场加宽", desc: "拓宽立体声声像，空间感更强", color: "#00a3a5" },
   { type: "aural", name: "谐波激励器", desc: "谐波激励，提升细节与空气感", color: "#6082e9" },
   { type: "reverb", name: "混响", desc: "增加空间混响，声音更润", color: "#996fda" },
@@ -48,6 +49,7 @@ export interface EffectParamDef {
 }
 
 const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
+  preamp: [{ key: "gain_db", label: "增益", min: -120, max: 48, step: 0.1, unit: "dB" }],
   wide: [{ key: "intensity", label: "强度", min: 0, max: 1, step: 0.01 }],
   aural: [
     { key: "tune_hz", label: "中心频率", min: 500, max: 10000, step: 10, unit: "Hz" },
@@ -92,6 +94,7 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
 };
 
 const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
+  preamp: { gain_db: 0 },
   wide: { intensity: 0.3543 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0, wet: 1, dry: 0 },
   reverb: { room_size: 1, decay: 0.5657, damping: 0.4083, pre_delay_ms: 0, wet: 0.3, dry: 0.9 },
@@ -135,6 +138,8 @@ export function semanticStrength(type: string, params: Record<string, number | s
       const ref = asNum(params.reference_phon, 80);
       return clamp01((ref - asNum(params.phon, ref)) / 40);
     }
+    case "preamp":
+      return clamp01((asNum(params.gain_db, 0) + 24) / 48);
     default:
       return 1;
   }
@@ -164,6 +169,9 @@ export function applySemanticStrength(
       next.phon = Math.round((ref - s * 40) * 100) / 100;
       break;
     }
+    case "preamp":
+      next.gain_db = Math.round((s * 48 - 24) * 10) / 10;
+      break;
   }
   return next;
 }

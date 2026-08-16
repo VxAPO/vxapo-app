@@ -69,13 +69,13 @@ function buildEvalFreqs(blocks: Block[]): number[] {
 }
 
 /** 所有启用频段在给定统一平移量下，整条曲线（含各段 Q 响应）的真实峰值（dB） */
-function curveMax(freqs: number[], blocks: Block[], delta: number, fs: number): number {
+function curveMax(freqs: number[], blocks: Block[], fs: number, preampGainDb = 0): number {
   let m = -Infinity;
   for (const f of freqs) {
-    let db = 0;
+    let db = preampGainDb;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += bandDb(f, { ...band, gain_db: band.gain_db + delta }, fs);
+      for (const band of b.bands) db += bandDb(f, band, fs);
     }
     if (db > m) m = db;
   }
@@ -185,11 +185,15 @@ export default function App() {
         : blocks,
     [blocks, channelOn, firstChannel, effActiveChannel],
   );
+  const preampGainDb = useMemo(() => {
+    const p = effects.find((e) => e.type === "preamp" && e.enabled);
+    return typeof p?.params?.gain_db === "number" ? p.params.gain_db : 0;
+  }, [effects]);
   const evalFreqs = useMemo(() => buildEvalFreqs(visibleBlocks), [visibleBlocks]);
   const fs = selected?.sample_rate ?? 48000;
   const peakGain = useMemo(
-    () => curveMax(evalFreqs, visibleBlocks, 0, fs),
-    [evalFreqs, visibleBlocks, fs],
+    () => curveMax(evalFreqs, visibleBlocks, fs, preampGainDb),
+    [evalFreqs, visibleBlocks, fs, preampGainDb],
   );
 
   const yTop = Math.max(6, Math.min(30, Math.ceil((peakGain + 1) / 2) * 2));
@@ -699,64 +703,25 @@ export default function App() {
   );
   const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
   const normalizeGain = useCallback(() => {
-    if (Math.abs(peakGain) < 0.05) {
+    const freqs = buildEvalFreqs(blocks);
+    const globalPeak = curveMax(freqs, blocks, fs, 0);
+    if (Math.abs(globalPeak) < 0.05) {
       notify("当前峰值增益已接近 0 dB，无需归一化");
       return;
     }
+    const gain = -globalPeak;
+    const rounded = Math.round(gain * 10) / 10;
     markDirty();
-    const first = channelNames[0] ?? "L";
-    // 通道模式下按声道分组分别求解；非通道模式整条链作为一组
-    const groups = new Map<string, Block[]>();
-    for (const b of blocks) {
-      const ch = channelOn ? (b.channel ?? first) : "all";
-      const list = groups.get(ch);
-      if (list) list.push(b);
-      else groups.set(ch, [b]);
-    }
-    const deltas = new Map<string, number>();
-    for (const [ch, chBlocks] of groups) {
-      const freqs = buildEvalFreqs(chBlocks);
-      const chPeak = curveMax(freqs, chBlocks, 0, fs);
-      if (Math.abs(chPeak) < 0.05) continue;
-      // 统一平移量不能简单取峰值相反数：偏离频段中心的位置受 Q 影响，
-      // 只有按真实曲线二分求解，补偿后该组曲线的峰值才会精确落在 0 dB。
-      let lo = -chPeak - 12;
-      let hi = -chPeak + 12;
-      for (let i = 0; i < 40; i++) {
-        const mid = (lo + hi) / 2;
-        if (curveMax(freqs, chBlocks, mid, fs) > 0) hi = mid;
-        else lo = mid;
-      }
-      deltas.set(ch, (lo + hi) / 2);
-    }
-    if (!deltas.size) {
-      notify("当前峰值增益已接近 0 dB，无需归一化");
-      return;
-    }
-    setBlocks((prev) =>
-      prev.map((b) => {
-        const ch = channelOn ? (b.channel ?? first) : "all";
-        const delta = deltas.get(ch);
-        if (delta == null) return b;
-        return {
-          ...b,
-          bands: b.bands.map((band) => ({
-            ...band,
-            gain_db: Math.round((band.gain_db + delta) * 10) / 10,
-          })),
-        };
-      }),
+    setEffects((prev) => {
+      const idx = prev.findIndex((e) => e.type === "preamp");
+      const item = { type: "preamp", enabled: true, params: { gain_db: rounded } };
+      if (idx < 0) return [...prev, item];
+      return prev.map((e, i) => (i === idx ? item : e));
+    });
+    notify(
+      `已将基准电平设为 ${rounded > 0 ? "+" : ""}${rounded.toFixed(1)} dB，峰值补偿到 0 dB`,
     );
-    if (channelOn) {
-      const summary = [...deltas.entries()]
-        .map(([ch, d]) => `${channelLabel(ch)} ${d > 0 ? "+" : ""}${d.toFixed(1)} dB`)
-        .join("，");
-      notify(`已按声道分别归一化：${summary}`);
-    } else {
-      const d = [...deltas.values()][0];
-      notify(`已将峰值增益补偿到 0 dB（统一${d > 0 ? "提升" : "衰减"} ${Math.abs(d).toFixed(1)} dB）`);
-    }
-  }, [blocks, channelOn, channelNames, fs, peakGain, markDirty, notify]);
+  }, [blocks, fs, markDirty, notify]);
   const closeDeletePreset = useCallback((open: boolean) => {
     if (!open) setDeletePresetTarget(null);
   }, []);
@@ -802,6 +767,7 @@ export default function App() {
           onAddEffect={addEffect}
           onAddBand={handleAddBand}
           channelOn={channelOn}
+          activeChannel={effActiveChannel}
           onToggleChannel={toggleChannel}
         />
 
@@ -959,6 +925,7 @@ export default function App() {
                 blocks={blocks}
                 fs={selected?.sample_rate ?? 48000}
                 yTop={yTop}
+                preampGainDb={preampGainDb}
                 curveChannel={channelOn ? effActiveChannel : "all"}
                 onCurveChannelChange={handleCurveChannelChange}
                 channelOn={channelOn}

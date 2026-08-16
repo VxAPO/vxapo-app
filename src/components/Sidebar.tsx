@@ -24,6 +24,7 @@ interface SidebarProps {
   onAddEffect: (type: string) => void;
   onAddBand: (kind: PeqBandKind) => void;
   channelOn: boolean;
+  activeChannel: string;
   onToggleChannel: () => void;
 }
 
@@ -40,6 +41,7 @@ function Sidebar({
   onAddEffect,
   onAddBand,
   channelOn,
+  activeChannel,
   onToggleChannel,
 }: SidebarProps) {
   const [sideW, setSideW] = useState<number>(() => {
@@ -219,7 +221,10 @@ function Sidebar({
           </button>
           <div className="adv-cat">效果器</div>
           {EFFECT_DEFS.map((e) => {
-            const added = effects.some((x) => x.type === e.type);
+            const added =
+              e.type === "preamp" && channelOn
+                ? effects.some((x) => x.type === "preamp" && x.channels?.includes(activeChannel))
+                : effects.some((x) => x.type === e.type);
             return (
               <button
                 className={`adv-pill${added ? " disabled" : ""}`}

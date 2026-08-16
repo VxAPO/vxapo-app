@@ -164,11 +164,11 @@ function dbY(db: number, top: number): number {
   return 24 + ((top - db) / (top + 16)) * 180;
 }
 
-function freqPath(blocks: Block[], fs: number, w: number, top: number): string {
+function freqPath(blocks: Block[], fs: number, w: number, top: number, preampGainDb = 0): string {
   const pts: string[] = [];
   for (let i = 0; i <= 240; i++) {
     const f = 20 * Math.pow(1000, i / 240);
-    let db = 0;
+    let db = preampGainDb;
     for (const b of blocks) {
       if (!b.enabled) continue;
       for (const band of b.bands) db += bandDb(f, band, fs);
@@ -192,6 +192,7 @@ interface CurvePlotProps {
   fs: number;
   curveW: number;
   yTop: number;
+  preampGainDb?: number;
 }
 
 interface HoverPt {
@@ -203,7 +204,7 @@ interface HoverPt {
   cvy: number;
 }
 
-function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
+function CurvePlot({ blocks, fs, curveW, yTop, preampGainDb = 0 }: CurvePlotProps) {
   const [hoverPt, setHoverPt] = useState<HoverPt | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -241,8 +242,8 @@ function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
   );
   const xLabels = ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"];
   const curveD = useMemo(
-    () => freqPath(blocks, fs, curveW, yTop),
-    [blocks, fs, curveW, yTop],
+    () => freqPath(blocks, fs, curveW, yTop, preampGainDb),
+    [blocks, fs, curveW, yTop, preampGainDb],
   );
 
   const onSvgMove = (e: MouseEvent<SVGSVGElement>) => {
@@ -255,7 +256,7 @@ function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
     const f = 20 * Math.pow(10, t * 3);
     const cl = Math.max(20, Math.min(20000, f));
     const x = logX(cl, curveW);
-    let db = 0;
+    let db = preampGainDb;
     for (const b of blocks) {
       if (!b.enabled) continue;
       for (const band of b.bands) db += bandDb(cl, band, fs);
@@ -293,7 +294,7 @@ function CurvePlot({ blocks, fs, curveW, yTop }: CurvePlotProps) {
     };
     const dbAt = (f: number) => {
       const cl = Math.max(20, Math.min(20000, f));
-      let db = 0;
+      let db = preampGainDb;
       for (const b of blocks) {
         if (!b.enabled) continue;
         for (const band of b.bands) db += bandDb(cl, band, fs);

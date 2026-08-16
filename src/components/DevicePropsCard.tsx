@@ -36,7 +36,7 @@ function DevicePropsCard({
             className="dev-prop-btn"
             type="button"
             disabled={!canNormalize}
-            title={canNormalize ? "统一调整所有 PEQ gain，把峰值增益补偿到 0 dB" : "峰值增益已接近 0 dB，无需归一化"}
+            title={canNormalize ? "生成基准电平并把峰值补偿到 0 dB" : "峰值增益已接近 0 dB，无需归一化"}
             onClick={onNormalize}
           >
             归一化

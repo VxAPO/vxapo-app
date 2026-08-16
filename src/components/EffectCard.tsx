@@ -28,14 +28,17 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
           aria-pressed={effect.enabled}
           aria-label={effect.enabled ? "停用效果器" : "启用效果器"}
           title={effect.enabled ? "点击停用效果器" : "点击启用效果器"}
-          onClick={() => onToggle(effect.type)}
+          onClick={() => onToggle(effect.id ?? effect.type)}
         />
         <span className="effect-name">{def?.name ?? effect.type}</span>
+        {effect.type === "preamp" && effect.channels?.length ? (
+          <span className="effect-channel">{effect.channels.join("/")}</span>
+        ) : null}
         <button
           className="close-x"
           type="button"
           aria-label="删除效果器"
-          onClick={() => onRemove(effect.type)}
+          onClick={() => onRemove(effect.id ?? effect.type)}
         >
           <X size={12} strokeWidth={2.5} />
         </button>
@@ -63,7 +66,7 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                     options={p.options}
                     ariaLabel={p.label}
                     disabled={disabled}
-                    onValueChange={(v) => onChangeParam(effect.type, p.key, v)}
+                    onValueChange={(v) => onChangeParam(effect.id ?? effect.type, p.key, v)}
                   />
                 </div>
               );
@@ -82,7 +85,7 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                   step={p.step}
                   disabled={disabled}
                   ariaLabel={p.label}
-                  onValueChange={(v) => onChangeParam(effect.type, p.key, v)}
+                  onValueChange={(v) => onChangeParam(effect.id ?? effect.type, p.key, v)}
                 />
                 <input
                   type="number"
@@ -93,7 +96,7 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                   value={clamped}
                   disabled={disabled}
                   aria-label={p.label}
-                  onChange={(e) => onChangeParam(effect.type, p.key, Number(e.target.value))}
+                  onChange={(e) => onChangeParam(effect.id ?? effect.type, p.key, Number(e.target.value))}
                 />
               </div>
             );
