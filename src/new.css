@@ -176,6 +176,15 @@ button {
   display: flex;
   width: 240px;
   flex: none;
+  --theme-hover-h: 220;
+  --theme-hover-s: 18%;
+  --theme-hover-l: 78%;
+}
+
+:root[data-theme="dark"] .theme-seg {
+  --theme-hover-h: 220;
+  --theme-hover-s: 12%;
+  --theme-hover-l: 34%;
 }
 
 .theme-seg button {
@@ -184,11 +193,16 @@ button {
   flex: 1;
   justify-content: center;
   background: transparent;
-  transition: color 0.25s ease, background-color 0.25s ease;
+  transition: color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .theme-seg button:hover {
-  background: var(--hover);
+  background: hsl(var(--theme-hover-h), var(--theme-hover-s), var(--theme-hover-l));
+}
+
+.theme-seg.no-hover button:hover {
+  background: transparent;
 }
 
 .theme-seg button[aria-pressed="true"] {
@@ -204,7 +218,7 @@ button {
   z-index: 0;
   border-radius: 9999px;
   background: var(--accent-bg);
-  transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.28s ease;
+  transition: left 0.32s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .seg button:disabled {
