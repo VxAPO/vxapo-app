@@ -42,9 +42,22 @@ fn system_uses_dark_mode() -> bool {
 
 fn cli_path() -> &'static str {
     CLI_PATH.get_or_init(|| {
-        std::env::var("VXAPO_CLI").unwrap_or_else(|_| {
-            r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe".to_string()
-        })
+        if let Ok(p) = std::env::var("VXAPO_CLI") {
+            return p;
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            // release：优先找 App exe 同目录的 vxapo-cli.exe（安装包部署布局）
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(dir) = exe.parent() {
+                    let cli = dir.join("vxapo-cli.exe");
+                    if cli.exists() {
+                        return cli.display().to_string();
+                    }
+                }
+            }
+        }
+        r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe".to_string()
     })
 }
 
