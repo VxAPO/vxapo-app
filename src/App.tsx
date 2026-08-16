@@ -168,7 +168,6 @@ export default function App() {
   const viewTransitionTokenRef = useRef(0);
   const viewCollapseTimerRef = useRef<number | undefined>(undefined);
   const viewScrollTopRef = useRef(0);
-  const oldViewHRef = useRef(0);
   const viewHeightLockRef = useRef(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -839,8 +838,11 @@ export default function App() {
       viewHeightLockRef.current = body.scrollHeight > body.clientHeight + 1;
       if (viewHeightLockRef.current) {
         viewScrollTopRef.current = body.scrollTop;
-        oldViewHRef.current = body.scrollHeight;
-        setViewTransitionH(body.scrollHeight);
+        // 只取 view-stack 的内容高度，而不是整个滚动容器的 scrollHeight；
+        // 这样过渡期间的滚动条长度是 max(旧内容, 新内容)，不会先变短再变长。
+        const stack = body.querySelector<HTMLElement>(".view-stack");
+        const stackH = stack ? Math.round(stack.getBoundingClientRect().height) : 0;
+        setViewTransitionH(stackH);
       } else {
         setViewTransitionH(null);
       }
