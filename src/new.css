@@ -187,6 +187,7 @@
   --scrollbar: #d9dce4;
   --scrollbar-hover: #c2c7d1;
   --disabled-fill: #b8bec9;
+  --tab-active-bg: #e9edf1;
 }
 
 :root[data-theme="dark"] {
@@ -197,8 +198,8 @@
   --text-primary: #c1c6cd;
   --text-secondary: #969ca4;
   --text-weak: #717882;
-  --border: rgba(255, 255, 255, 0.12);
-  --border-strong: rgba(255, 255, 255, 0.22);
+  --border: #373a3e;
+  --border-strong: #51555b;
   --hover: #25292e;
   --track: #22262a;
   --theme-hover-bg: #363c45;
@@ -220,6 +221,7 @@
   --disabled-fill: #32363b;
   --tab-inactive: #2f3135;
   --tab-active: #45474c;
+  --tab-active-bg: #45474c;
 }
 
 /* 切换主题的瞬间给整页元素加颜色过渡，结束后移除，避免日常全局过渡的卡顿 */
@@ -250,7 +252,47 @@
     --scrollbar-hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --disabled-fill 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --tab-inactive 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    --tab-active 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    --tab-active 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --tab-active-bg 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 主题切换期间以下元素直接跟随根变量变化，避免自身 transition 叠加造成节奏不一致 */
+.theme-transition .dev-props-card,
+.theme-transition .view-seg .seg-thumb,
+.theme-transition .side-seg .ind,
+.theme-transition .curve-wrap > svg > path,
+.theme-transition .curve-wrap > svg > circle,
+.theme-transition .curve-wrap > svg > line,
+.theme-transition .drag-bar-line,
+.theme-transition .enable-dot,
+.theme-transition .effect-dot,
+.theme-transition .tab-dot,
+.theme-transition .gs-thumb::before,
+.theme-transition .gs-thumb::after,
+.theme-transition .theme-seg button,
+.theme-transition .adv-pill,
+.theme-transition .adv-pill .adv-plus,
+.theme-transition .view-seg button,
+.theme-transition .view-seg button svg {
+  transition: none;
+}
+
+.theme-transition .tab-item.active .tab-btn,
+.theme-transition .tab-item.active .tab-btn:hover {
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0s;
+}
+
+.theme-transition .gs-thumb::after {
+  border-color: #6b7280;
+}
+
+/* 主题切换期间隐藏所有阴影，但预设卡左侧骑边保留 */
+.theme-transition *:not(.preset-card) {
+  box-shadow: none !important;
+}
+
+.theme-transition .preset-card {
+  box-shadow: inset 3px 0 0 var(--preset-accent, var(--brand)) !important;
 }
 
 
@@ -824,12 +866,13 @@ button {
 }
 
 .tab-item.active .tab-btn {
-  background: color-mix(in srgb, var(--frame) 98%, #000000);
+  background-color: var(--tab-active-bg);
   color: var(--text-primary);
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .tab-item.active .tab-btn:hover {
-  background: color-mix(in srgb, var(--frame) 98%, #000000);
+  background-color: var(--tab-active-bg);
 }
 
 .tab-dot {
@@ -1604,7 +1647,7 @@ input[type="number"]::-webkit-outer-spin-button {
   flex: none;
   width: auto;
   min-width: 240px;
-  background: color-mix(in srgb, var(--card) 56%, transparent);
+  background-color: color-mix(in srgb, var(--card) 56%, transparent);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 10px 18px 12px;
@@ -1612,7 +1655,7 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(40px) saturate(1.4);
   -webkit-backdrop-filter: blur(40px) saturate(1.4);
   pointer-events: auto;
@@ -1927,12 +1970,12 @@ input[type="number"]::-webkit-outer-spin-button {
   left: 0;
   width: calc(50% - 2px);
   border-radius: 9999px;
-  background: var(--brand-bg);
+  background-color: var(--brand-bg);
   border: 1px solid var(--brand);
   box-shadow: var(--card-shadow);
   transition:
     left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2398,7 +2441,7 @@ input[type="number"]::-webkit-outer-spin-button {
 
 :root[data-theme="dark"] .tab-item.active .tab-btn,
 :root[data-theme="dark"] .tab-item.active .tab-btn:hover {
-  background: var(--tab-active);
+  background-color: var(--tab-active-bg);
   color: var(--text-primary);
 }
 
@@ -2505,7 +2548,7 @@ input[type="number"]::-webkit-outer-spin-button {
 
 :root[data-theme="dark"] .sel-toolbar {
   background: color-mix(in srgb, var(--card) 78%, transparent);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid #3f4348;
   backdrop-filter: blur(28px) saturate(1.2);
   -webkit-backdrop-filter: blur(28px) saturate(1.2);
   box-shadow:
@@ -2586,7 +2629,7 @@ input[type="number"]::-webkit-outer-spin-button {
 /* 深色模式：曲线卡片与设备属性毛玻璃更实，避免透底发灰 */
 :root[data-theme="dark"] .curve-wrap,
 :root[data-theme="dark"] .dev-props-card {
-  background: color-mix(in srgb, var(--card) 82%, transparent);
+  background-color: color-mix(in srgb, var(--card) 82%, transparent);
   backdrop-filter: blur(28px) saturate(1.15);
   -webkit-backdrop-filter: blur(28px) saturate(1.15);
 }
