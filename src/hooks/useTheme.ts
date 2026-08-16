@@ -3,14 +3,26 @@ import type { ThemeMode } from "../lib/model";
 
 const THEME_TRANSITION_MS = 420;
 
+function currentSystemDark(): boolean {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
 export function useTheme() {
   const [theme, setTheme] = useState<ThemeMode>("system");
+  const [systemDark, setSystemDark] = useState(currentSystemDark);
   const prevAppliedRef = useRef<string | null>(null);
   const transitionTimerRef = useRef<number | undefined>(undefined);
 
-  const themeApplied = theme === "system"
-    ? (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-    : theme;
+  // 跟随系统时，系统深浅变化需要触发重渲染
+  useLayoutEffect(() => {
+    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mql) return;
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  const themeApplied = theme === "system" ? (systemDark ? "dark" : "light") : theme;
 
   useLayoutEffect(() => {
     const root = document.documentElement;
