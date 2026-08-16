@@ -767,6 +767,8 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .view-stage {
