@@ -119,7 +119,7 @@ const zh: Record<string, string> = {
   "effect.maximizer": "自动增益",
   "effect.loudness": "等响补偿",
   "effect.preamp": "基准电平",
-  "effect.preamp.desc": "整链增益补偿，用于把峰值拉回 0 dB",
+  "effect.preamp.desc": "把峰值拉回 0 dB",
   "effect.wide.desc": "拓宽立体声声像，空间感更强",
   "effect.aural.desc": "谐波激励，提升细节与空气感",
   "effect.reverb.desc": "增加空间混响，声音更润",
@@ -307,7 +307,7 @@ const en: Record<string, string> = {
   "effect.maximizer": "Auto Gain",
   "effect.loudness": "Loudness EQ",
   "effect.preamp": "Preamp",
-  "effect.preamp.desc": "Whole-chain gain compensation to pull peak back to 0 dB",
+  "effect.preamp.desc": "Pull peak back to 0 dB",
   "effect.wide.desc": "Wider stereo image",
   "effect.aural.desc": "Adds harmonics and air",
   "effect.reverb.desc": "Adds space and smoothness",
@@ -391,6 +391,11 @@ function readInitialLang(): Lang {
 }
 
 let currentLang: Lang = readInitialLang();
+try {
+  document.documentElement.dataset.lang = currentLang;
+} catch {
+  /* ignore */
+}
 const listeners = new Set<() => void>();
 
 export function getLang(): Lang {
@@ -400,6 +405,11 @@ export function getLang(): Lang {
 export function setLang(lang: Lang) {
   if (lang === currentLang) return;
   currentLang = lang;
+  try {
+    document.documentElement.dataset.lang = lang;
+  } catch {
+    /* ignore */
+  }
   try {
     localStorage.setItem(STORAGE_KEY, lang);
   } catch {

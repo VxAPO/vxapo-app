@@ -1188,6 +1188,10 @@ button {
   font-weight: 600;
 }
 
+:root[data-lang="en"] .g-name {
+  font-size: 12px;
+}
+
 .grow {
   flex: 1;
 }
