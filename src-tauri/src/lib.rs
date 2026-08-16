@@ -60,7 +60,11 @@ fn cli_path() -> &'static str {
                 }
             }
         }
-        r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe".to_string()
+        let mut fallback = r"D:\APO_Project\VxAPO\vxapo-cli\target\x86_64-pc-windows-msvc\release\vxapo-cli.exe".to_string();
+        if !std::path::Path::new(&fallback).exists() {
+            fallback = r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe".to_string();
+        }
+        fallback
     })
 }
 
