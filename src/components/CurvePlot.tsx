@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { Block, PeqBandKind } from "../lib/model";
 import { snapPx } from "../lib/snap";
+import { t } from "../lib/i18n";
 
 /** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
 const FOLLOW_FACTOR = 0.08;
@@ -448,7 +449,7 @@ function CurvePlot({ blocks, fs, curveW, yTop, preampGainDb = 0 }: CurvePlotProp
         height="220"
         preserveAspectRatio="none"
         role="img"
-        aria-label="频响曲线"
+        aria-label={t("freqResponse")}
         style={{
           cursor:
             'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'><g stroke=\'%23000\' stroke-width=\'1.8\'><path d=\'M6 0v3M6 9v3M0 6h3M9 6h3\'/></g><g stroke=\'%23fff\' stroke-width=\'0.8\'><path d=\'M6 0v3M6 9v3M0 6h3M9 6h3\'/></g></svg>") 6 6, crosshair',

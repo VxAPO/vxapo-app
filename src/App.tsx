@@ -1073,7 +1073,9 @@ export default function App() {
     } else {
       const u = updates[0];
       notify(
-        `已将基准电平设为 ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB，峰值补偿到 0 dB`,
+        t("notify.normalized", {
+          db: `${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)}`,
+        }),
       );
     }
   }, [blocks, channelOn, channelNames, effects, fs, markDirty, notify]);

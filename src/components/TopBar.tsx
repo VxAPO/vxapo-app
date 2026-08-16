@@ -40,7 +40,7 @@ function TopBar({
       <button className="pill" type="button" disabled={noDevices} onClick={onImport}>{t("import")}</button>
       <button className="pill" type="button" disabled={noDevices} onClick={onExport}>{t("export")}</button>
       <span className="spacer" data-tauri-drag-region />
-      <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label="视图切换">
+      <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label={t("view.switch")}>
         <span className={`seg-thumb ${view === "advanced" ? "right" : ""}`} />
         <button type="button" disabled={channelOn || noDevices} aria-pressed={view === "preset"} onClick={() => onViewChange("preset")}>
           <Tags size={13} />

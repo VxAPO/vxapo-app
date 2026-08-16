@@ -35,7 +35,7 @@ function EffectSemanticCard({
           title={effect.enabled ? t("disable.filter") : t("enable.filter")}
           onClick={() => onToggle(effect.id ?? effect.type)}
         />
-        <span className="effect-name">{def?.name ?? effect.type}</span>
+        <span className="effect-name">{def ? t(def.name) : effect.type}</span>
         {effect.type === "preamp" && effect.channels?.length ? (
           <span className="effect-channel">{effect.channels.join("/")}</span>
         ) : null}
@@ -48,7 +48,7 @@ function EffectSemanticCard({
           <X size={12} strokeWidth={2.5} />
         </button>
       </div>
-      {def?.desc ? <p className="effect-desc">{def.desc}</p> : null}
+      {def?.desc ? <p className="effect-desc">{t(def.desc)}</p> : null}
       <div className="effect-params">
         <div className="effect-param-row effect-strength-row">
           <span className="effect-param-label">{t("strength")}</span>
@@ -58,7 +58,7 @@ function EffectSemanticCard({
             max={1}
             step={0.01}
             disabled={disabled}
-            ariaLabel="强度"
+            ariaLabel={t("strength")}
             onValueChange={(v) => onStrengthChange(effect.id ?? effect.type, v)}
           />
           <span className="g-val">{Math.round(strength * 100)}%</span>

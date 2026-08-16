@@ -235,7 +235,7 @@ function Sidebar({
                 onClick={() => onAddEffect(e.type)}
               >
                 <Plus size={14} className="adv-plus" />
-                <span>{added ? `${e.name}${t("effect.added")}` : e.name}</span>
+                <span>{added ? `${t(e.name)}${t("effect.added")}` : t(e.name)}</span>
               </button>
             );
           })}

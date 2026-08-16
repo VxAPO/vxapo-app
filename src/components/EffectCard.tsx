@@ -31,7 +31,7 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
           title={effect.enabled ? t("disable.filter") : t("enable.filter")}
           onClick={() => onToggle(effect.id ?? effect.type)}
         />
-        <span className="effect-name">{def?.name ?? effect.type}</span>
+        <span className="effect-name">{def ? t(def.name) : effect.type}</span>
         {effect.type === "preamp" && effect.channels?.length ? (
           <span className="effect-channel">{effect.channels.join("/")}</span>
         ) : null}

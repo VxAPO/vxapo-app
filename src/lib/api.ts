@@ -2,6 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type { Device } from "./model";
+import { t } from "./i18n";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -46,7 +47,7 @@ export async function exportConfig(guid: string): Promise<void> {
   if (!isTauri) return;
   const { save } = await import("@tauri-apps/plugin-dialog");
   const path = await save({
-    title: "导出 VxAPO 配置",
+    title: t("export.title"),
     defaultPath: `config-${guid}.toml`,
     filters: [{ name: "TOML", extensions: ["toml"] }],
   });
@@ -64,7 +65,7 @@ export function isInstalled(d: Device): boolean {
 
 export function friendlyError(e: unknown): string {
   const msg = String(e);
-  if (/os error 5/i.test(msg)) return "权限不足，无法读写配置（请以管理员身份运行一次以修复权限）";
+  if (/os error 5/i.test(msg)) return t("error.permission");
   return msg;
 }
 

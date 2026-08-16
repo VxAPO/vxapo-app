@@ -1,13 +1,15 @@
 const CHANNEL_LABELS: Record<string, string> = {
-  L: "左声道",
-  R: "右声道",
-  C: "中置",
-  LFE: "低音",
-  BL: "后左",
-  BR: "后右",
-  SL: "侧左",
-  SR: "侧右",
+  L: "ch.L",
+  R: "ch.R",
+  C: "ch.C",
+  LFE: "ch.LFE",
+  BL: "ch.BL",
+  BR: "ch.BR",
+  SL: "ch.SL",
+  SR: "ch.SR",
 };
+
+import { t } from "./i18n";
 
 /** 与 driver get_channel_names 同款标准声道短名（按掩码位顺序） */
 export function channelNamesFor(channelCount: number | null | undefined): string[] {
@@ -28,5 +30,5 @@ export function channelNamesFor(channelCount: number | null | undefined): string
 }
 
 export function channelLabel(id: string): string {
-  return CHANNEL_LABELS[id] ?? id;
+  return t(CHANNEL_LABELS[id] ?? id);
 }

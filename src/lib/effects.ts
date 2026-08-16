@@ -9,12 +9,12 @@ export interface EffectDef {
 
 /** 效果器定义与中文名 */
 export const EFFECT_DEFS: EffectDef[] = [
-  { type: "preamp", name: "基准电平", desc: "整链增益补偿，用于把峰值拉回 0 dB", color: "#c360bc" },
-  { type: "wide", name: "声场加宽", desc: "拓宽立体声声像，空间感更强", color: "#00a3a5" },
-  { type: "aural", name: "谐波激励器", desc: "谐波激励，提升细节与空气感", color: "#6082e9" },
-  { type: "reverb", name: "混响", desc: "增加空间混响，声音更润", color: "#996fda" },
-  { type: "maximizer", name: "自动增益", desc: "自动调整增益，保持稳定响度", color: "#e05d40" },
-  { type: "loudness", name: "等响补偿", desc: "等响度曲线补偿，小音量更平衡", color: "#519741" },
+  { type: "preamp", name: "effect.preamp", desc: "effect.preamp.desc", color: "#c360bc" },
+  { type: "wide", name: "effect.wide", desc: "effect.wide.desc", color: "#00a3a5" },
+  { type: "aural", name: "effect.aural", desc: "effect.aural.desc", color: "#6082e9" },
+  { type: "reverb", name: "effect.reverb", desc: "effect.reverb.desc", color: "#996fda" },
+  { type: "maximizer", name: "effect.maximizer", desc: "effect.maximizer.desc", color: "#e05d40" },
+  { type: "loudness", name: "effect.loudness", desc: "effect.loudness.desc", color: "#519741" },
 ];
 
 export const KNOWN_EFFECT_TYPES = EFFECT_DEFS.map((e) => e.type);
