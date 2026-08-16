@@ -339,6 +339,12 @@ pub fn run() {
                     (0xf0u8, 0xf3u8, 0xf6u8)
                 };
                 let _ = win.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
+                // 等 WebView 完成首帧后再显示，避免白画布一闪
+                let win_for_show = win.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(140));
+                    let _ = win_for_show.show();
+                });
             }
             Ok(())
         })
