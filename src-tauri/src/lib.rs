@@ -105,8 +105,23 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         } else {
             (0xf0u8, 0xf3u8, 0xf6u8)
         };
+        
+        // 先设置背景色
         let _ = win.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
+        
+        // 再注入 JS 确保 WebView 使用正确的颜色
+        let color_hex = if system_uses_dark_mode() { "#16181b" } else { "#f0f3f6" };
+        let _ = win.eval(&format!("
+            document.documentElement.style.backgroundColor = '{}';
+            document.body.style.backgroundColor = '{}';
+            document.getElementById('root').style.backgroundColor = '{}';
+        ", color_hex, color_hex, color_hex));
+        
+        // 最后显示窗口
         win.show().map_err(|e| e.to_string())?;
+        
+        // 如果需要最大化
+        win.maximize().map_err(|e| e.to_string())?;
     }
     Ok(())
 }

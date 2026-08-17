@@ -23,7 +23,7 @@ function DeviceTabs({
   onAdd,
 }: DeviceTabsProps) {
   return (
-    <div className="tab-bar">
+    <div className={`tab-bar${devices.length === 0 ? " no-device" : ""}`}>
       <div className="tab-group">
         {devices.map((d) => (
           <div className={`tab-item ${d.guid === selectedGuid ? "active" : ""}`} key={d.guid}>

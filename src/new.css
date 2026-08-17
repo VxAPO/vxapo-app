@@ -822,6 +822,10 @@ button {
   flex: 0 0 auto;
 }
 
+.tab-bar.no-device {
+  background: var(--frame);
+}
+
 .tab-group {
   display: flex;
   align-items: flex-end;
