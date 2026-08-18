@@ -45,26 +45,37 @@ fn cli_path() -> &'static str {
         if let Ok(p) = std::env::var("VXAPO_CLI") {
             return p;
         }
-        #[cfg(not(debug_assertions))]
-        {
-            // release：优先找 App exe 同目录的 vxapo-cli.exe；
-            // Tauri bundle.resources 可能放到 exe 同级或 resources 子目录。
-            if let Ok(exe) = std::env::current_exe() {
-                if let Some(dir) = exe.parent() {
-                    let candidates = [dir.join("vxapo-cli.exe"), dir.join("resources").join("vxapo-cli.exe")];
-                    for cli in candidates {
-                        if cli.exists() {
-                            return cli.display().to_string();
-                        }
+
+        // 优先使用随 App 分发的 CLI，确保同目录存在 vxapo_driver.dll。
+        let manifest_cli = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("vxapo-cli.exe");
+        if manifest_cli.exists() {
+            return manifest_cli.display().to_string();
+        }
+
+        // release：优先找 App exe 同目录的 vxapo-cli.exe；
+        // Tauri bundle.resources 可能放到 exe 同级或 resources 子目录。
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let candidates = [dir.join("vxapo-cli.exe"), dir.join("resources").join("vxapo-cli.exe")];
+                for cli in candidates {
+                    if cli.exists() {
+                        return cli.display().to_string();
                     }
                 }
             }
         }
-        let mut fallback = r"D:\APO_Project\VxAPO\vxapo-cli\target\x86_64-pc-windows-msvc\release\vxapo-cli.exe".to_string();
-        if !std::path::Path::new(&fallback).exists() {
-            fallback = r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe".to_string();
+
+        // 开发机回退：优先选择带有 vxapo_driver.dll 的 target\release 目录。
+        let candidates = [
+            r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe",
+            r"D:\APO_Project\VxAPO\vxapo-cli\target\x86_64-pc-windows-msvc\release\vxapo-cli.exe",
+        ];
+        for cli in candidates {
+            if Path::new(cli).exists() {
+                return cli.to_string();
+            }
         }
-        fallback
+        candidates[0].to_string()
     })
 }
 
