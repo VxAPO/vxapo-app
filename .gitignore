@@ -30,4 +30,9 @@ resvg-cli.cjs
 tauri-dev*.log
 
 # Docs archived to ../vxapo-docs
-/README.md
+
+# Generated binaries and local helper scripts
+/src-tauri/resources/*.exe
+/src-tauri/resources/*.dll
+/fix-config-acl.cmd
+/restore-m16-config.cmd
