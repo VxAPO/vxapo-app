@@ -36,3 +36,6 @@ tauri-dev*.log
 /src-tauri/resources/*.dll
 /fix-config-acl.cmd
 /restore-m16-config.cmd
+
+# Tauri build output
+/src-tauri/target/
