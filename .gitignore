@@ -28,3 +28,6 @@ app_512.png
 direct_500.png
 resvg-cli.cjs
 tauri-dev*.log
+
+# Docs archived to ../vxapo-docs
+/README.md

@@ -822,8 +822,17 @@ button {
   flex: 0 0 auto;
 }
 
-.tab-bar.no-device {
+/* 无设备：内容区退回 frame 底色（保留圆角描边），不出现任何 --content / tab 占位 */
+.content.is-empty {
   background: var(--frame);
+}
+
+.content.is-empty .tab-bar {
+  display: none;
+}
+
+.content.is-empty .device-body {
+  background: transparent;
 }
 
 .tab-group {
@@ -960,7 +969,7 @@ button {
 }
 
 :root[data-theme="dark"] .tab-add:hover {
-  color: var(--brand-deep);
+  color: var(--brand);
   background: var(--brand-soft);
 }
 
@@ -1054,11 +1063,16 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 :root[data-theme="dark"] .no-device-plus {
   background: rgba(66, 188, 207, 0.6);
   color: rgba(255, 255, 255, 0.72);
+}
+
+:root[data-theme="dark"] .no-device-row:hover .no-device-plus {
+  background: rgba(88, 205, 219, 0.75);
 }
 
 .tuning-scroll {

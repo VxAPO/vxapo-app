@@ -1140,7 +1140,7 @@ export default function App() {
               onToggleChannel={toggleChannel}
             />
 
-            <main className="content">
+            <main className={`content${installedDevices.length === 0 ? " is-empty" : ""}`}>
           <DeviceTabs
             devices={installedDevices}
             selectedGuid={selectedGuid}
