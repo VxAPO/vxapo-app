@@ -170,7 +170,7 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
 export interface ConfigParse {
   blocks: Block[];
   effects: EffectItem[];
-  /** 顶层总开关：false = 整链 passthrough（driver v9.17） */
+  /** 顶层总开关：false = 整链 passthrough */
   enabled: boolean;
   /** 首个未知非 peq 效果器块起、到文件末尾的原始文本（保存时原样拼回，避免破坏第三方效果器） */
   tail: string;

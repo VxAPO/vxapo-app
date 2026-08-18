@@ -43,5 +43,6 @@
   },
   "allowScripts": {
     "esbuild@0.28.1": true
-  }
+  },
+  "license": "GPL-3.0-or-later"
 }
