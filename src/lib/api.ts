@@ -65,6 +65,12 @@ export async function installDevice(guid: string): Promise<InstallResult> {
   return invoke<InstallResult>("install_device", { guid });
 }
 
+/** 安装失败后的兜底回滚：清除已写入的注册表配置（CLI uninstall，提权）。 */
+export async function rollbackInstall(guid: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("rollback_install", { guid });
+}
+
 export async function onInstallProgress(
   cb: (ev: InstallProgressEvent) => void,
 ): Promise<() => void> {

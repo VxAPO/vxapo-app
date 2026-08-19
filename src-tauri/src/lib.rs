@@ -654,6 +654,15 @@ async fn install_device(app: tauri::AppHandle, guid: String) -> Result<InstallRe
     }
 }
 
+/// 安装失败后的兜底回滚：走 CLI uninstall（提权），清除已写入的注册表配置，
+/// 保证设备不残留"已安装"状态（不产生假设备页）。
+#[tauri::command]
+fn rollback_install(guid: String) -> Result<String, String> {
+    let cli = cli_path();
+    let tag = format!("rollback_{}", guid.replace(['{', '}'], ""));
+    run_cli(cli, &["uninstall", "-d", &guid], &tag)
+}
+
 /// 读取安装/卸载进度文本（供 UI 实时展示）。
 #[tauri::command]
 fn read_progress(tag: String) -> String {
@@ -687,6 +696,7 @@ pub fn run() {
             list_devices,
             uninstall_device,
             install_device,
+            rollback_install,
             read_progress
         ])
         .run(tauri::generate_context!())

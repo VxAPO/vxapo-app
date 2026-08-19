@@ -7,6 +7,7 @@ import {
   installDevice,
   isInstalled,
   onInstallProgress,
+  rollbackInstall,
   type InstallProgressEvent,
 } from "../lib/api";
 import type { Device } from "../lib/model";
@@ -122,6 +123,8 @@ function InstallDialog({
       } else {
         setPhase("failed");
         setStatusText(t("install.phase.failed"));
+        // 失败兜底：回滚注册表，避免产生"已安装"假设备页。
+        await rollbackInstall(d.guid).catch(() => {});
       }
       // done / failed 都刷新列表：失败时 best 配置已写入，设备按已安装态出现。
       await onRefresh();
@@ -129,6 +132,9 @@ function InstallDialog({
       if (!aliveRef.current) return;
       setPhase("failed");
       setStatusText(friendlyError(e));
+      // CLI 异常/超时退出：注册表可能残留，同样兜底回滚。
+      await rollbackInstall(d.guid).catch(() => {});
+      await onRefresh();
     } finally {
       onBusyChange?.(false);
       unlisten();
