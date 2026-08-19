@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use tauri::Manager;
+use tauri::Emitter;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -193,6 +195,18 @@ struct Device {
     lost_slot: Option<String>,
 }
 
+/// 安装结果（install_device 返回；前端 InstallDialog 消费）。
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InstallResult {
+    success: bool,
+    mode: Option<String>,
+    score: Option<u32>,
+    attempts: u32,
+    best_mode: Option<String>,
+    best_score: Option<u32>,
+}
+
 #[tauri::command]
 fn list_devices() -> Result<Vec<Device>, String> {
     let mut cmd = Command::new(cli_path());
@@ -356,6 +370,230 @@ fn run_cli(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
     })
 }
 
+/// 流式运行 CLI 并转发 JSON 事件（`install --verify` 专用）。
+///
+/// 直连路径：stdout 管道逐行解析事件；报“需要管理员权限”时降级提权路径
+/// （VBS/runas 隐藏窗口），提权路径下 CLI 通过 `--progress-file` 追加事件，
+/// 本函数按字节偏移增量读取并转发。两条路径对外行为一致。
+fn run_cli_with_events(
+    cli: &str,
+    args: &[&str],
+    tag: &str,
+    on_event: &mut dyn FnMut(serde_json::Value),
+) -> Result<String, String> {
+    let mut cmd = Command::new(cli);
+    cmd.args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let mut child = cmd.spawn().map_err(|e| format!("CLI 启动失败：{e}"))?;
+
+    // stderr 用线程收集，避免管道填满阻塞。
+    let stderr = child.stderr.take();
+    let stderr_thread = std::thread::spawn(move || {
+        let mut s = String::new();
+        if let Some(mut e) = stderr {
+            let _ = std::io::Read::read_to_string(&mut e, &mut s);
+        }
+        s
+    });
+
+    let mut out = String::new();
+    if let Some(stdout) = child.stdout.take() {
+        for line in BufReader::new(stdout).lines() {
+            if let Ok(line) = line {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
+                    on_event(v);
+                }
+                out.push_str(&line);
+                out.push('\n');
+            }
+        }
+    }
+    let status = child.wait().map_err(|e| format!("CLI 等待失败：{e}"))?;
+    let err = stderr_thread.join().unwrap_or_default();
+    let out_trim = out.trim().to_string();
+    let err_trim = err.trim().to_string();
+
+    if status.success() {
+        return Ok(out_trim);
+    }
+    let msg = if err_trim.is_empty() {
+        out_trim.clone()
+    } else {
+        err_trim.clone()
+    };
+    if msg.contains("需要管理员权限") {
+        let progress = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
+        return run_cli_elevated_stream(cli, args, tag, &progress, on_event);
+    }
+    Err(msg)
+}
+
+/// 提权流式执行：stdout 指 NUL（避免与 CLI 追加写 progress 文件冲突），
+/// 事件经 `--progress-file` 增量读取转发；`.done`/`.err` 判定沿用原逻辑。
+fn run_cli_elevated_stream(
+    cli: &str,
+    args: &[&str],
+    tag: &str,
+    progress: &Path,
+    on_event: &mut dyn FnMut(serde_json::Value),
+) -> Result<String, String> {
+    let tmp_err = std::env::temp_dir().join(format!("vxapo_{tag}.err.txt"));
+    let tmp_ps1 = std::env::temp_dir().join(format!("vxapo_{tag}.ps1"));
+    let tmp_vbs = std::env::temp_dir().join(format!("vxapo_{tag}.vbs"));
+    let outer_err = std::env::temp_dir().join(format!("vxapo_{tag}.outer.txt"));
+    let log_file = std::env::temp_dir().join(format!("vxapo_{tag}.log"));
+    let tmp_done = std::env::temp_dir().join(format!("vxapo_{tag}.done"));
+    for p in [&tmp_err, &tmp_ps1, &tmp_vbs, &outer_err, &log_file, &tmp_done] {
+        let _ = std::fs::remove_file(p);
+    }
+    let _ = std::fs::remove_file(progress);
+    let log = |m: &str| {
+        let _ = std::fs::write(&log_file, format!("{}\n", m));
+    };
+    let cleanup = || {
+        for p in [&tmp_ps1, &tmp_vbs, &outer_err, &tmp_done] {
+            let _ = std::fs::remove_file(p);
+        }
+    };
+    log("stream-start");
+
+    let quoted: Vec<String> = args
+        .iter()
+        .map(|a| format!("'{}'", a.replace('\'', "''")))
+        .collect();
+    let inner = format!(
+        "& '{}' {} 1> $null 2> '{}'; $code = $LASTEXITCODE; [System.IO.File]::WriteAllText('{}', \"$code\"); exit $code",
+        cli.replace('\'', "''"),
+        quoted.join(" "),
+        tmp_err.display().to_string().replace('\'', "''"),
+        tmp_done.display().to_string().replace('\'', "''"),
+    );
+    std::fs::write(&tmp_ps1, inner).map_err(|e| format!("写入提权脚本失败：{e}"))?;
+
+    let ps1_path = tmp_ps1.display().to_string();
+    let oerr_path = outer_err.display().to_string();
+    let vbs = format!(
+        r#"On Error Resume Next
+Set s = CreateObject("Shell.Application")
+r = s.ShellExecute("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File {ps1}", "", "runas", 0)
+If r <= 32 Then
+  Set fso = CreateObject("Scripting.FileSystemObject")
+  fso.CreateTextFile("{oerr}", True).Write CStr(r)
+End If"#,
+        ps1 = ps1_path,
+        oerr = oerr_path,
+    );
+    std::fs::write(&tmp_vbs, vbs).map_err(|e| format!("写入提权脚本失败：{e}"))?;
+
+    let spawn_result = Command::new("wscript.exe")
+        .arg(&tmp_vbs)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
+    if let Err(e) = spawn_result {
+        log(&format!("spawn-error: {e}"));
+        cleanup();
+        return Err(format!("提权启动失败：{e}"));
+    }
+    log("stream-spawned");
+
+    let mut progress_offset: u64 = 0;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
+    loop {
+        drain_progress(progress, &mut progress_offset, on_event);
+
+        let done = std::fs::read_to_string(&tmp_done).unwrap_or_default();
+        let done_raw = done.trim().trim_start_matches('\u{feff}').trim();
+        if !done_raw.is_empty() {
+            let code: i32 = done_raw.parse().unwrap_or(1);
+            drain_progress(progress, &mut progress_offset, on_event);
+            let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
+            let msg = err.trim().to_string();
+            log(&format!("stream-done:{code}"));
+            cleanup();
+            if code == 0 {
+                let _ = std::fs::remove_file(&log_file);
+                let _ = std::fs::remove_file(&tmp_err);
+                return Ok(msg);
+            }
+            return Err(if msg.is_empty() {
+                "安装失败".to_string()
+            } else {
+                msg
+            });
+        }
+
+        let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
+        if !err.trim().is_empty() {
+            let msg = err.trim().to_string();
+            log(&format!("stream-err: {msg}"));
+            cleanup();
+            return Err(msg);
+        }
+        let oerr = std::fs::read_to_string(&outer_err).unwrap_or_default();
+        if !oerr.trim().is_empty() {
+            let msg = oerr.trim().to_string();
+            log(&format!("stream-outer-err: {msg}"));
+            cleanup();
+            return Err(msg);
+        }
+        if std::time::Instant::now() >= deadline {
+            log("stream-timeout");
+            cleanup();
+            return Err("安装超时（5 分钟）".to_string());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+}
+
+/// 增量读取 progress 文件：只推进到最后一个完整行（含换行），避免切半行丢事件。
+fn drain_progress(
+    path: &Path,
+    offset: &mut u64,
+    on_event: &mut dyn FnMut(serde_json::Value),
+) {
+    use std::io::{Read, Seek, SeekFrom};
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return;
+    };
+    if f.seek(SeekFrom::Start(*offset)).is_err() {
+        return;
+    }
+    let mut s = String::new();
+    if f.read_to_string(&mut s).is_err() {
+        return;
+    }
+    let bytes = s.as_bytes();
+    let last_nl = bytes.iter().rposition(|&b| b == b'\n').map(|p| p + 1).unwrap_or(0);
+    if last_nl == 0 {
+        return;
+    }
+    *offset += last_nl as u64;
+    for line in s[..last_nl].lines() {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+            on_event(v);
+        }
+    }
+}
+
+/// 从 CLI 的 complete 事件构造 InstallResult。
+fn install_result_from_event(v: &serde_json::Value) -> InstallResult {
+    let get_u32 = |k: &str| v.get(k).and_then(|x| x.as_u64()).map(|n| n as u32);
+    InstallResult {
+        success: v.get("success").and_then(|s| s.as_bool()).unwrap_or(false),
+        mode: v.get("mode").and_then(|m| m.as_str()).map(|s| s.to_string()),
+        score: get_u32("score"),
+        attempts: get_u32("attempts").unwrap_or(0),
+        best_mode: v
+            .get("best_mode")
+            .and_then(|m| m.as_str())
+            .map(|s| s.to_string()),
+        best_score: get_u32("best_score"),
+    }
+}
+
 /// 卸载设备：以 `runas` 提权调 `vxapo-cli uninstall -d <guid> --json`。
 #[tauri::command]
 fn uninstall_device(guid: String) -> Result<String, String> {
@@ -364,13 +602,50 @@ fn uninstall_device(guid: String) -> Result<String, String> {
     run_cli(cli, &["uninstall", "-d", &guid], &tag)
 }
 
-/// 安装设备：以 `runas` 提权调 `vxapo-cli install -d <guid> --json`
-/// （自动探测安装模式）。
+/// 安装设备（`--verify` 验证闭环）：后台线程流式执行 CLI 并逐行 emit
+/// `install-progress` 事件；返回结构化 InstallResult。全程不阻塞命令线程。
 #[tauri::command]
-fn install_device(guid: String) -> Result<String, String> {
-    let cli = cli_path();
+async fn install_device(app: tauri::AppHandle, guid: String) -> Result<InstallResult, String> {
+    let cli = cli_path().to_string();
     let tag = format!("install_{}", guid.replace(['{', '}'], ""));
-    run_cli(cli, &["install", "-d", &guid], &tag)
+    let progress_path = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
+    let args: Vec<String> = vec![
+        "install".to_string(),
+        "-d".to_string(),
+        guid,
+        "--verify".to_string(),
+        "--progress-file".to_string(),
+        progress_path.to_string_lossy().into_owned(),
+    ];
+
+    let last_complete: std::sync::Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+    let lc = last_complete.clone();
+    let app2 = app.clone();
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let mut on_event = |ev: serde_json::Value| {
+            if ev.get("event").and_then(|e| e.as_str()) == Some("complete") {
+                if let Ok(mut g) = lc.lock() {
+                    *g = Some(ev.clone());
+                }
+            }
+            let _ = app2.emit("install-progress", &ev);
+        };
+        run_cli_with_events(&cli, &arg_refs, &tag, &mut on_event)
+    })
+    .await
+    .map_err(|e| format!("安装线程异常：{e}"))?;
+
+    let _ = std::fs::remove_file(&progress_path);
+    if let Some(complete) = last_complete.lock().unwrap().clone() {
+        return Ok(install_result_from_event(&complete));
+    }
+    match result {
+        Ok(out) => Err(format!("安装结束但缺少结果事件：{}", out.trim())),
+        Err(e) => Err(e),
+    }
 }
 
 /// 读取安装/卸载进度文本（供 UI 实时展示）。

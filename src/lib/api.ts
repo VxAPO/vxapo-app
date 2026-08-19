@@ -26,9 +26,51 @@ export async function uninstallDevice(guid: string): Promise<void> {
   await invoke("uninstall_device", { guid });
 }
 
-export async function installDevice(guid: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke("install_device", { guid });
+export interface InstallResult {
+  success: boolean;
+  mode?: string | null;
+  score?: number | null;
+  attempts: number;
+  best_mode?: string | null;
+  best_score?: number | null;
+}
+
+export type InstallProgressEvent =
+  | { event: "install_write"; mode: string }
+  | { event: "service"; action: "stopping" | "stopped" | "starting" | "running" }
+  | {
+      event: "test";
+      pipe?: string;
+      mode?: string;
+      score?: number;
+      max?: number;
+      premix?: boolean;
+      postmix?: boolean;
+      child_premix?: boolean;
+      child_postmix?: boolean;
+    }
+  | { event: "retry"; from: string; to: string; reason?: string }
+  | {
+      event: "complete";
+      success: boolean;
+      mode?: string;
+      score?: number;
+      attempts?: number;
+      best_mode?: string;
+      best_score?: number;
+    };
+
+export async function installDevice(guid: string): Promise<InstallResult> {
+  if (!isTauri) return { success: false, attempts: 0 };
+  return invoke<InstallResult>("install_device", { guid });
+}
+
+export async function onInstallProgress(
+  cb: (ev: InstallProgressEvent) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<InstallProgressEvent>("install-progress", (e) => cb(e.payload));
 }
 
 export async function readProgress(tag: string): Promise<string> {
