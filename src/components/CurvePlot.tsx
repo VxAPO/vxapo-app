@@ -274,13 +274,13 @@ function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }
   const yStep = yTop - yBottom > 26 ? 4 : 2;
   const yGrid = useMemo(() => {
     const g: { db: number; y: number }[] = [];
-    for (let db = yTop; db > yBottom; db -= yStep) g.push({ db, y: dbY(db, yTop, yBottom) });
-    g.push({ db: yBottom, y: dbY(yBottom, yTop, yBottom) });
-    // 0dB 参考线必须存在（步长变宽后可能跳过）。
-    if (0 > yBottom && 0 < yTop && !g.some((r) => r.db === 0)) {
-      g.push({ db: 0, y: dbY(0, yTop, yBottom) });
+    // 网格行统一落在步长整数倍：间距全程一致，0 是任意步长的倍数自然包含，
+    // 不再出现“0 附近 2dB、其余 4dB”的混合刻度。
+    const topRow = Math.floor(yTop / yStep) * yStep;
+    const bottomRow = Math.ceil(yBottom / yStep) * yStep;
+    for (let db = topRow; db >= bottomRow; db -= yStep) {
+      g.push({ db, y: dbY(db, yTop, yBottom) });
     }
-    g.sort((a, b) => b.db - a.db);
     return g;
   }, [yTop, yBottom, yStep]);
   const plotTop = dbY(yTop, yTop, yBottom);
