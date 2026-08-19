@@ -39,3 +39,7 @@ tauri-dev*.log
 
 # Tauri build output
 /src-tauri/target/
+
+# 运行中被替换的旧二进制（进程退出前被锁，改名保留）
+/src-tauri/resources/*.stuck
+/src-tauri/resources/*.old*

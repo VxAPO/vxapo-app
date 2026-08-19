@@ -108,7 +108,7 @@ function InstallDialog({
   const handleInstall = async (d: Device) => {
     setInstallingGuid(d.guid);
     setPhase("installing");
-    setStatusText(t("install.phase.writing", { mode: "" }));
+    setStatusText(t("install.phase.installing"));
     setAttempts([]);
     const unlisten = await onInstallProgress(handleProgress);
     try {

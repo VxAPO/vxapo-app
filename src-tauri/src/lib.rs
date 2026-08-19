@@ -48,14 +48,11 @@ fn cli_path() -> &'static str {
             return p;
         }
 
-        // 优先使用随 App 分发的 CLI，确保同目录存在 vxapo_driver.dll。
-        let manifest_cli = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("vxapo-cli.exe");
-        if manifest_cli.exists() {
-            return manifest_cli.display().to_string();
-        }
-
-        // release：优先找 App exe 同目录的 vxapo-cli.exe；
+        // release：优先找 App exe 同目录的 vxapo-cli.exe（随包版本），
         // Tauri bundle.resources 可能放到 exe 同级或 resources 子目录。
+        // 注意：CARGO_MANIFEST_DIR 只在 debug 构建使用——release 下它会固化到
+        // 开发目录，导致安装版 App 误用开发目录的 CLI/DLL（CLSID 注册错路径）。
+        #[cfg(not(debug_assertions))]
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 let candidates = [dir.join("vxapo-cli.exe"), dir.join("resources").join("vxapo-cli.exe")];
@@ -64,6 +61,15 @@ fn cli_path() -> &'static str {
                         return cli.display().to_string();
                     }
                 }
+            }
+        }
+
+        // debug（tauri dev）：使用随源码打包的 resources 副本。
+        #[cfg(debug_assertions)]
+        {
+            let manifest_cli = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("vxapo-cli.exe");
+            if manifest_cli.exists() {
+                return manifest_cli.display().to_string();
             }
         }
 
