@@ -644,14 +644,36 @@ async fn install_device(app: tauri::AppHandle, guid: String) -> Result<InstallRe
     .await
     .map_err(|e| format!("安装线程异常：{e}"))?;
 
-    let _ = std::fs::remove_file(&progress_path);
     if let Some(complete) = last_complete.lock().unwrap().clone() {
+        // 成功：清理临时进度文件；失败保留，供诊断（trace 步骤在 progress 里）。
+        let _ = std::fs::remove_file(&progress_path);
         return Ok(install_result_from_event(&complete));
     }
-    match result {
-        Ok(out) => Err(format!("安装结束但缺少结果事件：{}", out.trim())),
-        Err(e) => Err(e),
-    }
+    let tail = progress_tail(&progress_path, 12);
+    let msg = match result {
+        Ok(out) => format!("安装结束但缺少结果事件：{}", out.trim()),
+        Err(e) => e,
+    };
+    Err(if tail.is_empty() {
+        msg
+    } else {
+        format!("{msg}\n--- 进度尾部 ---\n{tail}")
+    })
+}
+
+/// 读取 progress 文件最后 N 行（失败诊断）。
+fn progress_tail(path: &Path, max_lines: usize) -> String {
+    let Ok(s) = std::fs::read_to_string(path) else {
+        return String::new();
+    };
+    s.lines()
+        .rev()
+        .take(max_lines)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// 安装失败后的兜底回滚：走 CLI uninstall（提权），清除已写入的注册表配置，
