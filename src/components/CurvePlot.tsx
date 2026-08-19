@@ -161,8 +161,9 @@ export function bandDb(
   }
 }
 
-function dbY(db: number, top: number): number {
-  return 24 + ((top - db) / (top + 16)) * 180;
+function dbY(db: number, top: number, bottom: number): number {
+  const span = Math.max(1, top - bottom);
+  return 24 + ((top - db) / span) * 180;
 }
 
 /**
@@ -205,6 +206,7 @@ function freqPath(
   top: number,
   preampGainDb = 0,
   freqs?: number[],
+  bottom = -16,
 ): string {
   const pts: string[] = [];
   const evalFreqs = freqs ?? Array.from({ length: 241 }, (_, i) => 20 * Math.pow(1000, i / 240));
@@ -214,8 +216,8 @@ function freqPath(
       if (!b.enabled) continue;
       for (const band of b.bands) db += bandDb(f, band, fs);
     }
-    const clamped = Math.max(-16, Math.min(top, db));
-    pts.push(`${logX(f, w).toFixed(1)} ${dbY(clamped, top).toFixed(1)}`);
+    const clamped = Math.max(bottom, Math.min(top, db));
+    pts.push(`${logX(f, w).toFixed(1)} ${dbY(clamped, top, bottom).toFixed(1)}`);
   }
   return `M${pts.join(" L")}`;
 }
@@ -233,6 +235,7 @@ interface CurvePlotProps {
   fs: number;
   curveW: number;
   yTop: number;
+  yBottom?: number;
   preampGainDb?: number;
 }
 
@@ -245,7 +248,7 @@ interface HoverPt {
   cvy: number;
 }
 
-function CurvePlot({ blocks, fs, curveW, yTop, preampGainDb = 0 }: CurvePlotProps) {
+function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }: CurvePlotProps) {
   const [hoverPt, setHoverPt] = useState<HoverPt | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -268,15 +271,20 @@ function CurvePlot({ blocks, fs, curveW, yTop, preampGainDb = 0 }: CurvePlotProp
     };
   };
 
-  const yStep = yTop + 16 > 26 ? 4 : 2;
+  const yStep = yTop - yBottom > 26 ? 4 : 2;
   const yGrid = useMemo(() => {
     const g: { db: number; y: number }[] = [];
-    for (let db = yTop; db > -16; db -= yStep) g.push({ db, y: dbY(db, yTop) });
-    g.push({ db: -16, y: dbY(-16, yTop) });
+    for (let db = yTop; db > yBottom; db -= yStep) g.push({ db, y: dbY(db, yTop, yBottom) });
+    g.push({ db: yBottom, y: dbY(yBottom, yTop, yBottom) });
+    // 0dB 参考线必须存在（步长变宽后可能跳过）。
+    if (0 > yBottom && 0 < yTop && !g.some((r) => r.db === 0)) {
+      g.push({ db: 0, y: dbY(0, yTop, yBottom) });
+    }
+    g.sort((a, b) => b.db - a.db);
     return g;
-  }, [yTop, yStep]);
-  const plotTop = dbY(yTop, yTop);
-  const plotBottom = dbY(-16, yTop);
+  }, [yTop, yBottom, yStep]);
+  const plotTop = dbY(yTop, yTop, yBottom);
+  const plotBottom = dbY(yBottom, yTop, yBottom);
   const xGrid = useMemo(
     () => [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].map((f) => logX(f, curveW)),
     [curveW],
@@ -284,8 +292,8 @@ function CurvePlot({ blocks, fs, curveW, yTop, preampGainDb = 0 }: CurvePlotProp
   const xLabels = ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"];
   const evalFreqs = useMemo(() => buildEvalFreqs(blocks), [blocks]);
   const curveD = useMemo(
-    () => freqPath(blocks, fs, curveW, yTop, preampGainDb, evalFreqs),
-    [blocks, fs, curveW, yTop, preampGainDb, evalFreqs],
+    () => freqPath(blocks, fs, curveW, yTop, preampGainDb, evalFreqs, yBottom),
+    [blocks, fs, curveW, yTop, preampGainDb, evalFreqs, yBottom],
   );
 
   const onSvgMove = (e: MouseEvent<SVGSVGElement>) => {
@@ -303,10 +311,10 @@ function CurvePlot({ blocks, fs, curveW, yTop, preampGainDb = 0 }: CurvePlotProp
       if (!b.enabled) continue;
       for (const band of b.bands) db += bandDb(cl, band, fs);
     }
-    const clamped = Math.max(-16, Math.min(yTop, db));
+    const clamped = Math.max(yBottom, Math.min(yTop, db));
     setHoverPt({
       x,
-      y: dbY(clamped, yTop),
+      y: dbY(clamped, yTop, yBottom),
       f: cl,
       db,
       cvx: viewX,
@@ -341,13 +349,13 @@ function CurvePlot({ blocks, fs, curveW, yTop, preampGainDb = 0 }: CurvePlotProp
         if (!b.enabled) continue;
         for (const band of b.bands) db += bandDb(cl, band, fs);
       }
-      return Math.max(-16, Math.min(yTop, db));
+      return Math.max(yBottom, Math.min(yTop, db));
     };
     const segW = tipW;
     const xA = Math.max(plotLeft, cx - segW / 2);
     const xB = Math.min(plotRight, cx + segW / 2);
-    const yA = sy + dbY(dbAt(fAtX(xA)), yTop) * scaleY;
-    const yB = sy + dbY(dbAt(fAtX(xB)), yTop) * scaleY;
+    const yA = sy + dbY(dbAt(fAtX(xA)), yTop, yBottom) * scaleY;
+    const yB = sy + dbY(dbAt(fAtX(xB)), yTop, yBottom) * scaleY;
     const slope = xB > xA ? (yB - yA) / (xB - xA) : 0;
     const my = sy + hoverPt.y * scaleY;
     const R = SAFE_RADIUS;

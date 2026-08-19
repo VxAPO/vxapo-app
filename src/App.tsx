@@ -60,6 +60,20 @@ function curveMax(freqs: number[], blocks: Block[], fs: number, preampGainDb = 0
   return m;
 }
 
+/** 整条曲线的最小值（dB）——Y 轴负侧自适应展宽依据。 */
+function curveMin(freqs: number[], blocks: Block[], fs: number, preampGainDb = 0): number {
+  let m = Infinity;
+  for (const f of freqs) {
+    let db = preampGainDb;
+    for (const b of blocks) {
+      if (!b.enabled) continue;
+      for (const band of b.bands) db += bandDb(f, band, fs);
+    }
+    if (db < m) m = db;
+  }
+  return m;
+}
+
 export default function App() {
   const { notice, notify } = useToast();
   const [loadErr, setLoadErr] = useState("");
@@ -215,8 +229,13 @@ export default function App() {
     () => curveMax(evalFreqs, visibleBlocks, fs, preampGainDb),
     [evalFreqs, visibleBlocks, fs, preampGainDb],
   );
+  const troughGain = useMemo(
+    () => curveMin(evalFreqs, visibleBlocks, fs, preampGainDb),
+    [evalFreqs, visibleBlocks, fs, preampGainDb],
+  );
 
   const yTop = Math.max(6, Math.min(30, Math.ceil((peakGain + 1) / 2) * 2));
+  const yBottom = Math.min(-6, Math.max(-30, Math.floor((troughGain - 1) / 2) * 2));
 
   // 设备切换时保存旧设备通道状态并恢复新设备通道状态（逐设备记忆）。
   useEffect(() => {
@@ -1290,6 +1309,7 @@ export default function App() {
                 blocks={blocks}
                 fs={selected?.sample_rate ?? 48000}
                 yTop={yTop}
+                yBottom={yBottom}
                 preampGainDb={preampGainDb}
                 curveChannel={channelOn ? effActiveChannel : "all"}
                 onCurveChannelChange={handleCurveChannelChange}

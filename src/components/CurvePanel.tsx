@@ -9,6 +9,7 @@ interface CurvePanelProps {
   blocks: Block[];
   fs: number;
   yTop: number;
+  yBottom?: number;
   preampGainDb?: number;
   curveChannel: string;
   onCurveChannelChange: (v: string) => void;
@@ -21,6 +22,7 @@ function CurvePanel({
   blocks,
   fs,
   yTop,
+  yBottom,
   preampGainDb = 0,
   curveChannel,
   onCurveChannelChange,
@@ -88,6 +90,7 @@ function CurvePanel({
         fs={fs}
         curveW={curveW}
         yTop={yTop}
+        yBottom={yBottom}
         preampGainDb={preampGainDb}
       />
     </div>
