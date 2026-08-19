@@ -193,7 +193,9 @@ export function buildEvalFreqs(blocks: Block[]): number[] {
   for (let i = 1; i < centers.length; i++) {
     freqs.add(Math.sqrt(centers[i - 1].fc * centers[i].fc));
   }
-  return [...freqs];
+  // 必须按频率升序返回：细化点是网格之后插入的，路径按数组顺序连线，
+  // 不排序会导致每个峰与 20k 之间多出一条连线。
+  return [...freqs].sort((a, b) => a - b);
 }
 
 function freqPath(
