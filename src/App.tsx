@@ -1370,7 +1370,6 @@ export default function App() {
         open={installOpen}
         onOpenChange={setInstallOpen}
         devices={devices}
-        onError={onError}
         onRefresh={refresh}
         onInstalled={handleInstalled}
         onBusyChange={setInstallBusy}

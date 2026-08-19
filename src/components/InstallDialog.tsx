@@ -16,7 +16,6 @@ interface InstallDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   devices: Device[];
-  onError: (msg: string) => void;
   onRefresh: () => Promise<void> | void;
   onInstalled: (name: string) => void;
   onBusyChange?: (busy: boolean) => void;
@@ -34,7 +33,6 @@ function InstallDialog({
   open,
   onOpenChange,
   devices,
-  onError,
   onRefresh,
   onInstalled,
   onBusyChange,
@@ -131,7 +129,6 @@ function InstallDialog({
       if (!aliveRef.current) return;
       setPhase("failed");
       setStatusText(friendlyError(e));
-      onError(friendlyError(e));
     } finally {
       onBusyChange?.(false);
       unlisten();
