@@ -24,12 +24,6 @@ interface InstallDialogProps {
 
 type Phase = "idle" | "installing" | "restarting" | "verifying" | "done" | "failed";
 
-interface Attempt {
-  mode: string;
-  score: number;
-  max: number;
-}
-
 function InstallDialog({
   open,
   onOpenChange,
@@ -41,7 +35,6 @@ function InstallDialog({
   const [installingGuid, setInstallingGuid] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [statusText, setStatusText] = useState("");
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
   const aliveRef = useRef(true);
 
   useEffect(() => {
@@ -57,7 +50,6 @@ function InstallDialog({
       setInstallingGuid(null);
       setPhase("idle");
       setStatusText("");
-      setAttempts([]);
     }
   }, [open]);
 
@@ -80,16 +72,8 @@ function InstallDialog({
         );
         break;
       case "test":
-        if (ev.pipe) {
-          setPhase("verifying");
-          setStatusText(t("install.phase.verifying"));
-        } else if (typeof ev.score === "number" && ev.mode) {
-          const mode = ev.mode;
-          const score = ev.score;
-          const max = ev.max ?? 33;
-          setPhase("verifying");
-          setAttempts((prev) => [...prev.filter((a) => a.mode !== mode), { mode, score, max }]);
-        }
+        setPhase("verifying");
+        setStatusText(t("install.phase.verifying"));
         break;
       case "retry":
         setStatusText(t("install.phase.retry", { from: ev.from, to: ev.to }));
@@ -110,7 +94,6 @@ function InstallDialog({
     setInstallingGuid(d.guid);
     setPhase("installing");
     setStatusText(t("install.phase.installing"));
-    setAttempts([]);
     onBusyChange?.(true);
     const unlisten = await onInstallProgress(handleProgress);
     try {
@@ -172,7 +155,6 @@ function InstallDialog({
                 device={installingDevice}
                 phase={phase}
                 statusText={statusText}
-                attempts={attempts}
                 onRetry={() => void handleInstall(installingDevice)}
                 onDone={() => setInstallingGuid(null)}
               />
@@ -228,14 +210,12 @@ function InstallProgressView({
   device,
   phase,
   statusText,
-  attempts,
   onRetry,
   onDone,
 }: {
   device: Device;
   phase: Phase;
   statusText: string;
-  attempts: Attempt[];
   onRetry: () => void;
   onDone: () => void;
 }) {
@@ -260,19 +240,6 @@ function InstallProgressView({
         />
       </div>
       <p className="install-progress-text">{statusText}</p>
-      {attempts.length > 0 && (
-        <div className="install-attempts">
-          <div className="install-attempts-title">{t("install.phase.detail")}</div>
-          {attempts.map((a) => (
-            <div className="install-attempt" key={a.mode}>
-              <span>{a.mode}</span>
-              <span className="install-attempt-score">
-                {a.score}/{a.max}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
       {!running && (
         <div className="install-actions">
           {phase === "failed" && (

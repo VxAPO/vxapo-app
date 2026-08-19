@@ -38,17 +38,7 @@ export interface InstallResult {
 export type InstallProgressEvent =
   | { event: "install_write"; mode: string }
   | { event: "service"; action: "stopping" | "stopped" | "starting" | "running" }
-  | {
-      event: "test";
-      pipe?: string;
-      mode?: string;
-      score?: number;
-      max?: number;
-      premix?: boolean;
-      postmix?: boolean;
-      child_premix?: boolean;
-      child_postmix?: boolean;
-    }
+  | { event: "test"; pipe?: string; mode?: string }
   | { event: "retry"; from: string; to: string; reason?: string }
   | {
       event: "complete";
