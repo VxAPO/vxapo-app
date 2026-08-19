@@ -646,7 +646,9 @@ async fn install_device(app: tauri::AppHandle, guid: String) -> Result<InstallRe
 
     if let Some(complete) = last_complete.lock().unwrap().clone() {
         // 成功：清理临时进度文件；失败保留，供诊断（trace 步骤在 progress 里）。
-        let _ = std::fs::remove_file(&progress_path);
+        if complete.get("success").and_then(|s| s.as_bool()).unwrap_or(false) {
+            let _ = std::fs::remove_file(&progress_path);
+        }
         return Ok(install_result_from_event(&complete));
     }
     let tail = progress_tail(&progress_path, 12);
