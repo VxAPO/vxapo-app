@@ -6,6 +6,7 @@ import { useInterval } from "./useInterval";
 export function useDevices(
   onError: (msg: string) => void,
   onUninstalled?: (name: string) => void,
+  paused?: boolean,
 ) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null);
@@ -48,7 +49,9 @@ export function useDevices(
     void load();
   }, [load]);
 
-  useInterval(load, 5000);
+  // 安装进行中暂停轮询：注册表写入后设备会瞬时显示"已安装"，
+  // 但标签页要等安装完成（done/failed 后的 onRefresh）才出现。
+  useInterval(load, paused ? null : 5000);
 
   const installedDevices = useMemo(() => devices.filter(isInstalled), [devices]);
   const selected = devices.find((d) => d.guid === selectedGuid) ?? null;

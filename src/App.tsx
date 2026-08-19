@@ -93,6 +93,7 @@ export default function App() {
   const [loadErr, setLoadErr] = useState("");
   const onError = useCallback((msg: string) => setLoadErr(msg), []);
   const handleUninstalled = useCallback((name: string) => notify(t("notify.uninstalled", { name })), [notify]);
+  const [installBusy, setInstallBusy] = useState(false);
 
   const {
     selectedGuid,
@@ -106,7 +107,7 @@ export default function App() {
     setUninstallTarget,
     uninstalling,
     confirmUninstall,
-  } = useDevices(onError, handleUninstalled);
+  } = useDevices(onError, handleUninstalled, installBusy);
 
   const [channelOn, setChannelOn] = useState(false);
   const [activeChannel, setActiveChannel] = useState("L");
@@ -1372,6 +1373,7 @@ export default function App() {
         onError={onError}
         onRefresh={refresh}
         onInstalled={handleInstalled}
+        onBusyChange={setInstallBusy}
       />
       <UninstallDialog
         device={uninstallTarget}

@@ -19,6 +19,7 @@ interface InstallDialogProps {
   onError: (msg: string) => void;
   onRefresh: () => Promise<void> | void;
   onInstalled: (name: string) => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 type Phase = "idle" | "installing" | "restarting" | "verifying" | "done" | "failed";
@@ -36,6 +37,7 @@ function InstallDialog({
   onError,
   onRefresh,
   onInstalled,
+  onBusyChange,
 }: InstallDialogProps) {
   const [installingGuid, setInstallingGuid] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -110,6 +112,7 @@ function InstallDialog({
     setPhase("installing");
     setStatusText(t("install.phase.installing"));
     setAttempts([]);
+    onBusyChange?.(true);
     const unlisten = await onInstallProgress(handleProgress);
     try {
       const res = await installDevice(d.guid);
@@ -130,6 +133,7 @@ function InstallDialog({
       setStatusText(friendlyError(e));
       onError(friendlyError(e));
     } finally {
+      onBusyChange?.(false);
       unlisten();
     }
   };
@@ -142,7 +146,17 @@ function InstallDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="vx-dialog-overlay" />
-        <Dialog.Content className="vx-dialog-content install-dialog" aria-describedby={undefined}>
+        <Dialog.Content
+          className="vx-dialog-content install-dialog"
+          aria-describedby={undefined}
+          onInteractOutside={(e) => {
+            // 安装进行中只允许通过关闭按钮/完成/重试关闭。
+            if (installingGuid) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (installingGuid) e.preventDefault();
+          }}
+        >
           <div className="vx-dialog-head">
             <Dialog.Title className="vx-dialog-title">{t("install.title")}</Dialog.Title>
             <Dialog.Close className="vx-dialog-close" aria-label={t("close.settings")}>
