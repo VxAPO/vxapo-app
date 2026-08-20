@@ -269,7 +269,7 @@
   border-radius: 9999px;
   border: 1px solid #3b3c3f;
   color: #3b3c3f;
-  background: transparent;
+  background: var(--surface-inset);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;

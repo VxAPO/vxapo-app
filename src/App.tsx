@@ -229,6 +229,7 @@ export default function App() {
     setCopyOpen,
     marquee,
     selGeom,
+    selGeomReady,
     onBodyPointerDown,
     onBodyPointerMove,
     onBodyPointerUp,
@@ -647,7 +648,7 @@ export default function App() {
             </div>
 
             <AnimatePresence mode="wait" initial={false}>
-              {selGeom && selectedIds.length > 0 && !toolbarHidden && (
+              {selGeom && selectedIds.length > 0 && !toolbarHidden && selGeomReady && (
                 <SelectionToolbar
                   selectedCount={selectedIds.length}
                   channelOn={channelOn}

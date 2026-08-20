@@ -49,6 +49,14 @@ export function useMarqueeSelection({
     bodyW: number;
     bodyH: number;
   } | null>(null);
+  // 几何就绪门闩：视图切换后置 false，必须等几何按当前视图重测完成才允许
+  // 浮窗出现，避免浮窗带着旧/兜底几何先挂载、再飞过去（淡入时机随机）。
+  const [selGeomReady, setSelGeomReady] = useState(true);
+  const selGeomViewRef = useRef<string | null>(null);
+  if (selGeomViewRef.current !== viewRef.current) {
+    selGeomViewRef.current = viewRef.current;
+    setSelGeomReady(false);
+  }
   const [selGeomTick, setSelGeomTick] = useState(0);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
@@ -249,6 +257,7 @@ export function useMarqueeSelection({
     const body = bodyRef.current;
     if (!body || selectedIds.length === 0) {
       setSelGeom(null);
+      setSelGeomReady(true);
       return;
     }
     const rect = body.getBoundingClientRect();
@@ -271,6 +280,7 @@ export function useMarqueeSelection({
         bodyW: rect.width,
         bodyH: contentH,
       });
+      setSelGeomReady(true);
       return;
     }
     let minX = Infinity;
@@ -293,6 +303,7 @@ export function useMarqueeSelection({
       bodyW: rect.width,
       bodyH: contentH,
     });
+    setSelGeomReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, blocks, selGeomTick]);
 
@@ -394,6 +405,7 @@ export function useMarqueeSelection({
     setCopyOpen,
     marquee,
     selGeom,
+    selGeomReady,
     selGeomTick,
     onBodyPointerDown,
     onBodyPointerMove,
