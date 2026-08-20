@@ -1,0 +1,241 @@
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .device-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .device-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1700px) {
+  .device-cards {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.preset-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 12px 12px;
+  position: relative;
+  box-shadow: inset 3px 0 0 var(--preset-accent, transparent), var(--card-shadow);
+}
+
+.preset-card.used {
+  opacity: 0.55;
+  filter: grayscale(0.8);
+  cursor: not-allowed;
+}
+
+.preset-card.used .add {
+  pointer-events: none;
+}
+
+.add:disabled {
+  background: var(--disabled-fill);
+  color: var(--on-accent);
+  cursor: not-allowed;
+}
+
+/* 自定义预设选色盘 */
+.preset-swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.preset-swatch.active {
+  border-color: var(--swatch-hover, var(--text-primary));
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.p-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.p-group {
+  font-size: 14px;
+  color: var(--preset-accent, var(--brand-deep));
+}
+
+.p-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sub {
+  font-size: 11px;
+  color: var(--text-weak);
+}
+
+.add {
+  border-radius: 9999px;
+  height: 24px;
+  padding: 0 12px;
+  font-size: 12px;
+  background: var(--preset-accent, var(--brand));
+  color: var(--on-accent);
+  font-weight: 500;
+}
+
+.add:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+.adv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adv-cat {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 14px 2px 2px;
+}
+
+.adv-cat:first-child {
+  margin-top: 0;
+}
+
+.adv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 13px;
+  box-shadow: var(--card-shadow);
+  transition: box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.adv-pill .adv-plus {
+  color: var(--brand-deep);
+  display: inline-flex;
+  flex: none;
+  transition: transform 0.18s ease;
+}
+
+.adv-pill:hover:not(:disabled) {
+  box-shadow: var(--hover-shadow);
+  transform: translateY(-1px);
+}
+
+.adv-pill.disabled {
+  color: var(--text-weak);
+  box-shadow: none;
+  border-style: dashed;
+  cursor: default;
+}
+
+.adv-pill.active {
+  border-color: var(--brand);
+}
+
+.adv-pill.active .adv-plus {
+  transform: rotate(45deg);
+}
+
+.circ-plus {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.circ-plus.on {
+  transform: rotate(45deg);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--content);
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  overflow: hidden;
+}
+
+/* 自定义预设卡片右上角删除 */
+.preset-del {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-weak);
+  padding: 0;
+}
+
+.preset-del:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 自定义预设为空时的占位卡：文字居中 */
+.preset-card.preset-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 76px;
+}
+
+.preset-card.preset-empty .p-desc {
+  text-align: center;
+  margin: 0;
+}

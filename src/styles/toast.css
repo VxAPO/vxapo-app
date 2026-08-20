@@ -1,0 +1,20 @@
+/* ── Toast 提示 ───────────────────────────────────────────── */
+
+.vx-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  z-index: 70;
+  background: var(--accent-bg);
+  color: var(--on-accent);
+  border-radius: 9999px;
+  padding: 8px 16px;
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes vx-toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+

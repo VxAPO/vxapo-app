@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import type { CSSProperties, RefObject, ReactNode } from "react";
-import type { FlyState } from "../hooks/useDragSort";
+import type { FlyState } from "../lib/dragSortTypes";
 import { snapPx } from "../lib/snap";
 
 interface DragLayerProps {

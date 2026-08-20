@@ -1,0 +1,704 @@
+.curve-wrap {
+  background: color-mix(in srgb, var(--card) 56%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 18px 14px;
+  flex: 1;
+  min-width: 0;
+  flex-shrink: 0;
+  box-shadow: var(--card-shadow);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(40px) saturate(1.4);
+  -webkit-backdrop-filter: blur(40px) saturate(1.4);
+  pointer-events: auto;
+}
+
+.curve-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+}
+
+.curve-wrap > svg {
+  margin-left: -10px;
+}
+
+.curve-wrap > svg > path,
+.curve-wrap > svg > circle,
+.curve-wrap > svg > line {
+  transition: stroke 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.curve-head .t {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1;
+}
+
+.curve-head select {
+  border-radius: 9999px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.bottom-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  padding: 10px 12px 12px;
+  pointer-events: none;
+}
+
+.dev-props-card {
+  flex: none;
+  width: auto;
+  min-width: 240px;
+  background-color: color-mix(in srgb, var(--card) 56%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 18px 12px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(40px) saturate(1.4);
+  -webkit-backdrop-filter: blur(40px) saturate(1.4);
+  pointer-events: auto;
+}
+
+.dev-props-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  height: 32px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.dev-prop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dev-prop b {
+  color: var(--text-primary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dev-prop .dev-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dev-prop-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dev-prop-btn {
+  flex: none;
+  border-radius: 9999px;
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.dev-prop-btn:hover:not(:disabled) {
+  border-color: var(--brand-deep);
+  color: var(--brand-deep);
+  background: var(--brand-soft);
+}
+
+.dev-prop-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Radix 组件（shadcn 风格） ───────────────────────────── */
+
+.vx-switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.vx-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: 28px;
+  height: 18px;
+  padding: 0;
+  border-radius: 9999px;
+  background: var(--track);
+  border: 1px solid var(--border);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  flex: none;
+}
+
+.vx-switch[data-state="checked"] {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.vx-switch-thumb {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--thumb);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transform: translateX(2px);
+  transition: transform 0.15s ease;
+}
+
+.vx-switch[data-state="checked"] .vx-switch-thumb {
+  transform: translateX(14px);
+}
+
+.vx-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+}
+
+.vx-select:focus-visible,
+.vx-select[data-state="open"] {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.vx-select-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--text-weak);
+}
+
+.vx-select-icon svg {
+  display: block;
+}
+
+.vx-field .vx-select {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.vx-select-content {
+  z-index: 70;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  min-width: var(--radix-select-trigger-width);
+}
+
+.vx-select-viewport {
+  padding: 4px;
+}
+
+.vx-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.vx-select-item[data-highlighted] {
+  background: var(--hover);
+}
+
+.vx-select-indicator {
+  display: inline-flex;
+  color: var(--brand-deep);
+}
+
+/* ── 设置弹窗（Radix Dialog，shadcn 风格） ─────────────────── */
+
+.vx-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 13, 18, 0.45);
+  z-index: 60;
+  animation: vx-fade 0.15s ease;
+}
+
+.vx-dialog-content {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 48px));
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  padding: 0 16px 16px;
+  z-index: 61;
+  animation: vx-pop 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.vx-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.vx-dialog-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.vx-dialog-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-weak);
+}
+
+.vx-dialog-close:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.vx-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vx-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 4px;
+  border-radius: 12px;
+}
+
+.vx-setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vx-setting-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vx-setting-desc {
+  font-size: 11px;
+  color: var(--text-weak);
+}
+
+.vx-setting-value {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+@keyframes vx-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vx-pop {
+  from { opacity: 0; transform: translate(-50%, -48%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* ── 视图切换（语义视图 / 参数视图） ─────────────────────────── */
+
+.seg.view-seg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.view-seg .seg-thumb {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: 0;
+  width: calc(50% - 2px);
+  border-radius: 9999px;
+  background-color: var(--brand-bg);
+  border: 1px solid var(--brand);
+  box-shadow: var(--card-shadow);
+  transition:
+    left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.view-seg .seg-thumb.right {
+  left: calc(50% + 2px);
+}
+
+.view-seg button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+  background: transparent;
+}
+
+.view-seg button svg {
+  transition: color 0.25s ease;
+}
+
+.view-seg button:hover {
+  color: var(--text-primary);
+}
+
+.view-seg button[aria-pressed="true"] {
+  background: transparent;
+  color: var(--brand);
+  font-weight: 400;
+}
+
+.view-seg button[aria-pressed="true"] svg {
+  color: var(--brand);
+}
+
+.view-seg[data-dir="right"] button[aria-pressed="true"] svg {
+  animation: vx-icon-tilt-right 0.65s ease;
+}
+
+.view-seg[data-dir="left"] button[aria-pressed="true"] svg {
+  animation: vx-icon-tilt-left 0.65s ease;
+}
+
+.view-seg button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@keyframes vx-icon-tilt-right {
+  0% { transform: translateX(0) rotate(0); }
+  38% { transform: translateX(2px) rotate(8deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+@keyframes vx-icon-tilt-left {
+  0% { transform: translateX(0) rotate(0); }
+  38% { transform: translateX(-2px) rotate(-8deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+/* ── 卡片拖拽（dnd-kit） ───────────────────────────────────── */
+
+.drag-card {
+  position: relative;
+  z-index: 1;
+  transition: box-shadow 0.18s ease;
+}
+
+.drag-card:hover {
+  box-shadow: var(--hover-shadow);
+}
+
+.drag-ghost {
+  background: var(--surface-inset);
+  border: 1px dashed var(--border-strong);
+  border-radius: 16px;
+}
+
+/* 拖拽中的原卡片就地变成占位槽：内容隐藏、虚线描边，
+   由卡片自己留在网格流内占位，避免出现第二张卡把占位挤掉 */
+.drag-card.is-dragging {
+  z-index: 0;
+  background: var(--surface-inset);
+  border-color: var(--border-strong);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.drag-card.is-dragging > * {
+  visibility: hidden;
+}
+
+.drag-fly {
+  position: relative;
+  width: fit-content;
+  min-width: 0;
+}
+
+.drag-fly.overlay-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 75;
+  pointer-events: none;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  animation: drag-shadow-lift 0.18s ease-out;
+}
+
+/* 抓取时阴影从 hover 状态平滑扩大到拖拽强阴影 */
+@keyframes drag-shadow-lift {
+  from {
+    box-shadow: var(--hover-shadow);
+  }
+  to {
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  }
+}
+
+.drag-fly.fly-anim {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+}
+
+/* 落地动画期间原卡片内容的硬性隐藏兜底：不受 is-dragging 类时序影响 */
+[data-fly-hidden="1"] > * {
+  visibility: hidden !important;
+}
+
+.drag-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 10px;
+  margin: -8px 0 2px;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 4px;
+}
+
+.drag-bar-line {
+  width: 40px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  transition: background 0.15s ease;
+}
+
+.drag-bar:hover .drag-bar-line {
+  background: var(--text-secondary);
+}
+
+/* 拖拽浮卡顶栏灰条：拖拽时直接使用 hover 颜色 */
+.drag-fly .drag-bar-line {
+  background: var(--text-secondary);
+}
+
+/* 落地：飞行副本的灰条从 hover 色过渡回常规灰 */
+.drag-fly.fly-anim .drag-bar-line {
+  background: var(--border-strong);
+  animation: drag-bar-land 0.45s ease-out forwards;
+}
+
+@keyframes drag-bar-land {
+  from {
+    background: var(--text-secondary);
+  }
+  to {
+    background: var(--border-strong);
+  }
+}
+
+
+/* ── 卸载确认弹窗 ─────────────────────────────────────────── */
+
+.uninstall-body {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.uninstall-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
+}
+
+.uninstall-main {
+  min-width: 0;
+}
+
+.uninstall-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.uninstall-device-name {
+  font-weight: 700;
+}
+
+.uninstall-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.uninstall-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.danger-btn {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.danger-btn:hover {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.danger-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* ── 安装设备弹窗 ─────────────────────────────────────────── */
+
+.install-dialog {
+  width: min(520px, calc(100vw - 48px));
+}
+
+.install-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── 曲线 hover 指示与悬浮卡 ───────────────────────────────── */
+
+.curve-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  width: max-content;
+  white-space: nowrap;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.curve-tip-body {
+  background: var(--accent-bg);
+  color: var(--on-accent);
+  border-radius: 10px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  animation: curve-tip-morph 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.curve-tip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes curve-tip-morph {
+  from {
+    transform: scale(0.86);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.curve-tip .tip-gain {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .curve-tip-body {
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 14px rgba(var(--shadow-ink), 0.45);
+}
+

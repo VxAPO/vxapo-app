@@ -1,0 +1,161 @@
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  height: 38px;
+  padding: 0 10px;
+  margin-top: 8px;
+  background: transparent;
+  flex: 0 0 auto;
+}
+
+/* 无设备：内容区退回 frame 底色（保留圆角描边），不出现任何 --content / tab 占位 */
+.content.is-empty {
+  background: var(--frame);
+}
+
+.content.is-empty .tab-bar {
+  display: none;
+}
+
+.content.is-empty .device-body {
+  background: transparent;
+}
+
+.tab-group {
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tab-item {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.tab-item.active {
+  z-index: 3;
+}
+
+.tab-item .tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 30px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-weak);
+  cursor: pointer;
+  background: transparent;
+  border-radius: 16px;
+  margin: 4px 6px 4px 2px;
+  min-width: 0;
+  width: 100%;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-item .tab-btn:hover {
+  background: var(--frame);
+  color: var(--text-secondary);
+}
+
+.tab-item.active .tab-btn {
+  background-color: var(--tab-active-bg);
+  color: var(--text-primary);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tab-item.active .tab-btn:hover {
+  background-color: var(--tab-active-bg);
+}
+
+.tab-dot {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--text-weak);
+  background: transparent;
+  z-index: 5;
+  padding: 0;
+}
+
+.tab-dot.on {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.tab-dot:hover {
+  border-color: var(--brand-deep);
+}
+
+.tab-close {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 0;
+  color: var(--text-secondary);
+  z-index: 4;
+}
+
+.tab-close svg {
+  display: block;
+}
+
+.tab-close:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tab-add {
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: transparent;
+  color: #555555;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.tab-add:hover {
+  color: var(--brand-deep);
+  background: var(--brand-soft);
+}
+
+:root[data-theme="dark"] .tab-add {
+  color: var(--text-secondary);
+}
+
+:root[data-theme="dark"] .tab-add:hover {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+

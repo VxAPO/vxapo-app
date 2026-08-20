@@ -1,0 +1,280 @@
+/* ── 深色模式：标签页 / 设备启用开关 / 卡片 hover 与描边补齐 ── */
+:root[data-theme="dark"] .tab-item .tab-btn:hover {
+  background: var(--tab-inactive);
+  color: var(--text-primary);
+}
+
+:root[data-theme="dark"] .tab-item.active .tab-btn,
+:root[data-theme="dark"] .tab-item.active .tab-btn:hover {
+  background-color: var(--tab-active-bg);
+  color: var(--text-primary);
+}
+
+:root[data-theme="dark"] .tab-dot:hover {
+  border-color: var(--brand);
+}
+
+:root[data-theme="dark"] .tab-dot.on:hover {
+  border-color: var(--brand-deep);
+}
+
+:root[data-theme="dark"] .enable-dot:hover {
+  border-color: var(--brand);
+}
+
+:root[data-theme="dark"] .enable-dot.on:hover {
+  border-color: var(--brand-deep);
+}
+
+:root[data-theme="dark"] .sem-group .enable-dot:hover {
+  border-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
+}
+
+:root[data-theme="dark"] .sem-group .enable-dot.on:hover {
+  border-color: var(--card-accent-hover-dark, var(--card-accent-dark, var(--card-accent, var(--brand))));
+}
+
+:root[data-theme="dark"] .effect-dot:hover {
+  border-color: var(--brand);
+}
+
+:root[data-theme="dark"] .effect-dot.on:hover {
+  border-color: var(--brand-deep);
+}
+
+:root[data-theme="dark"] .ch-pill.active,
+:root[data-theme="dark"] .ch-pill.active:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+:root[data-theme="dark"] .install-btn,
+:root[data-theme="dark"] .install-btn:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+:root[data-theme="dark"] .dev-prop-btn:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+:root[data-theme="dark"] .sel-action.save,
+:root[data-theme="dark"] .sel-action.save:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+:root[data-theme="dark"] .adv-pill .adv-plus,
+:root[data-theme="dark"] .circ-plus {
+  color: var(--brand);
+}
+
+:root[data-theme="dark"] .drag-card:hover {
+  box-shadow: var(--hover-shadow), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme="dark"] .drag-card.is-dragging,
+:root[data-theme="dark"] .drag-card.is-dragging:hover {
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .gs-thumb::after {
+  border-color: #1d1f22;
+  box-shadow: 0 1px 3px rgba(var(--shadow-ink), 0.55);
+}
+
+:root[data-theme="dark"] .vx-switch-thumb {
+  box-shadow: 0 1px 2px rgba(var(--shadow-ink), 0.55);
+}
+
+:root[data-theme="dark"] .vx-dialog-content {
+  box-shadow: 0 12px 40px rgba(var(--shadow-ink), 0.45);
+}
+
+:root[data-theme="dark"] .vx-toast {
+  box-shadow: 0 4px 16px rgba(var(--shadow-ink), 0.45);
+}
+
+:root[data-theme="dark"] .drag-fly.overlay-fixed,
+:root[data-theme="dark"] .drag-fly.overlay-fixed.effect-card {
+  animation: drag-shadow-lift-dark 0.18s ease-out;
+  box-shadow: 0 10px 28px rgba(var(--shadow-ink), 0.45);
+}
+
+@keyframes drag-shadow-lift-dark {
+  from {
+    box-shadow: var(--hover-shadow);
+  }
+  to {
+    box-shadow: 0 10px 28px rgba(var(--shadow-ink), 0.45);
+  }
+}
+
+:root[data-theme="dark"] .sel-toolbar {
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  border: 1px solid #3f4348;
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 16px rgba(var(--shadow-ink), 0.5);
+}
+
+@keyframes sel-toolbar-in-dark {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      var(--hover-shadow);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 6px 16px rgba(var(--shadow-ink), 0.45);
+  }
+}
+
+/* 深色模式：组色/预设色使用预存的深色基础色与深色 hover 色 */
+:root[data-theme="dark"] .preset-card {
+  box-shadow:
+    inset 3px 0 0 var(--preset-accent-dark, var(--preset-accent, transparent)),
+    var(--card-shadow);
+}
+
+:root[data-theme="dark"] .preset-card .p-group {
+  color: var(--preset-accent-dark, var(--preset-accent, var(--brand-deep)));
+}
+
+:root[data-theme="dark"] .preset-card .add {
+  background: var(--preset-accent-dark, var(--preset-accent, var(--brand)));
+}
+
+:root[data-theme="dark"] .group-card.enabled.sem-group {
+  border-color: color-mix(in srgb, var(--card-accent-dark, var(--card-accent, var(--brand))) 55%, transparent);
+}
+
+
+
+:root[data-theme="dark"] .sem-group .enable-dot.on {
+  background: var(--card-accent-dark, var(--card-accent, var(--brand)));
+  border-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
+}
+
+:root[data-theme="dark"] .sem-chip {
+  background: color-mix(in srgb, var(--card-accent-dark, var(--card-accent, var(--brand))) 14%, transparent);
+  color: var(--card-accent-dark, var(--card-accent, var(--brand-deep)));
+}
+
+:root[data-theme="dark"] .sem-chip:hover {
+  background: color-mix(in srgb, var(--card-accent-dark, var(--card-accent, var(--brand))) 24%, transparent);
+}
+
+:root[data-theme="dark"] .drag-card.is-selected {
+  outline-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
+}
+
+:root[data-theme="dark"] .drag-card.is-selected:not(.is-dragging) {
+  box-shadow: var(--hover-shadow);
+}
+
+:root[data-theme="dark"] .drag-card.is-dragging.is-selected {
+  border-color: var(--border-strong);
+}
+
+:root[data-theme="dark"] .drag-card.is-dragging.sem-group,
+:root[data-theme="dark"] .drag-card.is-dragging:not(.is-selected).sem-group {
+  border-color: var(--border-strong);
+  border-left-color: var(--border-strong);
+}
+
+/* 深色模式：曲线卡片与设备属性毛玻璃更实，避免透底发灰 */
+:root[data-theme="dark"] .curve-wrap,
+:root[data-theme="dark"] .dev-props-card {
+  background-color: color-mix(in srgb, var(--card) 82%, transparent);
+  backdrop-filter: blur(28px) saturate(1.15);
+  -webkit-backdrop-filter: blur(28px) saturate(1.15);
+}
+
+/* 深色模式：SVG 曲线/坐标轴实线提亮，压过虚线网格 */
+:root[data-theme="dark"] .curve-wrap > svg > path,
+:root[data-theme="dark"] .curve-wrap > svg > circle {
+  stroke: #47c3d1;
+}
+
+:root[data-theme="dark"] .curve-wrap > svg > line:not([stroke-dasharray]) {
+  stroke: rgba(255, 255, 255, 0.42);
+}
+
+.sem-label {
+  font-size: 12px;
+  color: var(--text-weak);
+  flex: none;
+}
+
+.fader-row.semantic .sem-label {
+  flex: none;
+}
+
+.fader-row.semantic .sem-label:first-child {
+  text-align: right;
+}
+
+.fader-row.semantic .sem-label:last-child {
+  text-align: left;
+}
+
+.fader-row.semantic {
+  padding: 0;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+/* 语义视图组标识：有组卡不再骑边，组色只用于组名/开关/标签等元素 */
+.sem-group {
+}
+
+.sem-group .group-head {
+  padding-right: 96px;
+}
+
+/* 组卡数字标号开关配色统一跟随组色 */
+.sem-group .enable-dot.on {
+  background: var(--card-accent, var(--brand));
+  border-color: var(--card-accent, var(--brand));
+  color: var(--on-accent);
+}
+
+.sem-group .enable-dot:hover {
+  border-color: var(--card-accent, var(--brand));
+}
+
+.sem-group .enable-dot.on:hover {
+  border-color: var(--card-accent-hover, var(--card-accent, var(--brand)));
+}
+
+.sem-chip {
+  position: absolute;
+  top: 18px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--card-accent, var(--brand)) 14%, transparent);
+  color: var(--card-accent, var(--brand-deep));
+  font-size: 11px;
+  font-weight: 600;
+  flex: none;
+  cursor: pointer;
+}
+
+.sem-chip:hover {
+  background: color-mix(in srgb, var(--card-accent, var(--brand)) 24%, transparent);
+}
+

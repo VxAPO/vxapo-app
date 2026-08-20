@@ -1,0 +1,325 @@
+/* VxAPO App — 新壳样式（UI 设计规范 02/03/04） */
+
+/* 注册主题颜色为可插值自定义属性，让明暗切换时所有颜色同步过渡 */
+
+@property --frame {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f0f3f6;
+}
+
+@property --content {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f7f9fc;
+}
+
+@property --card {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f7f9fc;
+}
+
+@property --surface-inset {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(52,63,81,0.02);
+}
+
+@property --text-primary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3d4552;
+}
+
+@property --text-secondary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3d4552;
+}
+
+@property --text-weak {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #69707c;
+}
+
+@property --border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d9dee7;
+}
+
+@property --border-strong {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b3bbc8;
+}
+
+@property --hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e3e8ef;
+}
+
+@property --track {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e3e7ee;
+}
+
+@property --brand {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #47c3d1;
+}
+
+@property --brand-deep {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #009aa2;
+}
+
+@property --brand-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(71,195,209,0.1);
+}
+
+@property --brand-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e2f5f7;
+}
+
+@property --danger {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #dc3d43;
+}
+
+@property --danger-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(220,61,67,0.1);
+}
+
+@property --on-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --accent-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3b3c3f;
+}
+
+@property --thumb {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --ring-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(15,23,42,0.14);
+}
+
+@property --scrollbar {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d9dce4;
+}
+
+@property --scrollbar-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #c2c7d1;
+}
+
+@property --disabled-fill {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b8bec9;
+}
+
+@property --tab-inactive {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e3e7ee;
+}
+
+@property --tab-active {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+
+:root[data-theme="light"] {
+  --frame: #f0f3f6;
+  --content: #f7f9fc;
+  --card: #f7f9fc;
+  --surface-inset: rgb(52 63 81 / 2%);
+  --text-primary: #3d4552;
+  --text-secondary: #3d4552;
+  --text-weak: #69707c;
+  --border: #d9dee7;
+  --border-strong: #b3bbc8;
+  --hover: #e3e8ef;
+  --track: #e3e7ee;
+  --theme-hover-bg: #c2cbd8;
+  --brand: #47c3d1;
+  --brand-deep: #009aa2;
+  --brand-soft: rgba(71, 195, 209, 0.1);
+  --brand-bg: #e2f5f7;
+  --danger: #dc3d43;
+  --danger-soft: rgba(220, 61, 67, 0.1);
+  --on-accent: #ffffff;
+  --accent-bg: #3b3c3f;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.02), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --thumb: #ffffff;
+  --ring-hover: rgba(15, 23, 42, 0.14);
+  --hover-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 4px 10px rgba(15, 23, 42, 0.08);
+  --scrollbar: #d9dce4;
+  --scrollbar-hover: #c2c7d1;
+  --disabled-fill: #b8bec9;
+  --tab-active-bg: #e9edf1;
+}
+
+:root[data-theme="dark"] {
+  --frame: #16181b;
+  --content: #1d1f22;
+  --card: #1d1f22;
+  --surface-inset: rgba(147, 197, 253, 0.02);
+  --text-primary: #c1c6cd;
+  --text-secondary: #969ca4;
+  --text-weak: #717882;
+  --border: #373a3e;
+  --border-strong: #51555b;
+  --hover: #25292e;
+  --track: #22262a;
+  --theme-hover-bg: #363c45;
+  --brand: #00919e;
+  --brand-deep: #006265;
+  --brand-soft: rgba(71, 195, 209, 0.14);
+  --brand-bg: #1d3e44;
+  --danger: #ea5556;
+  --danger-soft: rgba(234, 85, 86, 0.15);
+  --on-accent: #c1c6cd;
+  --accent-bg: #43474e;
+  --shadow-ink: 15, 18, 23;
+  --card-shadow: 0 1px 3px rgba(var(--shadow-ink), 0.7), 0 4px 14px rgba(var(--shadow-ink), 0.4);
+  --thumb: #c5c9d0;
+  --ring-hover: rgba(255, 255, 255, 0.14);
+  --hover-shadow: 0 4px 10px rgba(var(--shadow-ink), 0.8), 0 6px 16px rgba(var(--shadow-ink), 0.55);
+  --scrollbar: #3f4348;
+  --scrollbar-hover: #4f5358;
+  --disabled-fill: #32363b;
+  --tab-inactive: #2f3135;
+  --tab-active: #45474c;
+  --tab-active-bg: #45474c;
+}
+
+/* 切换主题的瞬间给整页元素加颜色过渡，结束后移除，避免日常全局过渡的卡顿 */
+.theme-transition {
+  transition:
+    --frame 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --content 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --card 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --surface-inset 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --text-primary 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --text-secondary 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --text-weak 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --border 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --border-strong 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --track 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --brand 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --brand-deep 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --brand-soft 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --brand-bg 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --danger 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --danger-soft 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --on-accent 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --accent-bg 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --thumb 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --scrollbar 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --scrollbar-hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --disabled-fill 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --tab-inactive 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --tab-active 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --tab-active-bg 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 主题切换期间以下元素直接跟随根变量变化，避免自身 transition 叠加造成节奏不一致 */
+.theme-transition .dev-props-card,
+.theme-transition .view-seg .seg-thumb,
+.theme-transition .side-seg .ind,
+.theme-transition .curve-wrap > svg > path,
+.theme-transition .curve-wrap > svg > circle,
+.theme-transition .curve-wrap > svg > line,
+.theme-transition .drag-bar-line,
+.theme-transition .enable-dot,
+.theme-transition .effect-dot,
+.theme-transition .tab-dot,
+.theme-transition .gs-thumb::before,
+.theme-transition .gs-thumb::after,
+.theme-transition .theme-seg button,
+.theme-transition .adv-pill,
+.theme-transition .adv-pill .adv-plus,
+.theme-transition .view-seg button,
+.theme-transition .view-seg button svg {
+  transition: none;
+}
+
+.theme-transition .tab-item.active .tab-btn,
+.theme-transition .tab-item.active .tab-btn:hover {
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0s;
+}
+
+.theme-transition .gs-thumb::after {
+  border-color: #6b7280;
+}
+
+/* 主题切换期间隐藏所有阴影，但预设卡左侧骑边保留 */
+.theme-transition *:not(.preset-card) {
+  box-shadow: none !important;
+}
+
+.theme-transition .preset-card {
+  box-shadow: inset 3px 0 0 var(--preset-accent, var(--brand)) !important;
+}
+
+
+.app-shell-new {
+  --side-gap: 10px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--frame);
+  color: var(--text-primary);
+  font-family: "Plus Jakarta Sans", "Microsoft YaHei UI", system-ui, sans-serif;
+  padding: 0 10px 10px;
+  gap: 0;
+  box-sizing: border-box;
+  animation: app-lang-fade 0.18s ease-out;
+}
+
+@keyframes app-lang-fade {
+  from { opacity: 0.82; }
+  to { opacity: 1; }
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+

@@ -1,0 +1,157 @@
+.topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 12px;
+  background: var(--frame);
+  flex: 0 0 auto;
+}
+
+.logo {
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  margin-right: 4px;
+  position: relative;
+  top: -1px;
+  display: block;
+  user-select: none;
+}
+
+/* ── 滚动条：隐藏轨道，只留滑块条（与进度条同色） ─────────── */
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 9999px;
+  transition: background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+.pill {
+  border-radius: 9999px;
+  height: 28px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pill:hover {
+  background: var(--hover);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.seg {
+  display: inline-flex;
+  border-radius: 9999px;
+  padding: 3px;
+  background: var(--track);
+  gap: 2px;
+}
+
+.seg button {
+  border-radius: 9999px;
+  height: 24px;
+  padding: 0 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--accent-bg);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+/* 设置主题滑块：胶囊 thumb + hover 背景 + 平移动画 + 颜色过渡 */
+.theme-seg {
+  position: relative;
+  display: flex;
+  width: 240px;
+  flex: none;
+}
+
+.theme-seg button {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  justify-content: center;
+  background: transparent;
+  transition: color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-seg button:hover {
+  background: var(--theme-hover-bg);
+}
+
+.theme-seg.no-hover button:hover {
+  background: transparent;
+}
+
+.theme-seg button[aria-pressed="true"] {
+  background: transparent;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.theme-seg-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  z-index: 0;
+  border-radius: 9999px;
+  background: var(--accent-bg);
+  transition:
+    left 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.seg button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.winbtn {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.winbtn.close:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: var(--side-gap);
+}
+

@@ -1,0 +1,123 @@
+.sidebar {
+  --side-border: 1px;
+  width: clamp(210px, 15vw, 260px);
+  flex: none;
+  background: var(--card);
+  border: var(--side-border) solid var(--border);
+  border-radius: 26px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: visible;
+  padding: 0;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.sidebar-scroll-inner {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px 14px 14px;
+  box-sizing: border-box;
+}
+
+.sidebar-scroll.disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.sidebar.disabled {
+  background: var(--frame);
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: calc(-1 * (var(--side-gap, 10px) + var(--side-border, 1px)));
+  width: var(--side-gap, 10px);
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 20;
+}
+
+.sidebar-resizer::after {
+  --resizer-dot: color-mix(in srgb, var(--text-weak) 65%, transparent);
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 16px;
+  background-image:
+    radial-gradient(circle, var(--resizer-dot) 1.4px, transparent 1.6px),
+    radial-gradient(circle, var(--resizer-dot) 1.4px, transparent 1.6px),
+    radial-gradient(circle, var(--resizer-dot) 1.4px, transparent 1.6px);
+  background-position: 0 0, 0 6px, 0 12px;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+  transition: background 0.15s ease;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer.dragging::after {
+  --resizer-dot: var(--brand);
+  opacity: 0.9;
+}
+
+.side-seg {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.side-seg .labels {
+  display: flex;
+}
+
+.side-seg .labels button {
+  flex: 1;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  font-size: 13px;
+  color: var(--text-weak);
+}
+
+.side-seg .labels button[aria-pressed="true"] {
+  color: var(--text-primary);
+}
+
+.side-seg .track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+
+.side-seg .ind {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-primary);
+  transition:
+    left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
