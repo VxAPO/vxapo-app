@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../lib/model";
 import { channelLabel } from "../lib/channels";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import CurvePlot from "./CurvePlot";
 import VxSelect from "./VxSelect";
 

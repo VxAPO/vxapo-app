@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Block, PresetLibraryEntry } from "../lib/model";
 import { presetAccent } from "../lib/blocks";
 import { loadCustomPresets, loadPresetMeta, saveStored } from "../lib/storage";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface UsePresetActionsOptions {
   blocks: Block[];

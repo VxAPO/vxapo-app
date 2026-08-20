@@ -1,5 +1,5 @@
 import { Fragment, memo } from "react";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import type { Block, EffectItem } from "../lib/model";
 import type { BandPatch } from "../lib/blocks";
 import { channelLabel } from "../lib/channels";

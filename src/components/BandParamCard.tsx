@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import type { BandPatch } from "../lib/blocks";
 import GainSlider from "./GainSlider";
 

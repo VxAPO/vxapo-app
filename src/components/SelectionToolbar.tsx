@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, Copy, Save, Trash2 } from "lucide-react";
 import { channelLabel } from "../lib/channels";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface SelectionToolbarProps {
   selectedCount: number;

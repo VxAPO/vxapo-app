@@ -1,5 +1,5 @@
 import { Fragment, memo } from "react";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import type { Block, EffectItem } from "../lib/model";
 import { accentStyle, type BandPatch } from "../lib/blocks";
 import DragCard from "./DragCard";

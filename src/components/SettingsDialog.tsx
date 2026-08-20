@@ -2,7 +2,8 @@ import { memo, useRef, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ThemeMode } from "../lib/model";
-import { setLang, t, useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n";
+import { setLang, t } from "../lib/i18n/core";
 
 interface SettingsDialogProps {
   open: boolean;

@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { Block } from "../lib/model";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
 import { useCurveHover } from "../hooks/useCurveHover";

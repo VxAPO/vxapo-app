@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { accentHoverColor, presetAccent } from "../lib/blocks";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface SavePresetDialogProps {
   open: boolean;

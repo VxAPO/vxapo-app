@@ -2,7 +2,7 @@ import { memo } from "react";
 import { X } from "lucide-react";
 import type { EffectItem } from "../lib/model";
 import { defaultEffectParams, effectDef, effectParams } from "../lib/effects";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import GainSlider from "./GainSlider";
 import VxSelect from "./VxSelect";
 

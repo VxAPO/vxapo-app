@@ -9,7 +9,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   SR: "ch.SR",
 };
 
-import { t } from "./i18n";
+import { t } from "./i18n/core";
 
 /** 与 driver get_channel_names 同款标准声道短名（按掩码位顺序） */
 export function channelNamesFor(channelCount: number | null | undefined): string[] {

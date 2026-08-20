@@ -1,6 +1,7 @@
 import type { PresetLibraryEntry } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
-import { t, useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface PresetDeckProps {
   library: PresetLibraryEntry[];

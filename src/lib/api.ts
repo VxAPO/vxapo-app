@@ -1,8 +1,9 @@
 // VxAPO App — Tauri 命令封装（UI 设计规范 05：文件系统 + CLI --json）
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { Device } from "./model";
-import { t } from "./i18n";
+import { t } from "./i18n/core";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -65,7 +66,6 @@ export async function onInstallProgress(
   cb: (ev: InstallProgressEvent) => void,
 ): Promise<() => void> {
   if (!isTauri) return () => {};
-  const { listen } = await import("@tauri-apps/api/event");
   return listen<InstallProgressEvent>("install-progress", (e) => cb(e.payload));
 }
 

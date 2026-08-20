@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { Device } from "../lib/model";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface DeviceTabsProps {
   devices: Device[];

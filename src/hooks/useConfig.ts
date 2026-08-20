@@ -11,7 +11,7 @@ import {
   type BandPatch,
 } from "../lib/blocks";
 import { useInterval } from "./useInterval";
-import { getLang, t } from "../lib/i18n";
+import { getLang, t } from "../lib/i18n/core";
 
 function effectId(e: EffectItem): string {
   return e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`;

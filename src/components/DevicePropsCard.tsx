@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { Device } from "../lib/model";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface DevicePropsCardProps {
   device: Device | null;

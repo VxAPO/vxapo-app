@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Block, ViewMode } from "../lib/model";
 import { channelLabel } from "../lib/channels";
 import { snapPx } from "../lib/snap";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface UseMarqueeSelectionOptions {
   bodyRef: React.RefObject<HTMLDivElement | null>;

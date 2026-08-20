@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Copy, Minus, SlidersHorizontal, Square, Tags, X } from "lucide-react";
 import type { ViewMode } from "../lib/model";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import logoUrl from "../assets/VxAPO_icon_v4.svg";
 
 interface TopBarProps {

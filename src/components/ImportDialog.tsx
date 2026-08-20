@@ -4,7 +4,7 @@ import { Plus, X } from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Device } from "../lib/model";
 import { readImportFile } from "../lib/api";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 import VxSelect from "./VxSelect";
 
 interface ImportDialogProps {

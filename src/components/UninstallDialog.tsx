@@ -4,7 +4,7 @@ import { TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { readProgress } from "../lib/api";
 import type { Device } from "../lib/model";
-import { t } from "../lib/i18n";
+import { t } from "../lib/i18n/core";
 
 interface UninstallDialogProps {
   device: Device | null;
