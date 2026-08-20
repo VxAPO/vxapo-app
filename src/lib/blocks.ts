@@ -63,12 +63,17 @@ export function ensureBlockIds(blocks: Block[]): Block[] {
   return blocks.map((b) => (b.id ? b : { ...b, id: crypto.randomUUID() }));
 }
 
-/** 忽略 id 后比较两个块的内容是否一致（group/name/enabled/bands） */
-export function blocksEqualShape(a: Block, b: Block): boolean {
+/**
+ * 忽略 id 后比较两个块的内容是否一致（group/name/enabled/bands）。
+ * first 传入第一声道：通道模式往返序列化会把「未分配」写成第一声道再读回 undefined，
+ * 这两种表示在 UI 中等价，必须视为相同，否则 mergeBlockIds 会误判 shape 变化而重建全部 id。
+ */
+export function blocksEqualShape(a: Block, b: Block, first?: string): boolean {
+  const norm = (ch?: string) => (first && ch === first ? undefined : ch);
   return (
     a.group === b.group &&
     a.name === b.name &&
-    a.channel === b.channel &&
+    norm(a.channel) === norm(b.channel) &&
     a.enabled === b.enabled &&
     a.bands.length === b.bands.length &&
     a.bands.every((band, i) => {
@@ -79,15 +84,15 @@ export function blocksEqualShape(a: Block, b: Block): boolean {
 }
 
 /** 热更新/外部刷新时合并 id：内容相同的块沿用旧 id，新增块才分配新 id，保证拖拽期间 key 稳定 */
-export function mergeBlockIds(prev: Block[], next: Block[]): Block[] {
+export function mergeBlockIds(prev: Block[], next: Block[], first?: string): Block[] {
   const used = new Set<string>();
   return next.map((b, i) => {
     const samePos = prev[i];
-    if (samePos?.id && !used.has(samePos.id) && blocksEqualShape(samePos, b)) {
+    if (samePos?.id && !used.has(samePos.id) && blocksEqualShape(samePos, b, first)) {
       used.add(samePos.id);
       return { ...b, id: samePos.id };
     }
-    const sameAny = prev.find((p) => p.id && !used.has(p.id) && blocksEqualShape(p, b));
+    const sameAny = prev.find((p) => p.id && !used.has(p.id) && blocksEqualShape(p, b, first));
     if (sameAny?.id) {
       used.add(sameAny.id);
       return { ...b, id: sameAny.id };

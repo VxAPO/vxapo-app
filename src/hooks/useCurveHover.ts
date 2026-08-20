@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "r
 import type { Block } from "../lib/model";
 import { snapPx } from "../lib/snap";
 import { dbY, logX } from "../lib/curve";
-import { bandDb } from "../lib/rbj";
+import { bandDbCached } from "../lib/rbj";
 
 /** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
 const FOLLOW_FACTOR = 0.08;
@@ -91,7 +91,7 @@ export function useCurveHover({
     let db = preampGainDb;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += bandDb(cl, band, fs);
+      for (const band of b.bands) db += bandDbCached(cl, band, fs);
     }
     const clamped = Math.max(yBottom, Math.min(yTop, db));
     setHoverPt({
@@ -129,7 +129,7 @@ export function useCurveHover({
       let db = preampGainDb;
       for (const b of blocks) {
         if (!b.enabled) continue;
-        for (const band of b.bands) db += bandDb(cl, band, fs);
+        for (const band of b.bands) db += bandDbCached(cl, band, fs);
       }
       return Math.max(yBottom, Math.min(yTop, db));
     };

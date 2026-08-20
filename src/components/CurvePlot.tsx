@@ -1,9 +1,10 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import type { Block } from "../lib/model";
 import { t } from "../lib/i18n";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
-import { bandDb } from "../lib/rbj";
+import { bandDbCached } from "../lib/rbj";
 import { useCurveHover } from "../hooks/useCurveHover";
+import { useThrottledCompute } from "../hooks/useThrottledCompute";
 import CurveGrid from "./CurveGrid";
 
 function freqPath(
@@ -21,7 +22,7 @@ function freqPath(
     let db = preampGainDb;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += bandDb(f, band, fs);
+      for (const band of b.bands) db += bandDbCached(f, band, fs);
     }
     const clamped = Math.max(bottom, Math.min(top, db));
     pts.push(`${logX(f, w).toFixed(1)} ${dbY(clamped, top, bottom).toFixed(1)}`);
@@ -47,11 +48,17 @@ interface CurvePlotProps {
 }
 
 function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }: CurvePlotProps) {
-  const evalFreqs = useMemo(() => buildEvalFreqs(blocks), [blocks]);
-  const curveD = useMemo(
-    () => freqPath(blocks, fs, curveW, yTop, preampGainDb, evalFreqs, yBottom),
-    [blocks, fs, curveW, yTop, preampGainDb, evalFreqs, yBottom],
+  // 路径生成同样较重：固定间隔重算，渲染用上一帧路径，避免拖滑块时每帧算路径。
+  const deferredPath = useThrottledCompute(
+    () => {
+      const freqs = buildEvalFreqs(blocks);
+      return freqPath(blocks, fs, curveW, yTop, preampGainDb, freqs, yBottom);
+    },
+    [blocks, fs, curveW, yTop, preampGainDb, yBottom],
   );
+  const curveD =
+    deferredPath ??
+    freqPath(blocks, fs, curveW, yTop, preampGainDb, buildEvalFreqs(blocks), yBottom);
   const plotTop = dbY(yTop, yTop, yBottom);
   const plotBottom = dbY(yBottom, yTop, yBottom);
   const { hoverPt, tipPos, svgRef, tipRef, onSvgMove, onMouseLeave } = useCurveHover({

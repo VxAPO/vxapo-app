@@ -35,6 +35,14 @@ export interface DragSession {
   /** 抓取点相对卡片左上角的偏移，悬浮层跟随指针但不跳动 */
   offsetX: number;
   offsetY: number;
+  /** 抓取点坐标（positionOverlay 对移动增量取整的基准） */
+  startX: number;
+  startY: number;
+  /** 原始卡片位置（悬浮层对齐锚点，保证抓取时完全覆盖原卡片） */
+  originLeft: number;
+  originTop: number;
+  /** 是否已越过移动阈值真正进入拖拽（未越过前不应用占位/阴影，避免点击闪动） */
+  armed: boolean;
   html?: string;
 }
 

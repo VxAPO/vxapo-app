@@ -1,5 +1,5 @@
 import type { Block } from "./model";
-import { bandDb } from "./rbj";
+import { bandDbCached } from "./rbj";
 
 /** 对数 X 坐标：20Hz → 40，20kHz → curveW-40（视口 220 高）。 */
 export function logX(freq: number, w: number): number {
@@ -53,7 +53,7 @@ export function curveMax(freqs: number[], blocks: Block[], fs: number, preampGai
     let db = preampGainDb;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += bandDb(f, band, fs);
+      for (const band of b.bands) db += bandDbCached(f, band, fs);
     }
     if (db > m) m = db;
   }
@@ -67,9 +67,30 @@ export function curveMin(freqs: number[], blocks: Block[], fs: number, preampGai
     let db = preampGainDb;
     for (const b of blocks) {
       if (!b.enabled) continue;
-      for (const band of b.bands) db += bandDb(f, band, fs);
+      for (const band of b.bands) db += bandDbCached(f, band, fs);
     }
     if (db < m) m = db;
   }
   return m;
+}
+
+/** 一遍循环同时求峰值与谷值（比分别调 curveMax/curveMin 少一遍全量扫描）。 */
+export function curveRange(
+  freqs: number[],
+  blocks: Block[],
+  fs: number,
+  preampGainDb = 0,
+): { min: number; max: number } {
+  let mn = Infinity;
+  let mx = -Infinity;
+  for (const f of freqs) {
+    let db = preampGainDb;
+    for (const b of blocks) {
+      if (!b.enabled) continue;
+      for (const band of b.bands) db += bandDbCached(f, band, fs);
+    }
+    if (db < mn) mn = db;
+    if (db > mx) mx = db;
+  }
+  return { min: mn === Infinity ? 0 : mn, max: mx === -Infinity ? 0 : mx };
 }

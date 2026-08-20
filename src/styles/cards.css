@@ -35,7 +35,9 @@
   border-radius: 16px;
   padding: 10px 12px 12px;
   position: relative;
-  box-shadow: inset 3px 0 0 var(--preset-accent, transparent), var(--card-shadow);
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--preset-accent, var(--brand)) calc(var(--deck-accent-op, 1) * 100%), transparent),
+    var(--card-shadow);
 }
 
 .preset-card.used {
@@ -207,35 +209,3 @@
   overflow: hidden;
 }
 
-/* 自定义预设卡片右上角删除 */
-.preset-del {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-weak);
-  padding: 0;
-}
-
-.preset-del:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-/* 自定义预设为空时的占位卡：文字居中 */
-.preset-card.preset-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 76px;
-}
-
-.preset-card.preset-empty .p-desc {
-  text-align: center;
-  margin: 0;
-}

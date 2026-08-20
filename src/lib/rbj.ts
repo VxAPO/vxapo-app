@@ -136,3 +136,35 @@ export function bandDb(
       return peakingDb(freq, band.fc, band.gain_db, band.q, fs);
   }
 }
+
+/**
+ * band 响应缓存：key = 参数 + 采样率，value = f→dB 稀疏表。
+ * 编辑单个 band 时只重算该 band 的缓存；曲线路径 / 峰值谷值 / 悬停共用，
+ * 消除每次渲染在 31 段下约 7 万次三角计算的掉帧。
+ */
+const BAND_CACHE_MAX = 512;
+const bandResponseCache = new Map<string, Map<number, number>>();
+
+export function bandDbCached(
+  freq: number,
+  band: { fc: number; gain_db: number; q: number; kind?: PeqBandKind },
+  fs: number,
+): number {
+  const key = `${band.kind ?? "peaking"}|${band.fc}|${band.gain_db}|${band.q}|${fs}`;
+  let m = bandResponseCache.get(key);
+  if (!m) {
+    m = new Map();
+    bandResponseCache.set(key, m);
+    if (bandResponseCache.size > BAND_CACHE_MAX) {
+      // 拖拽滑块会快速产生大量参数组合，超出预算直接整体清空（下次按需重建）。
+      bandResponseCache.clear();
+      bandResponseCache.set(key, m);
+    }
+  }
+  let v = m.get(freq);
+  if (v === undefined) {
+    v = bandDb(freq, band, fs);
+    m.set(freq, v);
+  }
+  return v;
+}

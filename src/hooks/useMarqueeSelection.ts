@@ -13,7 +13,6 @@ interface UseMarqueeSelectionOptions {
   setBlocks: React.Dispatch<React.SetStateAction<Block[]>>;
   markDirty: () => void;
   channelOn: boolean;
-  effActiveChannel: string;
   channelBandCounts: Record<string, number>;
   notify: (msg: string) => void;
   setActiveChannel: (ch: string) => void;
@@ -30,7 +29,6 @@ export function useMarqueeSelection({
   setBlocks,
   markDirty,
   channelOn,
-  effActiveChannel,
   channelBandCounts,
   notify,
   setActiveChannel,
@@ -76,13 +74,6 @@ export function useMarqueeSelection({
     setSelectedIds((prev) => prev.filter((id) => blocks.some((b) => b.id === id)));
   }, [blocks]);
 
-  // 通道选择变化后，旧声道的选中卡片从当前视图消失，框选浮窗失去几何参照；
-  // 直接清空选择，避免浮窗悬空/跳到错误位置。
-  useEffect(() => {
-    setSelectedIds([]);
-    setCopyOpen(false);
-  }, [channelOn, effActiveChannel]);
-
   useEffect(() => () => window.cancelAnimationFrame(marqueeRafRef.current), []);
 
   const onBodyPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -125,7 +116,6 @@ export function useMarqueeSelection({
       marqueeRafRef.current = requestAnimationFrame(() => {
         marqueeRafRef.current = 0;
         const m = pendingMarqueeRef.current;
-        pendingMarqueeRef.current = null;
         if (m) setMarquee(m);
       });
     }
@@ -136,16 +126,21 @@ export function useMarqueeSelection({
     marqueeRafRef.current = 0;
     const s = marqueeStartRef.current;
     const body = bodyRef.current;
-    const m = marquee ?? pendingMarqueeRef.current;
+    // pendingMarqueeRef 在 pointermove 里同步写入最新坐标且只在抬手时清空，
+    // 避免 rAF 提交 setMarquee 的窗口期里读到零尺寸旧值，把拖拽误判成点空白清空选择。
+    const m = pendingMarqueeRef.current ?? marquee;
     pendingMarqueeRef.current = null;
     marqueeStartRef.current = null;
     setMarquee(null);
     if (!s || !body || !m) return;
     const rect = body.getBoundingClientRect();
-    const x1 = Math.min(m.x1, m.x2);
-    const x2 = Math.max(m.x1, m.x2);
-    const y1 = Math.min(m.y1, m.y2);
-    const y2 = Math.max(m.y1, m.y2);
+    // 把内容坐标系换算回可视坐标再求交：拖动期间若 scrollTop/Left 被布局变化
+    // （视图收窄、滚动条出现/消失等）钳制，内容坐标会整体漂移，导致命中为空。
+    // 卡片矩形同样要换算成容器内可视坐标（减去容器自身在视口中的偏移）。
+    const x1 = Math.min(m.x1, m.x2) - body.scrollLeft;
+    const x2 = Math.max(m.x1, m.x2) - body.scrollLeft;
+    const y1 = Math.min(m.y1, m.y2) - body.scrollTop;
+    const y2 = Math.max(m.y1, m.y2) - body.scrollTop;
     if (x2 - x1 < 4 && y2 - y1 < 4) {
       // 点空白：清空选择
       setSelectedIds([]);
@@ -155,8 +150,8 @@ export function useMarqueeSelection({
     body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
       if (el.dataset.dndGroup === "effects") return;
       const r = el.getBoundingClientRect();
-      const rx = r.left - rect.left + body.scrollLeft;
-      const ry = r.top - rect.top + body.scrollTop;
+      const rx = r.left - rect.left;
+      const ry = r.top - rect.top;
       if (rx < x2 && rx + r.width > x1 && ry < y2 && ry + r.height > y1) {
         const id = el.dataset.dndId;
         if (id) ids.push(id);
@@ -322,7 +317,15 @@ export function useMarqueeSelection({
   // 位移动画沿用卡片飞行的二次贝塞尔：控制点水平偏移、先快后慢
   useLayoutEffect(() => {
     const el = toolbarElRef.current;
-    if (!el || !toolbarTarget) return;
+    if (!el || !toolbarTarget) {
+      // Target gone / element unmounted: stop flight and clear stale state,
+      // otherwise the next mount inherits an exit/fly state.
+      if (toolbarAnimRef.current) {
+        cancelAnimationFrame(toolbarAnimRef.current.raf);
+        toolbarAnimRef.current = null;
+      }
+      return;
+    }
     const cur = toolbarAnimRef.current;
     if (cur) cancelAnimationFrame(cur.raf);
     const start = {
@@ -351,7 +354,13 @@ export function useMarqueeSelection({
     const step = () => {
       const node = toolbarElRef.current;
       const anim = toolbarAnimRef.current;
-      if (!node || !anim) return;
+      if (!node) {
+        // Toolbar unmounted mid-flight: cancel remaining frames and clear
+        // stale state so the next mount starts from a clean first frame.
+        toolbarAnimRef.current = null;
+        return;
+      }
+      if (!anim) return;
       const t = Math.min(1, (performance.now() - anim.t0) / 400);
       const k = 1 - Math.pow(1 - t, 4);
       const inv = 1 - k;
@@ -373,6 +382,7 @@ export function useMarqueeSelection({
   useEffect(
     () => () => {
       if (toolbarAnimRef.current) cancelAnimationFrame(toolbarAnimRef.current.raf);
+      toolbarAnimRef.current = null;
     },
     [],
   );

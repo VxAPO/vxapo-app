@@ -3,13 +3,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
-import type { Block, EffectItem, PeqBandKind } from "./lib/model";
+import type { Block, Device, EffectItem, PeqBandKind } from "./lib/model";
 import { LIBRARY } from "./data/library";
 import { channelNamesFor } from "./lib/channels";
 import { exportConfig, friendlyError, writeConfig } from "./lib/api";
 import { parseConfigWithTail } from "./lib/toml";
 import { snapPx } from "./lib/snap";
-import { buildEvalFreqs, curveMax, curveMin } from "./lib/curve";
+import { buildEvalFreqs, curveRange } from "./lib/curve";
 import { planNormalize } from "./lib/normalize";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
@@ -21,6 +21,7 @@ import { useChannelState } from "./hooks/useChannelState";
 import { usePresetActions } from "./hooks/usePresetActions";
 import { useMarqueeSelection } from "./hooks/useMarqueeSelection";
 import { useViewAnimation, VIEW_COLLAPSE_MS } from "./hooks/useViewAnimation";
+import { useThrottledCompute } from "./hooks/useThrottledCompute";
 import AdvancedView from "./components/AdvancedView";
 import ConfirmDialog from "./components/ConfirmDialog";
 import CurvePanel from "./components/CurvePanel";
@@ -126,16 +127,25 @@ export default function App() {
         e.channels.includes(effActiveChannel),
     );
   }, [effects, channelOn, effActiveChannel]);
-  const evalFreqs = useMemo(() => buildEvalFreqs(visibleBlocks), [visibleBlocks]);
   const fs = selected?.sample_rate ?? 48000;
-  const peakGain = useMemo(
-    () => curveMax(evalFreqs, visibleBlocks, fs, preampGainDb),
-    [evalFreqs, visibleBlocks, fs, preampGainDb],
-  );
-  const troughGain = useMemo(
-    () => curveMin(evalFreqs, visibleBlocks, fs, preampGainDb),
-    [evalFreqs, visibleBlocks, fs, preampGainDb],
-  );
+  // 峰值/谷值曲线计算较重（31 段 × 数百评估点），拖动滑块时固定间隔重算
+  //（默认 120ms），滑块 move 只重渲染被拖的卡片，保证拖动帧数。
+  const deferredCurve = useThrottledCompute(() => {
+    const freqs = buildEvalFreqs(visibleBlocks);
+    const range = curveRange(freqs, visibleBlocks, fs, preampGainDb);
+    return { freqs, peak: range.max, trough: range.min };
+  }, [visibleBlocks, fs, preampGainDb]);
+  const { peakGain, troughGain } = useMemo(() => {
+    if (deferredCurve) {
+      return { peakGain: deferredCurve.peak, troughGain: deferredCurve.trough };
+    }
+    const freqs = buildEvalFreqs(visibleBlocks);
+    const range = curveRange(freqs, visibleBlocks, fs, preampGainDb);
+    return {
+      peakGain: range.max,
+      troughGain: range.min,
+    };
+  }, [deferredCurve, visibleBlocks, fs, preampGainDb]);
   const yTop = Math.max(6, Math.min(30, Math.ceil((peakGain + 1) / 2) * 2));
   const yBottom = Math.min(-6, Math.max(-30, Math.floor((troughGain - 1) / 2) * 2));
 
@@ -235,7 +245,6 @@ export default function App() {
     setBlocks,
     markDirty,
     channelOn,
-    effActiveChannel,
     channelBandCounts,
     notify,
     setActiveChannel,
@@ -285,7 +294,11 @@ export default function App() {
   }, []);
   const handleCurveChannelChange = useCallback(
     (v: string) => {
-      if (channelOn) setActiveChannel(v);
+      if (channelOn) {
+        setActiveChannel(v);
+        setSelectedIds([]);
+        setCopyOpen(false);
+      }
     },
     [channelOn],
   );
@@ -296,6 +309,14 @@ export default function App() {
   const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
   const handleToggleMaximize = useCallback(() => void toggleMaximize(), [toggleMaximize]);
   const handleInstalled = useCallback((name: string) => notify(t("notify.installed", { name })), [notify]);
+  const openUninstall = useCallback(
+    (d: Device) => {
+      setSelectedIds([]);
+      setCopyOpen(false);
+      setUninstallTarget(d);
+    },
+    [setUninstallTarget],
+  );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
@@ -308,6 +329,7 @@ export default function App() {
     // 已处于 advanced 时直接清空选择即可，不触发视图退场/进场。
     if (view !== "advanced") beginViewAnim(); else setCopyOpen(false);
     setCopyOpen(false);
+    setSelectedIds([]);
     const first = channelNames[0] ?? "L";
     if (!channelOn) {
       // 开启通道选择器：全局基准电平拆成每声道一个
@@ -356,9 +378,20 @@ export default function App() {
     effectsDragApi.cancelDrag();
   }, [channelOn, channelNames, view, markDirty, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
 
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
-  const openInstall = useCallback(() => setInstallOpen(true), []);
+  const openSettings = useCallback(() => {
+    // 打开设置前清除框选，避免浮窗悬空在点击层。
+    setSelectedIds([]);
+    setCopyOpen(false);
+    setSettingsOpen(true);
+  }, []);
+  const openInstall = useCallback(() => {
+    setSelectedIds([]);
+    setCopyOpen(false);
+    setInstallOpen(true);
+  }, []);
   const openImport = useCallback(() => {
+    setSelectedIds([]);
+    setCopyOpen(false);
     const guid = selectedGuid ?? installedDevices[0]?.guid ?? null;
     setImportDeviceGuid(guid);
     setImportOpen(true);
@@ -484,7 +517,7 @@ export default function App() {
             tuningOn={deviceTuningOn}
             onSelect={setSelectedGuid}
             onToggleTuning={toggleDeviceTuning}
-            onUninstall={setUninstallTarget}
+            onUninstall={openUninstall}
             onAdd={openInstall}
           />
 
@@ -613,7 +646,7 @@ export default function App() {
             </AnimatePresence>
             </div>
 
-            <AnimatePresence>
+            <AnimatePresence mode="wait" initial={false}>
               {selGeom && selectedIds.length > 0 && !toolbarHidden && (
                 <SelectionToolbar
                   selectedCount={selectedIds.length}

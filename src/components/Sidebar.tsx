@@ -6,6 +6,7 @@ import { presetAccent, presetCardStyle } from "../lib/blocks";
 import { t, useI18n } from "../lib/i18n";
 import { EFFECT_DEFS } from "../lib/effects";
 import { snapPx } from "../lib/snap";
+import PresetDeck from "./PresetDeck";
 
 const SIDEBAR_MIN = 210;
 const SECTIONS: SideSection[] = ["preset", "custom", "advanced"];
@@ -135,68 +136,61 @@ function Sidebar({
         </div>
 
         {side === "preset" && (
-        <div className="cards">
-          {library.map((p) => {
-            const used = usedPresets.includes(p.id);
-            const accent = p.color ?? presetAccent(p.bands);
-            return (
-              <div
-                className={`preset-card${used ? " used" : ""}`}
-                key={p.id}
-                style={presetCardStyle(accent)}
-              >
-                <p className="p-name"><span className="p-group">{lang === "en" ? (p.group_en ?? p.group) : p.group}</span> · {lang === "en" ? (p.name_en ?? p.name) : p.name}</p>
-                <p className="p-desc">{lang === "en" ? (p.desc_en ?? p.desc) : p.desc}</p>
-                <div className="row">
-                  <span className="sub">{p.bands.length} {t("bands")}</span>
-                  <button
-                    className="add"
-                    type="button"
-                    disabled={used}
-                    onClick={() => onApplyPreset(p)}
-                  >
-                    {used ? t("effect.added") : t("install")}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <PresetDeck library={library} usedPresets={usedPresets} onApplyPreset={onApplyPreset} />
         )}
 
         {side === "custom" && (
-        <div className="cards">
-          {customPresets.length === 0 ? (
-            <div className="preset-card preset-empty">
-              <p className="p-desc">{t("empty.customPreset")}</p>
-            </div>
-          ) : (
-            customPresets.map((p) => (
-              <div
-                className="preset-card"
-                key={p.id}
-                style={presetCardStyle(p.color ?? presetAccent(p.bands))}
-              >
-                <button
-                  className="preset-del"
-                  type="button"
-                  aria-label={t("delete")}
-                  title={t("delete")}
-                  onClick={() => onDeletePreset(p)}
+        customPresets.length === 0 ? (
+          <p className="preset-empty">{t("empty.customPreset")}</p>
+        ) : (
+          <div className="preset-list">
+            {customPresets.map((p) => {
+              const used = usedPresets.includes(p.id);
+              const name = lang === "en" ? (p.name_en ?? p.name) : p.name;
+              const group = lang === "en" ? (p.group_en ?? p.group) : p.group;
+              return (
+                <div
+                  key={p.id}
+                  role="button"
+                  tabIndex={used ? undefined : 0}
+                  className={`adv-pill preset-pill custom${used ? " disabled" : ""}`}
+                  style={presetCardStyle(p.color ?? presetAccent(p.bands))}
+                  onClick={used ? undefined : () => onApplyPreset(p)}
+                  onKeyDown={
+                    used
+                      ? undefined
+                      : (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onApplyPreset(p);
+                          }
+                        }
+                  }
+                  title={used ? `${name}${t("effect.added")}` : name}
                 >
-                  <X size={12} strokeWidth={2.5} />
-                </button>
-                <p className="p-name"><span className="p-group">{lang === "en" ? (p.group_en ?? p.group) : p.group}</span> · {lang === "en" ? (p.name_en ?? p.name) : p.name}</p>
-                {p.desc ? <p className="p-desc">{lang === "en" ? (p.desc_en ?? p.desc) : p.desc}</p> : null}
-                <div className="row">
-                  <span className="sub">{p.bands.length} {t("bands")}</span>
-                  <button className="add" type="button" onClick={() => onApplyPreset(p)}>{t("install")}</button>
+                  <span className="preset-dot" aria-hidden="true" />
+                  <span className="preset-name">
+                    <span className="p-group">{group}</span>
+                    <span className="p-sub">{name}</span>
+                  </span>
+                  {used && <span className="preset-added">{t("effect.added")}</span>}
+                  <button
+                    className="preset-pill-del"
+                    type="button"
+                    aria-label={t("delete")}
+                    title={t("delete")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeletePreset(p);
+                    }}
+                  >
+                    <X size={12} strokeWidth={2.5} />
+                  </button>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-        )}
+              );
+            })}
+          </div>
+        ))}
 
         {side === "advanced" && (
         <div className="adv-list">

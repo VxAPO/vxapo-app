@@ -35,6 +35,16 @@ function BandParamCard({
 }: BandParamCardProps) {
   const band = b.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 };
   const disabled = !b.enabled;
+  const typeKey =
+    band.kind === "low_shelf"
+      ? "filter.type.lowShelf"
+      : band.kind === "high_shelf"
+        ? "filter.type.highShelf"
+        : band.kind === "low_pass"
+          ? "filter.type.lowPass"
+          : band.kind === "high_pass"
+            ? "filter.type.highPass"
+            : "filter.type.peaking";
 
   return (
     <>
@@ -52,7 +62,7 @@ function BandParamCard({
         >
           {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
         </button>
-        <span className="b-type">{band.kind === "low_shelf" ? "LS" : band.kind === "high_shelf" ? "HS" : band.kind === "low_pass" ? "LP" : band.kind === "high_pass" ? "HP" : "PEAK"}</span>
+        <span className="b-type">{t(typeKey)}</span>
         <span className="grow" />
       </div>
       <div className="band-params">
@@ -126,4 +136,21 @@ function BandParamCard({
   );
 }
 
-export default memo(BandParamCard);
+/**
+ * 参数卡按实际用到的内容做浅比较：拖动滑块时 setBlocks 会生成新 block 对象，
+ * 默认 memo 会让全部 31 张卡一起重渲染；这里只让参数变化的那张卡重渲染。
+ */
+export default memo(BandParamCard, (prev, next) => {
+  if (prev.num !== next.num || prev.dragNum !== next.dragNum) return false;
+  const a = prev.block;
+  const b = next.block;
+  if (a.enabled !== b.enabled || a.bands.length !== b.bands.length) return false;
+  const ba = a.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 };
+  const bb = b.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 };
+  return (
+    ba.fc === bb.fc &&
+    ba.gain_db === bb.gain_db &&
+    ba.q === bb.q &&
+    ba.kind === bb.kind
+  );
+});

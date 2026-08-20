@@ -2,7 +2,7 @@ import { memo, useEffect, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
-import { accentHoverColor, presetAccent, semanticName } from "../lib/blocks";
+import { accentHoverColor, presetAccent } from "../lib/blocks";
 import { t } from "../lib/i18n";
 
 interface SavePresetDialogProps {
@@ -37,21 +37,19 @@ function SavePresetDialog({
   onSave,
 }: SavePresetDialogProps) {
   const [name, setName] = useState(defaultName);
-  const [desc, setDesc] = useState("");
   const [color, setColor] = useState("#6fbf73");
   const [descs, setDescs] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
       setName(defaultName);
-      setDesc("");
       setColor(presetAccent(blocks.map((b) => b.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 })));
-      setDescs(blocks.map((b) => b.name?.trim() || semanticName(b)));
+      setDescs(blocks.map(() => ""));
     }
   }, [open, blocks, defaultName]);
 
   const save = () => {
-    onSave(name.trim() || t("preset.name.placeholder"), desc.trim(), color, descs.map((d) => d.trim()));
+    onSave(name.trim() || t("preset.name.placeholder"), "", color, descs.map((d) => d.trim()));
   };
 
   return (
@@ -73,15 +71,6 @@ function SavePresetDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("preset.name.placeholder")}
-              />
-            </label>
-            <label className="vx-field">
-              <span className="vx-field-label">{t("preset.desc")}</span>
-              <input
-                className="vx-text-input"
-                value={desc}
-                onChange={(e) => setDesc(e.target.value)}
-                placeholder={t("preset.desc.placeholder")}
               />
             </label>
             <div className="vx-field">

@@ -104,14 +104,17 @@ export function useConfig(
         });
         setBlocks((prev) => {
           const next = parsed.blocks;
-          if (prev.length === next.length && prev.every((b, i) => blocksEqualShape(b, next[i]))) {
+          if (
+            prev.length === next.length &&
+            prev.every((b, i) => blocksEqualShape(b, next[i], channelCtx.first))
+          ) {
             return prev;
           }
-          return mergeBlockIds(prev, next);
+          return mergeBlockIds(prev, next, channelCtx.first);
         });
       })
       .catch(() => {});
-  }, [selectedGuid]);
+  }, [selectedGuid, channelCtx.first]);
 
   useInterval(pollConfig, selectedGuid && loaded ? 2000 : null);
 
@@ -283,7 +286,12 @@ export function useConfig(
     setBlocks((prev) =>
       prev.map((b, i) =>
         i === blockIdx
-          ? { ...b, bands: b.bands.map((band, j) => (j === bandIdx ? { ...band, ...patch } : band)) }
+          ? {
+              ...b,
+              // 频率变了，语义标签就该跟着频响走：清掉旧名字让 semanticName 回退到感知标签
+              ...(patch.fc !== undefined ? { name: undefined } : {}),
+              bands: b.bands.map((band, j) => (j === bandIdx ? { ...band, ...patch } : band)),
+            }
           : b,
       ),
     );

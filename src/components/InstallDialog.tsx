@@ -125,6 +125,8 @@ function InstallDialog({
   };
 
   const busy = installingGuid !== null;
+  // 安装进行中（installing/restarting/verifying）禁用关闭，成功/失败后才允许关闭。
+  const closeDisabled = phase === "installing" || phase === "restarting" || phase === "verifying";
   const candidates = devices.filter((d) => !isInstalled(d));
   const installingDevice = devices.find((d) => d.guid === installingGuid) ?? null;
 
@@ -145,7 +147,11 @@ function InstallDialog({
         >
           <div className="vx-dialog-head">
             <Dialog.Title className="vx-dialog-title">{t("install.title")}</Dialog.Title>
-            <Dialog.Close className="vx-dialog-close" aria-label={t("close.settings")}>
+            <Dialog.Close
+              className="vx-dialog-close"
+              aria-label={t("close.settings")}
+              disabled={closeDisabled}
+            >
               <X size={16} />
             </Dialog.Close>
           </div>

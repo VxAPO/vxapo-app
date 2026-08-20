@@ -11,6 +11,7 @@ interface VxSelectProps {
   value?: string;
   options: VxSelectOption[];
   onValueChange: (value: string) => void;
+  className?: string;
   ariaLabel?: string;
   disabled?: boolean;
   placeholder?: string;
@@ -21,6 +22,7 @@ export default function VxSelect({
   value,
   options,
   onValueChange,
+  className,
   ariaLabel,
   disabled = false,
   placeholder,
@@ -43,7 +45,10 @@ export default function VxSelect({
       }}
       disabled={disabled}
     >
-      <Select.Trigger className={`vx-select${disabled ? " disabled" : ""}`} aria-label={ariaLabel}>
+      <Select.Trigger
+        className={`vx-select${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
+        aria-label={ariaLabel}
+      >
         {icon}
         <Select.Value placeholder={placeholder} />
         <Select.Icon className="vx-select-icon">

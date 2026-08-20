@@ -30,6 +30,119 @@
   box-sizing: border-box;
 }
 
+/* 预设列表：与「高级」区一致的紧凑条目（flex + gap，无 margin 挤出问题） */
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preset-pill .preset-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--preset-accent, var(--brand-deep));
+  flex: none;
+  transition: transform 0.18s ease;
+}
+
+.adv-pill.preset-pill {
+  border-color: color-mix(in srgb, var(--preset-accent, var(--brand)) 55%, var(--border));
+}
+
+.preset-pill .preset-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  min-width: 0;
+}
+
+.preset-pill .p-group {
+  color: var(--preset-accent, var(--brand-deep));
+  font-weight: 700;
+  flex: none;
+}
+
+.preset-pill .p-sub {
+  font-size: 12px;
+  color: var(--text-weak);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-pill .preset-added {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-weak);
+  flex: none;
+}
+
+.adv-pill.preset-pill.disabled {
+  border-color: var(--border);
+}
+
+.preset-pill.disabled .preset-dot {
+  background: var(--text-weak);
+}
+
+.adv-pill.preset-pill.disabled .p-group {
+  color: var(--text-weak);
+}
+
+.preset-pill:hover:not(:disabled) .preset-dot {
+  transform: scale(1.25);
+}
+
+/* 自定义预设：与预设区同款 pill，右侧删除按钮 */
+.preset-pill.custom .preset-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-pill.custom .preset-added {
+  margin-left: 0;
+}
+
+/* 自定义预设是 div，:disabled 不生效：已添加态禁止 hover 浮起 */
+.adv-pill.preset-pill.custom.disabled:hover {
+  box-shadow: none;
+  transform: none;
+  cursor: default;
+}
+
+.preset-pill.custom.disabled:hover .preset-dot {
+  transform: none;
+}
+
+.preset-pill-del {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-weak);
+  padding: 0;
+  flex: none;
+}
+
+.preset-pill-del:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 无自定义预设时的纯文字占位 */
+.preset-empty {
+  font-size: 12px;
+  color: var(--text-weak);
+  line-height: 1.5;
+  text-align: center;
+  margin: 2px 2px;
+}
+
 .sidebar-scroll.disabled {
   pointer-events: none;
   opacity: 0.55;

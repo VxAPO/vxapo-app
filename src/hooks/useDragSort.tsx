@@ -78,9 +78,11 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     const el = overlayRef.current;
     const d = dragRef.current;
     if (!el || !d) return;
-    // 取整到像素网格，悬浮副本的文字渲染与网格卡片保持一致
-    el.style.left = `${snapPx(x - d.offsetX)}px`;
-    el.style.top = `${snapPx(y - d.offsetY)}px`;
+    // 以原始卡片位置为锚点，只对移动增量取整到像素网格：
+    // 整条位置取整会让不同分数列（243 / 520.75 / 798.5…）的对齐结果不一，
+    // 出现偶数列偏移、奇数列不偏移；锚点取原值保证抓取时完全覆盖原卡片。
+    el.style.left = `${d.originLeft + snapPx(x - d.startX)}px`;
+    el.style.top = `${d.originTop + snapPx(y - d.startY)}px`;
   };
 
   const slotIndexAt = (x: number, y: number, slots: Slot[]): number => {
@@ -185,7 +187,9 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       commitDragOrder(d, finalSlot);
       setTick((t) => t + 1);
       if (from) {
-        const box = (r: DOMRect) => ({ left: snapPx(r.left), top: snapPx(r.top), width: snapPx(r.width), height: snapPx(r.height) });
+        // 端点保持精确：占位框在分数坐标（520.75px）上，起点/终点取整会在
+        // 落地瞬间露出占位框虚线；中间帧由 FlyPath 取整保证文字不发虚。
+        const box = (r: DOMRect) => ({ left: r.left, top: r.top, width: r.width, height: r.height });
         // 显式锁定原卡片内容隐藏，避免任何渲染时序让它在飞行动画中闪现
         const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
         if (draggedEl) draggedEl.setAttribute("data-fly-hidden", "1");
@@ -210,7 +214,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
           content,
           from: box(from),
           // 飞行副本保持原卡尺寸，只把落点坐标移过去，避免高低不同的卡互相拉伸
-          to: { left: snapPx(to.left), top: snapPx(to.top), width: snapPx(from.width), height: snapPx(from.height) },
+          to: { left: to.left, top: to.top, width: from.width, height: from.height },
         };
         setFly(nextFly);
         flyRef.current = nextFly;
@@ -271,24 +275,42 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       everLeft: false,
       offsetX: x - origin.rect.left,
       offsetY: y - origin.rect.top,
+      startX: x,
+      startY: y,
+      originLeft: origin.rect.left,
+      originTop: origin.rect.top,
+      armed: false,
       html: originEl?.innerHTML,
     };
-    setActiveKey(key);
-    setOverlayNum(base.get(key)! + 1);
-    setDragSize({ width: snapPx(origin.rect.width), height: snapPx(origin.rect.height) });
-    const tryPosition = () => {
-      if (overlayRef.current) {
-        positionOverlay(x, y);
-      } else {
-        requestAnimationFrame(tryPosition);
-      }
+
+    // 按下不立即进入拖拽：移动越过阈值才应用占位/阴影/飞行副本，
+    // 原地点击（含狂点）不会让卡片闪动。
+    const arm = (d: DragSession, px: number, py: number) => {
+      d.armed = true;
+      setActiveKey(d.key);
+      setOverlayNum(d.base.get(d.key)! + 1);
+      // 宽度/高度用实测原值：分数列宽（如 265.75px）取整会让飞行副本比原卡片
+      // 宽/窄最多 0.5px；位置仍由 positionOverlay 取整，保证文字不发虚。
+      const originRect = d.slots[d.entered].rect;
+      setDragSize({ width: originRect.width, height: originRect.height });
+      const tryPosition = () => {
+        if (overlayRef.current) {
+          positionOverlay(px, py);
+        } else {
+          requestAnimationFrame(tryPosition);
+        }
+      };
+      tryPosition();
     };
-    tryPosition();
 
     const onMove = (e: PointerEvent) => {
       if (dragTokenRef.current !== token) return;
       const d = dragRef.current;
       if (!d) return;
+      if (!d.armed) {
+        if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 4) return;
+        arm(d, e.clientX, e.clientY);
+      }
       positionOverlay(e.clientX, e.clientY);
       const idx = slotIndexAt(e.clientX, e.clientY, d.slots);
       if (idx < 0 && !d.everLeft) {
@@ -325,6 +347,29 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       removeListeners();
       clearDragTimers();
       if (!d) return;
+      // 未越过阈值的点击：没有任何视觉变化，直接清理
+      if (!d.armed) {
+        resetCardStyles();
+        dragRef.current = null;
+        setActiveKey(null);
+        setDragSize(null);
+        setFly(null);
+        flyRef.current = null;
+        setTick((t) => t + 1);
+        return;
+      }
+      // 原地点击（几乎没移动）：按点击处理直接还原，不触发占位/飞行动画，
+      // 避免卡片被“拎起”又落回造成闪烁
+      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 4) {
+        resetCardStyles();
+        dragRef.current = null;
+        setActiveKey(null);
+        setDragSize(null);
+        setFly(null);
+        flyRef.current = null;
+        setTick((t) => t + 1);
+        return;
+      }
       // 松手瞬间按当前指针位置结算，防止快速拖拽时防抖未触发导致落点滞后
       const idx = slotIndexAt(e.clientX, e.clientY, d.slots);
       if (idx !== d.entered && !(idx < 0 && !d.everLeft)) applyLayout(idx);

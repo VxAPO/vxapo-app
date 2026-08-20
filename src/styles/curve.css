@@ -320,6 +320,17 @@
   color: var(--text-primary);
 }
 
+.vx-dialog-close:disabled {
+  color: var(--text-weak);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vx-dialog-close:disabled:hover {
+  background: transparent;
+  color: var(--text-weak);
+}
+
 .vx-dialog-body {
   display: flex;
   flex-direction: column;
