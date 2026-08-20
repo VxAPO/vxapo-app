@@ -98,7 +98,9 @@ const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
   preamp: { gain_db: 0 },
   wide: { intensity: 0.3543 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0, wet: 1, dry: 0 },
-  reverb: { room_size: 1, decay: 0.5657, damping: 0.4083, pre_delay_ms: 0, wet: 0.3, dry: 0.9 },
+  // decay 0.41 对应修复后（循环增益只乘一次）与旧等效环路 0.417 相同的尾音长度；
+  // 与语义强度模型 wet=s、decay=0.2+0.7s 在默认强度 0.3 处一致。
+  reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, wet: 0.3, dry: 0.9 },
   maximizer: {
     gain_boost_db: 6,
     max_output_db: -0.3,
@@ -159,8 +161,13 @@ export function applySemanticStrength(
       next.intensity = Math.round(s * 10000) / 10000;
       break;
     case "aural":
-    case "reverb":
       next.wet = Math.round(s * 10000) / 10000;
+      break;
+    case "reverb":
+      // 板式混响强度 = 湿声混合量 + 尾长联动：s=0 接近干声（wet=0），
+      // s=1 满湿声且尾音最长（decay=0.9）；默认强度 0.3 落在旧默认尾音上。
+      next.wet = Math.round(s * 10000) / 10000;
+      next.decay = Math.round((0.2 + 0.7 * s) * 10000) / 10000;
       break;
     case "maximizer":
       next.gain_boost_db = Math.round(s * 3000) / 100;
