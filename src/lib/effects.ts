@@ -53,8 +53,7 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
   preamp: [{ key: "gain_db", label: "增益", min: -120, max: 48, step: 0.1, unit: "dB" }],
   wide: [
     { key: "intensity", label: "强度", min: 0, max: 1, step: 0.01 },
-    { key: "gain", label: "高频增益", min: 0, max: 1, step: 0.01 },
-    { key: "center_delay_ms", label: "中心延迟", min: 0, max: 20, step: 0.1, unit: "ms" },
+    { key: "gain", label: "高频补偿", min: 0, max: 1, step: 0.01 },
     { key: "air", label: "空气吸收", min: 0, max: 1, step: 0.01 },
     { key: "crossover_hz", label: "分频点", min: 100, max: 1000, step: 10, unit: "Hz" },
   ],
@@ -102,7 +101,7 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
 
 const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
   preamp: { gain_db: 0 },
-  wide: { intensity: 0.3543, gain: 0, center_delay_ms: 0, air: 0, crossover_hz: 200 },
+  wide: { intensity: 0.3543, gain: 0, air: 0, crossover_hz: 200 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
   // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
@@ -165,10 +164,9 @@ export function applySemanticStrength(
   switch (type) {
     case "wide":
       next.intensity = Math.round(s * 10000) / 10000;
-      // 拉高强度顺带把人声推远：中心延迟 0→20ms、空气吸收 0→1；
-      // 默认强度处保持 0（原声），满强度拉满；高频增益由参数视图手动微调。
+      // 拉高强度顺带把人声推远（空气吸收 0→1）；默认强度处保持 0（原声），
+      // 满强度拉满；高频补偿由参数视图手动微调。
       const ramp = Math.max(0, Math.min(1, (s - 0.3) / 0.7));
-      next.center_delay_ms = Math.round(ramp * 20 * 10) / 10;
       next.air = Math.round(ramp * 10000) / 10000;
       break;
     case "aural": {
