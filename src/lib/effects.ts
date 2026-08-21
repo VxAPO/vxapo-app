@@ -51,7 +51,11 @@ export interface EffectParamDef {
 
 const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
   preamp: [{ key: "gain_db", label: "增益", min: -120, max: 48, step: 0.1, unit: "dB" }],
-  wide: [{ key: "intensity", label: "强度", min: 0, max: 1, step: 0.01 }],
+  wide: [
+    { key: "intensity", label: "强度", min: 0, max: 1, step: 0.01 },
+    { key: "depth", label: "深度", min: 0, max: 1, step: 0.01 },
+    { key: "crossover_hz", label: "分频点", min: 100, max: 1000, step: 10, unit: "Hz" },
+  ],
   aural: [
     { key: "tune_hz", label: "中心频率", min: 500, max: 10000, step: 10, unit: "Hz" },
     { key: "drive", label: "驱动", min: 0, max: 4.25, step: 0.01 },
@@ -96,11 +100,11 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
 
 const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
   preamp: { gain_db: 0 },
-  wide: { intensity: 0.3543 },
-  aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0, wet: 1, dry: 0 },
-  // decay 0.41 对应修复后（循环增益只乘一次）与旧等效环路 0.417 相同的尾音长度；
-  // 与语义强度模型 wet=s、decay=0.2+0.7s 在默认强度 0.3 处一致。
-  reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, wet: 0.3, dry: 0.9 },
+  wide: { intensity: 0.3543, depth: 0, crossover_hz: 200 },
+  aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
+  // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
+  // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
+  reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, wet: 0.27, dry: 0.73 },
   maximizer: {
     gain_boost_db: 6,
     max_output_db: -0.3,
@@ -132,9 +136,9 @@ export function semanticStrength(type: string, params: Record<string, number | s
     case "wide":
       return clamp01(asNum(params.intensity, 0.3543));
     case "aural":
-      return clamp01(asNum(params.wet, 1));
+      return clamp01(asNum(params.wet, 0.5) / 0.9);
     case "reverb":
-      return clamp01(asNum(params.wet, 0.3));
+      return clamp01(asNum(params.wet, 0.27) / 0.9);
     case "maximizer":
       return clamp01(asNum(params.gain_boost_db, 6) / 30);
     case "loudness": {
@@ -159,18 +163,34 @@ export function applySemanticStrength(
   switch (type) {
     case "wide":
       next.intensity = Math.round(s * 10000) / 10000;
+      // 拉高强度顺带加深中心距离：默认强度处 depth=0 保持原声。
+      next.depth = Math.round(Math.max(0, Math.min(0.7, s - 0.3)) * 10000) / 10000;
       break;
-    case "aural":
-      next.wet = Math.round(s * 10000) / 10000;
+    case "aural": {
+      // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，避免干湿和 >1 削波。
+      const wet = Math.round(s * 0.9 * 10000) / 10000;
+      next.wet = wet;
+      next.dry = Math.round((1 - wet) * 10000) / 10000;
       break;
-    case "reverb":
-      // 板式混响强度 = 湿声混合量 + 尾长联动：s=0 接近干声（wet=0），
-      // s=1 满湿声且尾音最长（decay=0.9）；默认强度 0.3 落在旧默认尾音上。
-      next.wet = Math.round(s * 10000) / 10000;
+    }
+    case "reverb": {
+      // 强度 = 湿声 + 尾长 + 预延迟 + 房间大小联动，阻尼随衰减一起升；
+      // 干湿交叉淡化保证和 ≤ 1。
+      const wet = Math.round(s * 0.9 * 10000) / 10000;
+      next.wet = wet;
+      next.dry = Math.round((1 - wet) * 10000) / 10000;
       next.decay = Math.round((0.2 + 0.7 * s) * 10000) / 10000;
+      next.damping =
+        Math.round((0.15 + 0.63 * (0.2 + 0.7 * s)) * 10000) / 10000;
+      next.pre_delay_ms = Math.round(Math.max(0, Math.min(0.7, s - 0.3)) * 50 * 10) / 10;
+      next.room_size = Math.round((0.85 + 0.5 * s) * 10000) / 10000;
       break;
+    }
     case "maximizer":
       next.gain_boost_db = Math.round(s * 3000) / 100;
+      // 强度提升时释放时间与预看相应增加（默认强度 0.2 处过原默认值）。
+      next.release_ms = Math.round((4 + 30.9 * s) * 100) / 100;
+      next.lookahead_ms = Math.round((0.5 + 1.25 * s) * 100) / 100;
       break;
     case "loudness": {
       const ref = asNum(params.reference_phon, 80);
