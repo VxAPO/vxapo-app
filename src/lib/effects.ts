@@ -163,8 +163,8 @@ export function applySemanticStrength(
   switch (type) {
     case "wide":
       next.intensity = Math.round(s * 10000) / 10000;
-      // 拉高强度顺带加深中心距离：默认强度处 depth=0 保持原声。
-      next.depth = Math.round(Math.max(0, Math.min(0.7, s - 0.3)) * 10000) / 10000;
+      // 拉高强度顺带加深中心距离：默认强度处 depth=0 保持原声，满强度到 1.0。
+      next.depth = Math.round(Math.max(0, Math.min(1, (s - 0.3) / 0.7)) * 10000) / 10000;
       break;
     case "aural": {
       // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，避免干湿和 >1 削波。
