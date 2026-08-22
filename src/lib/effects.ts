@@ -13,7 +13,7 @@ export const EFFECT_DEFS: EffectDef[] = [
   { type: "wide", name: "effect.wide", desc: "effect.wide.desc", color: "#00a3a5" },
   { type: "aural", name: "effect.aural", desc: "effect.aural.desc", color: "#6082e9" },
   { type: "reverb", name: "effect.reverb", desc: "effect.reverb.desc", color: "#996fda" },
-  { type: "maximizer", name: "effect.maximizer", desc: "effect.maximizer.desc", color: "#e05d40" },
+  { type: "compressor", name: "effect.compressor", desc: "effect.compressor.desc", color: "#e05d40" },
   { type: "loudness", name: "effect.loudness", desc: "effect.loudness.desc", color: "#519741" },
 ];
 
@@ -52,10 +52,10 @@ export interface EffectParamDef {
 const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
   preamp: [{ key: "gain_db", label: "增益", min: -120, max: 48, step: 0.1, unit: "dB" }],
   wide: [
-    { key: "intensity", label: "强度", min: 0, max: 1, step: 0.01 },
     { key: "gain", label: "高频补偿", min: 0, max: 1, step: 0.01 },
     { key: "air", label: "空气吸收", min: 0, max: 1, step: 0.01 },
-    { key: "crossover_hz", label: "分频点", min: 100, max: 1000, step: 10, unit: "Hz" },
+    { key: "mix", label: "干湿混合", min: 0, max: 1, step: 0.01 },
+    { key: "crossover_hz", label: "分频点", min: 200, max: 1000, step: 10, unit: "Hz" },
   ],
   aural: [
     { key: "tune_hz", label: "中心频率", min: 500, max: 10000, step: 10, unit: "Hz" },
@@ -73,25 +73,15 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
     { key: "wet", label: "湿声", min: 0, max: 1, step: 0.01 },
     { key: "dry", label: "干声", min: 0, max: 1, step: 0.01 },
   ],
-  maximizer: [
-    { key: "gain_boost_db", label: "增益提升", min: 0, max: 30, step: 0.1, unit: "dB" },
-    { key: "max_output_db", label: "输出上限", min: -30, max: 0, step: 0.1, unit: "dB" },
-    { key: "release_ms", label: "释放时间", min: 0.1, max: 100, step: 0.1, unit: "ms" },
-    { key: "target", label: "目标电平", min: 0.01, max: 1, step: 0.01 },
-    { key: "lookahead_ms", label: "预看", min: 0, max: 10, step: 0.1, unit: "ms" },
-    {
-      key: "dither",
-      label: "抖动",
-      min: 0,
-      max: 1,
-      step: 1,
-      options: [
-        { value: "none", label: "无" },
-        { value: "uniform", label: "均匀" },
-        { value: "triangular", label: "三角" },
-        { value: "shaped", label: "整形" },
-      ],
-    },
+  compressor: [
+    { key: "threshold_db", label: "阈值", min: -60, max: 0, step: 1, unit: "dBFS" },
+    { key: "ratio", label: "比例", min: 1, max: 20, step: 0.5 },
+    { key: "knee_db", label: "软膝", min: 0, max: 12, step: 1, unit: "dB" },
+    { key: "attack_ms", label: "攻击", min: 0.1, max: 100, step: 0.5, unit: "ms" },
+    { key: "release_ms", label: "释放时间", min: 10, max: 1000, step: 10, unit: "ms" },
+    { key: "makeup_gain_db", label: "补偿增益", min: 0, max: 24, step: 0.5, unit: "dB" },
+    { key: "wet", label: "湿声", min: 0, max: 1, step: 0.01 },
+    { key: "dry", label: "干声", min: 0, max: 1, step: 0.01 },
   ],
   loudness: [
     { key: "phon", label: "目标响度", min: 0, max: 120, step: 1, unit: "phon" },
@@ -101,18 +91,20 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
 
 const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
   preamp: { gain_db: 0 },
-  wide: { intensity: 0.3543, gain: 0, air: 0, crossover_hz: 200 },
+  wide: { gain: 0.05, air: 0.3543, mix: 0.6, crossover_hz: 200 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
   // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
   reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, wet: 0.27, dry: 0.73 },
-  maximizer: {
-    gain_boost_db: 6,
-    max_output_db: -0.3,
-    release_ms: 10.18,
-    target: 0.32,
-    lookahead_ms: 0.75,
-    dither: "shaped",
+  compressor: {
+    threshold_db: -18,
+    ratio: 4,
+    knee_db: 3,
+    attack_ms: 10,
+    release_ms: 100,
+    makeup_gain_db: 6,
+    wet: 1,
+    dry: 0,
   },
   loudness: { phon: 80, reference_phon: 80 },
 };
@@ -135,13 +127,15 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 export function semanticStrength(type: string, params: Record<string, number | string>): number {
   switch (type) {
     case "wide":
-      return clamp01(asNum(params.intensity, 0.3543));
+      // 中置距离 = 空气吸收深度（唯一距离控制）。
+      return clamp01(asNum(params.air, 0.3543));
     case "aural":
       return clamp01(asNum(params.wet, 0.5) / 0.9);
     case "reverb":
       return clamp01(asNum(params.wet, 0.27) / 0.9);
-    case "maximizer":
-      return clamp01(asNum(params.gain_boost_db, 6) / 30);
+    case "compressor":
+      // 强度 = 压缩比（1 → 0，20 → 1）。
+      return clamp01((asNum(params.ratio, 4) - 1) / 19);
     case "loudness": {
       const ref = asNum(params.reference_phon, 80);
       return clamp01((ref - asNum(params.phon, ref)) / 40);
@@ -163,11 +157,9 @@ export function applySemanticStrength(
   const s = clamp01(strength);
   switch (type) {
     case "wide":
-      next.intensity = Math.round(s * 10000) / 10000;
-      // 拉高强度顺带把人声推远（空气吸收 0→1）；默认强度处保持 0（原声），
-      // 满强度拉满；高频补偿由参数视图手动微调。
-      const ramp = Math.max(0, Math.min(1, (s - 0.3) / 0.7));
-      next.air = Math.round(ramp * 10000) / 10000;
+      // 语义强度即空气吸收深度（0→1，无死区）；
+      // 高频补偿由参数视图手动微调，语义滑块不碰。
+      next.air = Math.round(s * 10000) / 10000;
       break;
     case "aural": {
       // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，避免干湿和 >1 削波。
@@ -189,11 +181,9 @@ export function applySemanticStrength(
       next.room_size = Math.round((0.85 + 0.5 * s) * 10000) / 10000;
       break;
     }
-    case "maximizer":
-      next.gain_boost_db = Math.round(s * 3000) / 100;
-      // 强度提升时释放时间与预看相应增加（默认强度 0.2 处过原默认值）。
-      next.release_ms = Math.round((4 + 30.9 * s) * 100) / 100;
-      next.lookahead_ms = Math.round((0.5 + 1.25 * s) * 100) / 100;
+    case "compressor":
+      // 强度拉满 → 20:1，拉低 → 1:1（不压缩）。
+      next.ratio = Math.round((1 + s * 19) * 100) / 100;
       break;
     case "loudness": {
       const ref = asNum(params.reference_phon, 80);
