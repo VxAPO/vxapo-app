@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type { ThemeMode } from "../lib/model";
 import { useI18n } from "../lib/i18n";
 import { setLang, t } from "../lib/i18n/core";
+import { writeLang } from "../lib/api";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -112,6 +113,7 @@ function SettingsDialog({
                     onClick={() => {
                       onOpenChange(false);
                       setLang(l);
+                      void writeLang(l);
                     }}
                   >
                     {t(l === "zh" ? "language.zh" : "language.en")}

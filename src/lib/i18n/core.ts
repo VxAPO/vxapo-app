@@ -3,19 +3,9 @@ import { en } from "./en";
 
 export type Lang = "zh" | "en";
 
-const STORAGE_KEY = "vxapo.lang";
-
-function readInitialLang(): Lang {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    if (v === "en" || v === "zh") return v;
-  } catch {
-    /* ignore */
-  }
-  return "zh";
-}
-
-let currentLang: Lang = readInitialLang();
+// 语言统一以 C:\ProgramData\VxAPO\lang.txt 为准（安装器写入默认，设置切换写回），
+// 不再使用 localStorage，避免历史残留导致安装器选择不生效。
+let currentLang: Lang = "zh";
 try {
   document.documentElement.dataset.lang = currentLang;
 } catch {
@@ -32,11 +22,6 @@ export function setLang(lang: Lang) {
   currentLang = lang;
   try {
     document.documentElement.dataset.lang = lang;
-  } catch {
-    /* ignore */
-  }
-  try {
-    localStorage.setItem(STORAGE_KEY, lang);
   } catch {
     /* ignore */
   }

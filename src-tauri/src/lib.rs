@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use tauri::Manager;
@@ -113,6 +113,44 @@ fn read_config(guid: String) -> Result<String, String> {
 #[tauri::command]
 fn read_import_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+/// 语言文件固定位置（与 config 同目录约定；安装器与应用设置共用）。
+fn lang_file_path() -> PathBuf {
+    Path::new(r"C:\ProgramData\VxAPO\lang.txt").to_path_buf()
+}
+
+/// 读取界面语言（"zh" / "en"；无文件或内容非法返回空串）。
+/// 回退到可执行文件目录下的 lang.txt（旧版安装器遗留）。
+#[tauri::command]
+fn read_lang(app: tauri::AppHandle) -> Result<String, String> {
+    let mut candidates = vec![lang_file_path()];
+    if let Ok(dir) = app.path().executable_dir() {
+        candidates.push(dir.join("lang.txt"));
+    }
+    for p in candidates {
+        if let Ok(s) = std::fs::read_to_string(p) {
+            let v = s.trim();
+            if v == "zh" || v == "en" {
+                return Ok(v.to_string());
+            }
+            return Ok(String::new());
+        }
+    }
+    Ok(String::new())
+}
+
+/// 写入界面语言（设置里切换时调用；与安装器共用同一个 lang.txt）。
+#[tauri::command]
+fn write_lang(lang: String) -> Result<(), String> {
+    if lang != "zh" && lang != "en" {
+        return Err("invalid lang".to_string());
+    }
+    let path = lang_file_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(path, lang).map_err(|e| e.to_string())
 }
 
 /// 前端资源渲染完成后显示主窗口（配合 visible:false，消除白屏一闪）。
@@ -714,6 +752,8 @@ pub fn run() {
             write_config,
             read_config,
             read_import_file,
+            read_lang,
+            write_lang,
             show_main_window,
             export_config,
             open_in_explorer,

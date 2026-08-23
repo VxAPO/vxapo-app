@@ -12,6 +12,22 @@ export async function readConfig(guid: string): Promise<string> {
   return invoke<string>("read_config", { guid });
 }
 
+/** 读取界面语言（"zh" / "en"；无记录返回空串）。 */
+export async function readLang(): Promise<string> {
+  if (!isTauri) return "";
+  return invoke<string>("read_lang");
+}
+
+/** 写入界面语言（设置里切换时调用，与安装器共用 lang.txt）。 */
+export async function writeLang(lang: string): Promise<void> {
+  if (!isTauri) return;
+  try {
+    await invoke("write_lang", { lang });
+  } catch {
+    /* 尽力而为：写失败时本次会话仍生效 */
+  }
+}
+
 export async function writeConfig(guid: string, content: string): Promise<void> {
   if (!isTauri) return;
   await invoke("write_config", { guid, content });
