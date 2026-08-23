@@ -143,8 +143,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    color 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
 
 .tab-add:hover {

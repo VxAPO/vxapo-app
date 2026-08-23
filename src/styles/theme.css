@@ -309,7 +309,8 @@
 .theme-transition .adv-pill,
 .theme-transition .adv-pill .adv-plus,
 .theme-transition .view-seg button,
-.theme-transition .view-seg button svg {
+.theme-transition .view-seg button svg,
+.theme-transition .no-device-tip {
   transition: none;
 }
 
