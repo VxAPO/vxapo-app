@@ -18,6 +18,7 @@ import { useToast } from "./hooks/useToast";
 import { useI18n } from "./lib/i18n";
 import { t } from "./lib/i18n/core";
 import { useWindowControls } from "./hooks/useWindowControls";
+import OverlayScrollbar from "./components/OverlayScrollbar";
 import { useChannelState } from "./hooks/useChannelState";
 import { usePresetActions } from "./hooks/usePresetActions";
 import { useMarqueeSelection } from "./hooks/useMarqueeSelection";
@@ -96,7 +97,7 @@ export default function App() {
     mode: channelOn,
     first: channelNames[0] ?? "L",
     active: effActiveChannel,
-  });
+  }, installedDevices.map((d) => d.guid));
 
   const { theme, setTheme } = useTheme();
   const { isMax, minimize, toggleMaximize, close } = useWindowControls();
@@ -151,6 +152,13 @@ export default function App() {
   const yBottom = Math.min(-6, Math.max(-30, Math.floor((troughGain - 1) / 2) * 2));
 
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [bodyNode, setBodyNode] = useState<HTMLDivElement | null>(null);
+  // 设备切换时滚动容器会重挂载：用回调 ref 把当前节点同步给滚动条，
+  // 滚动条组件本身不卸载，才能做平滑淡出。
+  const setBodyRef = useCallback((el: HTMLDivElement | null) => {
+    bodyRef.current = el;
+    setBodyNode(el);
+  }, []);
   const [hintShift, setHintShift] = useState(0);
 
   // 空态提示行水平对齐顶栏视图切换的真实中心（左右按钮簇宽度不同，不能按窗口中心算）
@@ -552,8 +560,8 @@ export default function App() {
             ) : (
               <>
             <div
-              className="tuning-scroll"
-              ref={bodyRef}
+              className="tuning-scroll os-scroll"
+              ref={setBodyRef}
               style={{ paddingBottom: BOTTOM_BAR_PAD }}
               onPointerDown={onBodyPointerDown}
               onPointerMove={onBodyPointerMove}
@@ -702,6 +710,14 @@ export default function App() {
             )}
               </motion.div>
             </AnimatePresence>
+            <OverlayScrollbar
+              targetRef={bodyRef}
+              target={bodyNode}
+              deviceKey={selectedGuid ?? "none"}
+              rightPx={-2}
+              thumbRight={-2}
+              bottomInset={26}
+            />
           </div>
             </main>
           </>

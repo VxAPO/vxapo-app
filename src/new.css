@@ -10,4 +10,5 @@
 @import "./styles/dialogs.css";
 @import "./styles/toast.css";
 @import "./styles/drag.css";
+@import "./styles/overlay-scroll.css";
 @import "./styles/dark.css";

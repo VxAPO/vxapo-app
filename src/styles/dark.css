@@ -80,8 +80,13 @@
 }
 
 :root[data-theme="dark"] .gs-thumb::after {
-  border-color: #1d1f22;
   box-shadow: 0 1px 3px rgba(var(--shadow-ink), 0.55);
+}
+
+/* 深色下 disabled 圆头保持低对比（描边用 --border、无阴影） */
+:root[data-theme="dark"] .gs-root.disabled .gs-thumb::after {
+  border-color: var(--border);
+  box-shadow: none;
 }
 
 :root[data-theme="dark"] .vx-switch-thumb {
@@ -197,16 +202,6 @@
   background-color: color-mix(in srgb, var(--card) 82%, transparent);
   backdrop-filter: blur(28px) saturate(1.15);
   -webkit-backdrop-filter: blur(28px) saturate(1.15);
-}
-
-/* 深色模式：SVG 曲线/坐标轴实线提亮，压过虚线网格 */
-:root[data-theme="dark"] .curve-wrap > svg > path,
-:root[data-theme="dark"] .curve-wrap > svg > circle {
-  stroke: #47c3d1;
-}
-
-:root[data-theme="dark"] .curve-wrap > svg > line:not([stroke-dasharray]) {
-  stroke: rgba(255, 255, 255, 0.42);
 }
 
 .sem-label {

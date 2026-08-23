@@ -55,8 +55,8 @@ export default function CurveGrid({ curveW, yTop, yBottom }: CurveGridProps) {
           strokeDasharray="4 4"
         />
       ))}
-      <line x1="40" y1={plotTop} x2="40" y2={plotBottom} stroke="var(--border-strong)" strokeWidth="1.5" />
-      <line x1="40" y1={plotBottom} x2={curveW - 40} y2={plotBottom} stroke="var(--border-strong)" strokeWidth="1.5" />
+      <line x1="40" y1={plotTop} x2="40" y2={plotBottom} stroke="var(--curve-axis)" strokeWidth="1.5" />
+      <line x1="40" y1={plotBottom} x2={curveW - 40} y2={plotBottom} stroke="var(--curve-axis)" strokeWidth="1.5" />
       <g fill="var(--text-secondary)" fontSize="10">
         {xLabels.map((f, i) => (
           <text key={f} x={xGrid[i]} y={plotBottom + 12} textAnchor="middle">{f}</text>

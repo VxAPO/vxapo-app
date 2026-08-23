@@ -6,6 +6,7 @@ import type { Device } from "../lib/model";
 import { readImportFile } from "../lib/api";
 import { t } from "../lib/i18n/core";
 import VxSelect from "./VxSelect";
+import OverlayScrollbar from "./OverlayScrollbar";
 
 interface ImportDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ function ImportDialog({
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const previewRef = useRef<HTMLPreElement>(null);
 
   // Tauri 文件拖放事件：比 HTML5 drop 更可靠，读取路径后由 Rust 读内容
   useEffect(() => {
@@ -108,6 +110,7 @@ function ImportDialog({
     e.preventDefault();
     setDragOver(false);
     const f = e.dataTransfer.files?.[0];
+    if (!f) return;
     if (f) readFile(f);
   };
 
@@ -159,10 +162,13 @@ function ImportDialog({
                   <div className="import-preview-head">
                     <span className="import-preview-name">{fileName}</span>
                     <button className="import-reset" type="button" onClick={onReset} aria-label={t("import.chooseFile")}>
-                      <X size={14} />
+                      <X size={12} />
                     </button>
                   </div>
-                  <pre className="import-preview-text">{fileText}</pre>
+                  <pre className="import-preview-text os-scroll" ref={previewRef}>
+                    {fileText}
+                    <OverlayScrollbar targetRef={previewRef} bottomInset={14} zIndex={65} />
+                  </pre>
                 </div>
               ) : (
                 <div

@@ -88,7 +88,7 @@ function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }
         onMouseLeave={onMouseLeave}
       >
         <CurveGrid curveW={curveW} yTop={yTop} yBottom={yBottom} />
-        <path d={curveD} fill="none" stroke="var(--brand-deep)" strokeWidth="2" />
+        <path d={curveD} fill="none" stroke="var(--curve-path)" strokeWidth="2" />
         {hoverPt && (
           <>
             <line
@@ -105,7 +105,7 @@ function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }
               cy={hoverPt.y}
               r="3"
               fill="var(--card)"
-              stroke="var(--brand-deep)"
+              stroke="var(--curve-path)"
               strokeWidth="2"
             />
           </>

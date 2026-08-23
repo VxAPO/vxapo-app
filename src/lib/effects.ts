@@ -53,7 +53,8 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
   preamp: [{ key: "gain_db", label: "增益", min: -120, max: 48, step: 0.1, unit: "dB" }],
   wide: [
     { key: "gain", label: "高频补偿", min: 0, max: 1, step: 0.01 },
-    { key: "air", label: "空气吸收", min: 0, max: 1, step: 0.01 },
+    { key: "air", label: "中置空气", min: 0, max: 1, step: 0.01 },
+    { key: "air_side", label: "侧向空气", min: 0, max: 1, step: 0.01 },
     { key: "mix", label: "干湿混合", min: 0, max: 1, step: 0.01 },
     { key: "crossover_hz", label: "分频点", min: 200, max: 1000, step: 10, unit: "Hz" },
   ],
@@ -70,6 +71,7 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
     { key: "decay", label: "衰减", min: 0, max: 1, step: 0.01 },
     { key: "damping", label: "阻尼", min: 0, max: 1, step: 0.01 },
     { key: "pre_delay_ms", label: "预延迟", min: 0, max: 100, step: 1, unit: "ms" },
+    { key: "low_cut_hz", label: "低频保护", min: 20, max: 250, step: 5, unit: "Hz" },
     { key: "wet", label: "湿声", min: 0, max: 1, step: 0.01 },
     { key: "dry", label: "干声", min: 0, max: 1, step: 0.01 },
   ],
@@ -91,11 +93,11 @@ const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
 
 const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
   preamp: { gain_db: 0 },
-  wide: { gain: 0.05, air: 0.3543, mix: 0.6, crossover_hz: 200 },
+  wide: { gain: 0.05, air: 0.3543, air_side: 0, mix: 0.6, crossover_hz: 200 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
   // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
-  reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, wet: 0.27, dry: 0.73 },
+  reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, low_cut_hz: 100, wet: 0.27, dry: 0.73 },
   compressor: {
     threshold_db: -18,
     ratio: 4,

@@ -56,6 +56,18 @@
   initial-value: #b3bbc8;
 }
 
+@property --curve-axis {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b3bbc8;
+}
+
+@property --curve-path {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #009aa2;
+}
+
 @property --hover {
   syntax: '<color>';
   inherits: true;
@@ -122,6 +134,18 @@
   initial-value: #ffffff;
 }
 
+@property --gs-thumb-border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3d4552;
+}
+
+@property --gs-thumb-disabled {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b8bec9;
+}
+
 @property --ring-hover {
   syntax: '<color>';
   inherits: true;
@@ -169,6 +193,8 @@
   --text-weak: #69707c;
   --border: #d9dee7;
   --border-strong: #b3bbc8;
+  --curve-axis: #b3bbc8;
+  --curve-path: #009aa2;
   --hover: #e3e8ef;
   --track: #e3e7ee;
   --theme-hover-bg: #c2cbd8;
@@ -182,6 +208,8 @@
   --accent-bg: #3b3c3f;
   --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.02), 0 1px 3px rgba(15, 23, 42, 0.04);
   --thumb: #ffffff;
+  --gs-thumb-border: #3d4552;
+  --gs-thumb-disabled: #ffffff;
   --ring-hover: rgba(15, 23, 42, 0.14);
   --hover-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 4px 10px rgba(15, 23, 42, 0.08);
   --scrollbar: #d9dce4;
@@ -200,6 +228,8 @@
   --text-weak: #717882;
   --border: #373a3e;
   --border-strong: #51555b;
+  --curve-axis: #7c7d7f;
+  --curve-path: #47c3d1;
   --hover: #25292e;
   --track: #22262a;
   --theme-hover-bg: #363c45;
@@ -214,6 +244,8 @@
   --shadow-ink: 15, 18, 23;
   --card-shadow: 0 1px 3px rgba(var(--shadow-ink), 0.7), 0 4px 14px rgba(var(--shadow-ink), 0.4);
   --thumb: #c5c9d0;
+  --gs-thumb-border: #1d1f22;
+  --gs-thumb-disabled: #6d7279;
   --ring-hover: rgba(255, 255, 255, 0.14);
   --hover-shadow: 0 4px 10px rgba(var(--shadow-ink), 0.8), 0 6px 16px rgba(var(--shadow-ink), 0.55);
   --scrollbar: #3f4348;
@@ -236,6 +268,8 @@
     --text-weak 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --border 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --border-strong 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --curve-axis 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --curve-path 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --track 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --brand 0.35s cubic-bezier(0.4, 0, 0.2, 1),
@@ -247,6 +281,8 @@
     --on-accent 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --accent-bg 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --thumb 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --gs-thumb-border 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --gs-thumb-disabled 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --ring-hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --scrollbar 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --scrollbar-hover 0.35s cubic-bezier(0.4, 0, 0.2, 1),
@@ -280,10 +316,6 @@
 .theme-transition .tab-item.active .tab-btn,
 .theme-transition .tab-item.active .tab-btn:hover {
   transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0s;
-}
-
-.theme-transition .gs-thumb::after {
-  border-color: #6b7280;
 }
 
 /* 主题切换期间隐藏所有阴影，但预设卡左侧骑边保留 */

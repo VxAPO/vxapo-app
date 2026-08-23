@@ -1,9 +1,10 @@
-import { memo, useEffect, useState, type CSSProperties } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { accentHoverColor, presetAccent } from "../lib/blocks";
 import { t } from "../lib/i18n/core";
+import OverlayScrollbar from "./OverlayScrollbar";
 
 interface SavePresetDialogProps {
   open: boolean;
@@ -39,6 +40,7 @@ function SavePresetDialog({
   const [name, setName] = useState(defaultName);
   const [color, setColor] = useState("#6fbf73");
   const [descs, setDescs] = useState<string[]>([]);
+  const bandListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -90,7 +92,8 @@ function SavePresetDialog({
             </div>
             <div className="vx-field">
               <span className="vx-field-label">{t("preset.bandDesc")}</span>
-              <div className="preset-band-list">
+              <div className="preset-band-list os-scroll" ref={bandListRef}>
+                <OverlayScrollbar targetRef={bandListRef} thumbRight={-6} zIndex={65} />
                 {blocks.map((b, i) => {
                   const band = b.bands[0];
                   return (

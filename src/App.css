@@ -729,17 +729,6 @@ button {
 .module-list.empty .empty-hint {
   margin: auto;
 }
-.module-list::-webkit-scrollbar {
-  width: 6px;
-}
-.module-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-.module-list::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--radius-pill);
-}
-
 /* 模块卡片 */
 .module-card {
   display: flex;

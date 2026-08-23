@@ -48,6 +48,7 @@
   height: 256px;
   opacity: 0.16;
   filter: grayscale(1) invert(1);
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root[data-theme="light"] .no-device-logo {
@@ -57,6 +58,7 @@
 .no-device-tip {
   color: #3d455280;
   font-size: 13px;
+  transition: color 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root[data-theme="dark"] .no-device-tip {
@@ -88,7 +90,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root[data-theme="dark"] .no-device-plus {
@@ -620,7 +623,7 @@ html[data-lang="zh"] .b-type {
   inset: 0;
   border-radius: 50%;
   background: var(--thumb);
-  border: 1px solid var(--text-primary);
+  border: 1px solid var(--gs-thumb-border);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
@@ -634,7 +637,7 @@ html[data-lang="zh"] .b-type {
 }
 
 .gs-root.disabled .gs-thumb::after {
-  background: var(--thumb);
+  background: var(--gs-thumb-disabled);
   border-color: var(--border);
   box-shadow: none;
 }

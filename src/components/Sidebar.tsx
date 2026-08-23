@@ -8,6 +8,7 @@ import { t } from "../lib/i18n/core";
 import { EFFECT_DEFS } from "../lib/effects";
 import { snapPx } from "../lib/snap";
 import PresetDeck from "./PresetDeck";
+import OverlayScrollbar from "./OverlayScrollbar";
 
 const SIDEBAR_MIN = 210;
 const SECTIONS: SideSection[] = ["preset", "custom", "advanced"];
@@ -61,6 +62,7 @@ function Sidebar({
   const resizeStartRef = useRef<{ startX: number; startW: number } | null>(null);
   const resizeRafRef = useRef(0);
   const pendingWRef = useRef<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -123,7 +125,8 @@ function Sidebar({
       style={{ width: sideW }}
     >
       <div className={`sidebar-scroll${disabled ? " disabled" : ""}`}>
-        <div className="sidebar-scroll-inner">
+        <div className="sidebar-scroll-inner os-scroll" ref={scrollRef}>
+        <OverlayScrollbar targetRef={scrollRef} rounded />
         <div className="side-seg">
         <div className="labels">
           {SECTIONS.map((s) => (

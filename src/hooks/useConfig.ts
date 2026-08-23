@@ -30,6 +30,7 @@ export function useConfig(
   onError: (msg: string) => void,
   notify: (msg: string) => void,
   channelCtx: ChannelCtx = { mode: false, first: "L", active: "L" },
+  deviceGuids: string[] = [],
 ) {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [effects, setEffects] = useState<EffectItem[]>([]);
@@ -38,6 +39,35 @@ export function useConfig(
   const saveTimer = useRef<number | undefined>(undefined);
   const dirtyRef = useRef(false);
   const tailRef = useRef("");
+  const initReqRef = useRef<Set<string>>(new Set());
+
+  // 设备列表加载后：为每个未缓存的设备读取启用状态，
+  // 保证标签页调音开关初次打开就显示正确（不再默认“开”）。
+  useEffect(() => {
+    if (deviceGuids.length === 0) return;
+    let alive = true;
+    for (const guid of deviceGuids) {
+      if (initReqRef.current.has(guid)) continue;
+      initReqRef.current.add(guid);
+      readConfig(guid)
+        .then((text) => {
+          if (!alive) return;
+          const parsed = parseConfigWithTail(text);
+          setTuningMap((prev) =>
+            prev[guid] !== undefined ? prev : { ...prev, [guid]: parsed.enabled },
+          );
+        })
+        .catch(() => {
+          if (!alive) return;
+          setTuningMap((prev) =>
+            prev[guid] !== undefined ? prev : { ...prev, [guid]: false },
+          );
+        });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [deviceGuids]);
 
   useEffect(() => {
     return () => {
@@ -298,11 +328,29 @@ export function useConfig(
   }, [markDirty]);
 
   const deviceTuningOn = useCallback((guid: string) => tuningMap[guid] ?? true, [tuningMap]);
-  const toggleDeviceTuning = useCallback((guid: string) => {
-    const next = !deviceTuningOn(guid);
-    markDirty();
-    setTuningMap((prev) => ({ ...prev, [guid]: next }));
-  }, [deviceTuningOn, markDirty]);
+  const toggleDeviceTuning = useCallback(
+    (guid: string) => {
+      const next = !deviceTuningOn(guid);
+      setTuningMap((prev) => ({ ...prev, [guid]: next }));
+      if (guid === selectedGuid) {
+        // 当前设备：走自动保存（buildToml 会带上 enabled）。
+        markDirty();
+      } else {
+        // 非当前设备：直接改写目标配置的 enabled（只翻转总开关，不动内容），
+        // 否则切过去会被磁盘旧值覆盖。
+        readConfig(guid)
+          .then((text) => {
+            const parsed = parseConfigWithTail(text);
+            const content =
+              buildToml(parsed.blocks, next, normalizeEffects(parsed.effects), channelCtx) +
+              parsed.tail;
+            return writeConfig(guid, content);
+          })
+          .catch((e: unknown) => onError(friendlyError(e)));
+      }
+    },
+    [deviceTuningOn, selectedGuid, channelCtx, onError, markDirty],
+  );
 
   return {
     blocks,

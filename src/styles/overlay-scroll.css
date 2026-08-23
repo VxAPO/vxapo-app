@@ -1,0 +1,40 @@
+/* 自绘 overlay 滚动条：隐藏原生滚动条，视觉细条不占布局宽度 */
+.os-scroll {
+  scrollbar-width: none;
+}
+
+.os-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.os-track {
+  position: fixed;
+  width: 5px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.os-track.on {
+  opacity: 1;
+}
+
+.os-thumb {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  border-radius: 9999px;
+  background: var(--scrollbar);
+  pointer-events: none;
+  cursor: pointer;
+  will-change: transform;
+}
+
+.os-track.on .os-thumb {
+  pointer-events: auto;
+}
+
+.os-thumb:hover {
+  background: var(--scrollbar-hover);
+}

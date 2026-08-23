@@ -12,6 +12,7 @@ import {
 } from "../lib/api";
 import type { Device } from "../lib/model";
 import { t } from "../lib/i18n/core";
+import OverlayScrollbar from "./OverlayScrollbar";
 
 interface InstallDialogProps {
   open: boolean;
@@ -36,6 +37,7 @@ function InstallDialog({
   const [phase, setPhase] = useState<Phase>("idle");
   const [statusText, setStatusText] = useState("");
   const aliveRef = useRef(true);
+  const installListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -171,7 +173,8 @@ function InstallDialog({
               </div>
             ) : (
               <>
-                <div className="install-list">
+                <div className="install-list os-scroll" ref={installListRef}>
+                  <OverlayScrollbar targetRef={installListRef} thumbRight={-6} zIndex={65} />
                   {candidates.map((d) => (
                     <div className="install-item" key={d.guid}>
                       <div className="install-item-info">

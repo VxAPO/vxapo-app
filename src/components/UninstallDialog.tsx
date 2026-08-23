@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { readProgress } from "../lib/api";
 import type { Device } from "../lib/model";
 import { t } from "../lib/i18n/core";
+import OverlayScrollbar from "./OverlayScrollbar";
 
 interface UninstallDialogProps {
   device: Device | null;
@@ -23,6 +24,7 @@ function UninstallDialog({
 }: UninstallDialogProps) {
   const [progress, setProgress] = useState("");
   const aliveRef = useRef(true);
+  const progressRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -77,7 +79,12 @@ function UninstallDialog({
               {busy ? t("uninstall.inProgress") : t("uninstall.confirm")}
             </button>
           </div>
-          {progress && <pre className="op-progress">{progress}</pre>}
+          {progress && (
+            <pre className="op-progress os-scroll" ref={progressRef}>
+              {progress}
+              <OverlayScrollbar targetRef={progressRef} zIndex={65} />
+            </pre>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

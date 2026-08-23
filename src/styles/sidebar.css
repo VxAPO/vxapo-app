@@ -28,6 +28,7 @@
   overflow-x: hidden;
   padding: 12px 14px 14px 14px;
   box-sizing: border-box;
+  position: relative;
 }
 
 /* 预设列表：与「高级」区一致的紧凑条目（flex + gap，无 margin 挤出问题） */

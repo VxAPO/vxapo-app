@@ -30,8 +30,8 @@ function DeviceTabs({
             <button
               className={`tab-dot ${tuningOn(d.guid) ? "on" : ""}`}
               type="button"
-              aria-label={tuningOn(d.guid) ? t("disable.filter") : t("enable.filter")}
-              title={tuningOn(d.guid) ? t("disable.filter") : t("enable.filter")}
+              aria-label={tuningOn(d.guid) ? t("disable.device") : t("enable.device")}
+              title={tuningOn(d.guid) ? t("disable.device") : t("enable.device")}
               onClick={() => onToggleTuning(d.guid)}
             />
             <button className="tab-btn" type="button" onClick={() => onSelect(d.guid)}>

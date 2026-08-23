@@ -16,17 +16,11 @@
   margin-right: 4px;
   position: relative;
   top: -1px;
-  display: block;
+display: block;
   user-select: none;
 }
 
-/* ── 滚动条：隐藏轨道，只留滑块条（与进度条同色） ─────────── */
-
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
+/* ── 滚动条颜色：叠加在 fluentOverlay 原生细条上（不设宽度） ── */
 *::-webkit-scrollbar-track {
   background: transparent;
 }
