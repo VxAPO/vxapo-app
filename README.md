@@ -53,7 +53,7 @@ npm run build:win
 
 项目文档见 `../vxapo-docs`，App 引用规范见 `../vxapo-docs/app`。
 
-## 致谢 Equalizer APO
+## 设计参考与致谢
 
 VxAPO 的设计参考了 [Equalizer APO](https://sourceforge.net/projects/equalizerapo/)：
 逐设备 APO 槽位安装、配置文件驱动 DSP、31 段 GraphicEQ 上限、事件驱动热重载等。
@@ -134,7 +134,7 @@ npm run build:win
 
 See `../vxapo-docs`, with the app reference under `../vxapo-docs/app`.
 
-## Acknowledgments: Equalizer APO
+## Design references & acknowledgments
 
 VxAPO's design is inspired by [Equalizer APO](https://sourceforge.net/projects/equalizerapo/):
 per-device APO slot installation, config-file-driven DSP, the 31-band GraphicEQ limit,
