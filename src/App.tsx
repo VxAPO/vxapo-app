@@ -91,6 +91,9 @@ export default function App() {
     patchBand,
     totalBands,
     channelBandCounts,
+    configChannelMode,
+    loaded,
+    forceReload,
     deviceTuningOn,
     toggleDeviceTuning,
   } = useConfig(installedDevices.length === 0 ? null : selectedGuid, onError, notify, {
@@ -230,6 +233,18 @@ export default function App() {
     cancelToolbarAnimRef,
     bumpSelGeomTickRef,
   });
+
+  // 通道选择器开关跟随磁盘配置：重启/切换设备后从 per-channel 数据还原，
+  // 避免界面停在“关”而配置实际是分通道的（还会在保存时丢掉非首通道块）。
+  // 通道模式下必须落在参数视图（通道选择器只存在于参数视图，preset 按钮此时也禁用）。
+  useEffect(() => {
+    if (!loaded) return;
+    setChannelOn(configChannelMode);
+    if (configChannelMode) {
+      setSegDir("right");
+      setView("advanced");
+    }
+  }, [loaded, configChannelMode, setChannelOn, setSegDir, setView]);
 
   const {
     selectedIds,
@@ -416,13 +431,14 @@ export default function App() {
         }
         await writeConfig(guid, content);
         setSelectedGuid(guid);
+        forceReload();
         setImportOpen(false);
         notify(t("import.success"));
       } catch (e) {
         notify(`${t("import.fail")}：${friendlyError(e)}`);
       }
     },
-    [notify, setSelectedGuid],
+    [notify, setSelectedGuid, forceReload],
   );
   const handleExport = useCallback(() => {
     if (!selectedGuid) return;

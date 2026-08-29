@@ -36,10 +36,14 @@ export function useConfig(
   const [effects, setEffects] = useState<EffectItem[]>([]);
   const [tuningMap, setTuningMap] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState(false);
+  // 磁盘 config 编码的通道模式：存在任意带 channels 的 EQ 块或效果器即为开启。
+  // 供前端还原通道选择器开关（重启/切换设备后不能停留在内存默认的“关”）。
+  const [configChannelMode, setConfigChannelMode] = useState(false);
   const saveTimer = useRef<number | undefined>(undefined);
   const dirtyRef = useRef(false);
   const tailRef = useRef("");
   const initReqRef = useRef<Set<string>>(new Set());
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   // 设备列表加载后：为每个未缓存的设备读取启用状态，
   // 保证标签页调音开关初次打开就显示正确（不再默认“开”）。
@@ -94,12 +98,14 @@ export function useConfig(
           const parsed = parseConfigWithTail(text);
           setBlocks(ensureBlockIds(parsed.blocks));
           setEffects(normalizeEffects(parsed.effects));
+          setConfigChannelMode(parsed.channelMode);
           tailRef.current = parsed.tail;
           setTuningMap((prev) =>
             prev[selectedGuid] === parsed.enabled ? prev : { ...prev, [selectedGuid]: parsed.enabled },
           );
         } catch {
           setBlocks([]);
+          setConfigChannelMode(false);
           tailRef.current = "";
         }
         onError("");
@@ -108,6 +114,7 @@ export function useConfig(
       .catch((e: unknown) => {
         if (!alive) return;
         setBlocks([]);
+        setConfigChannelMode(false);
         tailRef.current = "";
         onError(friendlyError(e));
         setLoaded(true);
@@ -115,7 +122,13 @@ export function useConfig(
     return () => {
       alive = false;
     };
-  }, [selectedGuid, onError]);
+  }, [selectedGuid, onError, reloadNonce]);
+
+  // 强制重新读取磁盘配置（导入到当前设备等场景，selectedGuid 未变时不会触发上面的 effect）。
+  const forceReload = useCallback(() => {
+    dirtyRef.current = false;
+    setReloadNonce((n) => n + 1);
+  }, []);
 
   // 监控 config 目录热更新：外部/驱动改写 config.toml 时自动刷新 UI（编辑中跳过，避免覆盖手头改动）
   const pollConfig = useCallback(() => {
@@ -125,6 +138,7 @@ export function useConfig(
         if (dirtyRef.current) return;
         const parsed = parseConfigWithTail(text);
         tailRef.current = parsed.tail;
+        setConfigChannelMode(parsed.channelMode);
         setTuningMap((prev) =>
           prev[selectedGuid] === parsed.enabled ? prev : { ...prev, [selectedGuid]: parsed.enabled },
         );
@@ -359,8 +373,10 @@ export function useConfig(
     setEffects,
     tuningMap,
     loaded,
+    configChannelMode,
     dirtyRef,
     markDirty,
+    forceReload,
     applyPreset,
     addBand,
     addEffect,

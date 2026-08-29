@@ -66,9 +66,17 @@ function pushBlock(blocks: Block[], b: Block) {
   }
 }
 
-export function parseConfig(text: string): { blocks: Block[]; effects: EffectItem[] } {
+export function parseConfig(text: string): {
+  blocks: Block[];
+  effects: EffectItem[];
+  channelMode: boolean;
+} {
   const blocks: Block[] = [];
   const effects: EffectItem[] = [];
+  // 通道选择器模式：任意块/效果器带“单声道 channels”即视为开启。
+  // App 开启通道模式时每块只写一个声道（channels=["L"]/["R"]）；
+  // 多元素（如 ["L","R"]）是立体声共用一个块，不属通道模式。
+  let channelMode = false;
   let current: Block | null = null;
   let currentEffect: EffectItem | null = null;
   let inBand = false;
@@ -115,6 +123,7 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
         try {
           const arr: unknown = JSON.parse(value);
           if (Array.isArray(arr)) {
+            if (arr.length === 1) channelMode = true;
             currentEffect.channels = arr.map((c) => String(c));
           }
         } catch {
@@ -142,7 +151,10 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
       case "channels": {
         try {
           const arr: unknown = JSON.parse(value);
-          if (Array.isArray(arr) && arr.length) current.channel = String(arr[0]);
+          if (Array.isArray(arr) && arr.length) {
+            if (arr.length === 1) channelMode = true;
+            current.channel = String(arr[0]);
+          }
         } catch {
           /* 忽略无法解析的 channels */
         }
@@ -164,12 +176,14 @@ export function parseConfig(text: string): { blocks: Block[]; effects: EffectIte
   }
   if (current) pushBlock(blocks, current);
   if (currentEffect) effects.push(currentEffect);
-  return { blocks, effects };
+  return { blocks, effects, channelMode };
 }
 
 export interface ConfigParse {
   blocks: Block[];
   effects: EffectItem[];
+  /** 通道选择器模式：存在单声道块/效果器即为开启（立体声块 channels=["L","R"] 不算）。 */
+  channelMode: boolean;
   /** 顶层总开关：false = 整链 passthrough */
   enabled: boolean;
   /** 首个未知非 peq 效果器块起、到文件末尾的原始文本（保存时原样拼回，避免破坏第三方效果器） */
@@ -177,7 +191,7 @@ export interface ConfigParse {
 }
 
 export function parseConfigWithTail(text: string): ConfigParse {
-  const { blocks, effects } = parseConfig(text);
+  const { blocks, effects, channelMode } = parseConfig(text);
   const lines = text.split(/\r?\n/);
   let enabled = true;
   for (const line of lines) {
@@ -201,10 +215,10 @@ export function parseConfigWithTail(text: string): ConfigParse {
       }
     }
     if (type && type !== "peq" && !KNOWN_EFFECT_TYPES.includes(type)) {
-      return { blocks, effects, enabled, tail: "\n" + lines.slice(i).join("\n") };
+      return { blocks, effects, channelMode, enabled, tail: "\n" + lines.slice(i).join("\n") };
     }
   }
-  return { blocks, effects, enabled, tail: "" };
+  return { blocks, effects, channelMode, enabled, tail: "" };
 }
 
 export function countBands(blocks: Block[]): number {
