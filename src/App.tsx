@@ -21,6 +21,7 @@ import { useWindowControls } from "./hooks/useWindowControls";
 import OverlayScrollbar from "./components/OverlayScrollbar";
 import { useChannelState } from "./hooks/useChannelState";
 import { useGlassRing } from "./hooks/useGlassRing";
+import { useEdgeTintLayer } from "./hooks/useEdgeTintLayer";
 import { usePresetActions } from "./hooks/usePresetActions";
 import { useMarqueeSelection } from "./hooks/useMarqueeSelection";
 import { useViewAnimation, VIEW_COLLAPSE_MS } from "./hooks/useViewAnimation";
@@ -159,6 +160,7 @@ export default function App() {
   const [bodyNode, setBodyNode] = useState<HTMLDivElement | null>(null);
   const devFxRef = useRef<HTMLDivElement | null>(null);
   useGlassRing(devFxRef);
+  useEdgeTintLayer(devFxRef);
   // 设备切换时滚动容器会重挂载：用回调 ref 把当前节点同步给滚动条，
   // 滚动条组件本身不卸载，才能做平滑淡出。
   const setBodyRef = useCallback((el: HTMLDivElement | null) => {

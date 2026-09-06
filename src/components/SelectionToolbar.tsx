@@ -4,6 +4,7 @@ import { ChevronDown, Copy, Save, Trash2 } from "lucide-react";
 import { channelLabel } from "../lib/channels";
 import { t } from "../lib/i18n/core";
 import { useGlassRing } from "../hooks/useGlassRing";
+import { useEdgeTintLayer } from "../hooks/useEdgeTintLayer";
 
 interface SelectionToolbarProps {
   selectedCount: number;
@@ -32,6 +33,7 @@ export default function SelectionToolbar({
   onDelete,
 }: SelectionToolbarProps) {
   useGlassRing(toolbarRef);
+  useEdgeTintLayer(toolbarRef);
   return (
     <motion.div
       className="fx fx-toolbar"

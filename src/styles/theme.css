@@ -187,6 +187,8 @@
 @property --ring-g2 { syntax: '<number>'; inherits: true; initial-value: 0.26; }
 @property --ring-s1 { syntax: '<number>'; inherits: true; initial-value: 0.32; }
 @property --ring-s2 { syntax: '<number>'; inherits: true; initial-value: 0.28; }
+@property --ring-l  { syntax: '<number>'; inherits: true; initial-value: 0.08; }
+@property --ring-r  { syntax: '<number>'; inherits: true; initial-value: 0.04; }
 @property --ring-t  { syntax: '<number>'; inherits: true; initial-value: 0.3; }
 @property --ring-m  { syntax: '<number>'; inherits: true; initial-value: 0.22; }
 @property --ring-b  { syntax: '<number>'; inherits: true; initial-value: 0.22; }
@@ -226,13 +228,13 @@
   --scrollbar-hover: #c2c7d1;
   --disabled-fill: #b8bec9;
   --tab-active-bg: #e9edf1;
-  --ring-g1: 0.3;
-  --ring-g2: 0.26;
-  --ring-s1: 0.32;
-  --ring-s2: 0.28;
-  --ring-t: 0.3;
-  --ring-m: 0.22;
-  --ring-b: 0.22;
+  --ring-g1: 0.34;
+  --ring-g2: 0.24;
+  --ring-s1: 0.3;
+  --ring-l: 0.08;
+  --ring-r: 0.04;
+  --ring-t: 0.26;
+  --ring-b: 0.14;
   --ring-base: rgba(217, 222, 231, 0.25);
 }
 
@@ -272,13 +274,13 @@
   --tab-inactive: #2f3135;
   --tab-active: #45474c;
   --tab-active-bg: #45474c;
-  --ring-g1: 0.12;
-  --ring-g2: 0.1;
+  --ring-g1: 0.14;
+  --ring-g2: 0.09;
   --ring-s1: 0.12;
-  --ring-s2: 0.1;
-  --ring-t: 0.11;
-  --ring-m: 0.02;
-  --ring-b: 0.08;
+  --ring-l: 0.035;
+  --ring-r: 0.018;
+  --ring-t: 0.09;
+  --ring-b: 0.05;
   --ring-base: rgba(255, 255, 255, 0.035);
 }
 
@@ -320,6 +322,8 @@
     --ring-g2 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --ring-s1 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --ring-s2 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-l 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-r 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --ring-t 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --ring-m 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --ring-b 0.35s cubic-bezier(0.4, 0, 0.2, 1),

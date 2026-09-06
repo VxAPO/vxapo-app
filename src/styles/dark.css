@@ -242,6 +242,17 @@
   -webkit-backdrop-filter: blur(34px) saturate(3) brightness(1.05);
 }
 
+/* 染色交给 Canvas 近距离取样，关闭旧伪元素的远距 backdrop 采样，避免远距离染色与暗色偏蓝 */
+.fx-curve::after,
+.fx-dev::after,
+.fx-toolbar::after,
+.fx-curve::before,
+.fx-dev::before,
+.fx-toolbar::before {
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
 .sem-label {
   font-size: 12px;
   color: var(--text-weak);

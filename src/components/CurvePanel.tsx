@@ -3,6 +3,7 @@ import type { Block } from "../lib/model";
 import { channelLabel } from "../lib/channels";
 import { t } from "../lib/i18n/core";
 import { useGlassRing } from "../hooks/useGlassRing";
+import { useEdgeTintLayer } from "../hooks/useEdgeTintLayer";
 import CurvePlot from "./CurvePlot";
 import VxSelect from "./VxSelect";
 
@@ -79,6 +80,7 @@ function CurvePanel({
   }, []);
 
   useGlassRing(fxRef);
+  useEdgeTintLayer(fxRef);
 
   return (
     <div className="fx fx-curve" ref={fxRef}>
