@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import type { EffectItem, PeqBandKind, PresetLibraryEntry, SideSection } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
 import { useI18n } from "../lib/i18n";
-import { t } from "../lib/i18n/core";
+import { displayGroupLabel, t } from "../lib/i18n/core";
 import { EFFECT_DEFS } from "../lib/effects";
 import { snapPx } from "../lib/snap";
 import PresetDeck from "./PresetDeck";
@@ -151,7 +151,7 @@ function Sidebar({
             {customPresets.map((p) => {
               const used = usedPresets.includes(p.id);
               const name = lang === "en" ? (p.name_en ?? p.name) : p.name;
-              const group = lang === "en" ? (p.group_en ?? p.group) : p.group;
+              const group = displayGroupLabel(lang === "en" ? (p.group_en ?? p.group) : p.group);
               return (
                 <div
                   key={p.id}

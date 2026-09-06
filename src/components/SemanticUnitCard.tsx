@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
-import { t } from "../lib/i18n/core";
+import { displayBandName, displayGroupLabel, t } from "../lib/i18n/core";
 import { semanticName, type BandPatch } from "../lib/blocks";
 import GainSlider from "./GainSlider";
 
@@ -47,7 +47,7 @@ function SemanticUnitCard({
         >
           {String(num ?? (dragNum != null ? dragNum + 1 : bi + 1)).padStart(2, "0")}
         </button>
-        <span className="g-name">{t(semanticName(b))}</span>
+        <span className="g-name">{t(displayBandName(semanticName(b)))}</span>
         <span className="grow" />
         {groupLabel ? (
           <button
@@ -56,7 +56,7 @@ function SemanticUnitCard({
             title={t("delete.group")}
             onClick={() => onRemoveGroup(groupLabel)}
           >
-            <span className="sem-chip-label">{groupLabel}</span>
+            <span className="sem-chip-label">{displayGroupLabel(groupLabel)}</span>
             <X size={10} strokeWidth={2.5} />
           </button>
         ) : (

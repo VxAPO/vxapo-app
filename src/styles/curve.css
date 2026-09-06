@@ -14,7 +14,10 @@
   /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏 */
   backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
   -webkit-backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
-  transition: box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: auto;
 }
 
@@ -151,9 +154,7 @@
     var(--ring-base, color-mix(in srgb, var(--border) 25%, transparent));
   backdrop-filter: blur(12px) saturate(3) brightness(1);
   -webkit-backdrop-filter: blur(12px) saturate(3) brightness(1);
-  transition:
-    opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    backdrop-filter 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
 
@@ -186,9 +187,7 @@
   -webkit-backdrop-filter: blur(24px) saturate(2.4) brightness(1);
   /* 下层：只负责外部颜色向内渗，不携带高光 */
   background: transparent;
-  transition:
-    opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    backdrop-filter 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
 

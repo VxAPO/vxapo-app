@@ -1,7 +1,7 @@
 import type { PresetLibraryEntry } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
 import { useI18n } from "../lib/i18n";
-import { t } from "../lib/i18n/core";
+import { displayGroupLabel, t } from "../lib/i18n/core";
 
 interface PresetDeckProps {
   library: PresetLibraryEntry[];
@@ -17,7 +17,7 @@ export default function PresetDeck({ library, usedPresets, onApplyPreset }: Pres
       {library.map((p) => {
         const used = usedPresets.includes(p.id);
         const name = lang === "en" ? (p.name_en ?? p.name) : p.name;
-        const group = lang === "en" ? (p.group_en ?? p.group) : p.group;
+        const group = displayGroupLabel(lang === "en" ? (p.group_en ?? p.group) : p.group);
         return (
           <button
             key={p.id}
