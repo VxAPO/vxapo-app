@@ -223,23 +223,23 @@
 :root[data-theme="dark"] .fx-toolbar::after {
   opacity: 0.8;
   /* 颜色走基础规则的 --ring-* token，随主题插值 */
-  backdrop-filter: blur(14px) saturate(1.6) brightness(1);
-  -webkit-backdrop-filter: blur(14px) saturate(1.6) brightness(1);
+  backdrop-filter: blur(30px) saturate(2.6) brightness(1);
+  -webkit-backdrop-filter: blur(30px) saturate(2.6) brightness(1);
 }
 
 /* 深色曲线/设备卡内容较靠内，放大采样半径让内部内容颜色染上描边 */
 :root[data-theme="dark"] .fx-curve::after,
 :root[data-theme="dark"] .fx-dev::after {
-  backdrop-filter: blur(18px) saturate(1.9) brightness(1);
-  -webkit-backdrop-filter: blur(18px) saturate(1.9) brightness(1);
+  backdrop-filter: blur(36px) saturate(3) brightness(1);
+  -webkit-backdrop-filter: blur(36px) saturate(3) brightness(1);
 }
 
 /* 深色内渗层：保留内容颜色鲜艳，但不过度提亮近中性深色底（防“渗蓝发光”） */
 :root[data-theme="dark"] .fx-curve::before,
 :root[data-theme="dark"] .fx-dev::before,
 :root[data-theme="dark"] .fx-toolbar::before {
-  backdrop-filter: blur(20px) saturate(2.6) brightness(1.05);
-  -webkit-backdrop-filter: blur(20px) saturate(2.6) brightness(1.05);
+  backdrop-filter: blur(34px) saturate(3) brightness(1.05);
+  -webkit-backdrop-filter: blur(34px) saturate(3) brightness(1.05);
 }
 
 .sem-label {
