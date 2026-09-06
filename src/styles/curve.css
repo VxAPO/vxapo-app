@@ -129,10 +129,10 @@
 .fx-toolbar::after {
   content: "";
   position: absolute;
-  inset: -1px; /* 跨在描边上：外 1px + 内 1px，共 2px */
+  inset: -2px; /* 高光带：落在外 2px，不向内延伸 */
   padding: 2px;
-  border-radius: 17px;
-  /* 盖在交界线上：由环带自己把面板外缘的模糊采样带完整覆盖，避免漏缝 */
+  border-radius: 18px;
+  /* 上层：高光/描边灰，不随颜色内渗 */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -141,10 +141,7 @@
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-  opacity: 0.8;
-  /* 环带 = 描边灰(半透) 底 + 贴角径向受光 + 背板环境染色
-     亮度从四个角按距离径向衰减，不随宽高比变形：
-     左上/右下亮、右上/左下暗，两暗角前各一撮点缀 */
+  opacity: 0.4;
   background:
     radial-gradient(50% 50% at 0% 0%, rgb(255 255 255 / var(--ring-g1, 0.3)) 0%, rgb(255 255 255 / 0) 60%),
     radial-gradient(50% 50% at 100% 100%, rgb(255 255 255 / var(--ring-g2, 0.26)) 0%, rgb(255 255 255 / 0) 60%),
@@ -154,24 +151,50 @@
     var(--ring-base, color-mix(in srgb, var(--border) 25%, transparent));
   backdrop-filter: blur(12px) saturate(3) brightness(1);
   -webkit-backdrop-filter: blur(12px) saturate(3) brightness(1);
-  transition: backdrop-filter 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
 
 .fx-toolbar::after {
-  border-radius: 15px;
+  border-radius: 16px;
 }
 
-/* 曲线/设备卡：垫到面板之下采外部调音卡片；环带放外侧（外 2px），
-   卡片自身已无透明描边、模糊覆盖到最外缘，避免交界漏缝 */
-.fx-curve::after,
-.fx-dev::after {
+/* 双层采样：
+   ::before = 下层（z:-1，外侧带）采“面板背后/更矮图层”的外部内容；
+   ::after  = 上层（盖在交界线上）采面板内部 + 提供高光/描边灰。 */
+.fx-curve::before,
+.fx-dev::before,
+.fx-toolbar::before {
+  content: "";
+  position: absolute;
   z-index: -1;
-  inset: -2px;
-  padding: 2px;
+  inset: -2px; /* 外侧 2px + 向内侧延伸，让色层透过面板半透明底向内显示 */
+  padding: 14px;
   border-radius: 18px;
-  backdrop-filter: blur(24px) saturate(3.4) brightness(1);
-  -webkit-backdrop-filter: blur(24px) saturate(3.4) brightness(1);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 1;
+  backdrop-filter: blur(24px) saturate(2.4) brightness(1);
+  -webkit-backdrop-filter: blur(24px) saturate(2.4) brightness(1);
+  /* 下层：只负责外部颜色向内渗，不携带高光 */
+  background: transparent;
+  transition:
+    opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.fx-toolbar::before {
+  border-radius: 16px;
+  padding: 8px; /* 工具栏较小，内伸少一些避免盖到按钮 */
 }
 
 .dev-props-title {

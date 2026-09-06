@@ -60,6 +60,8 @@ export function useMarqueeSelection({
   const [selGeomTick, setSelGeomTick] = useState(0);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
+  // 拖动前是否已有工具栏：有则再次框选时工具栏保持显示
+  const hadToolbarRef = useRef(false);
   const pendingMarqueeRef = useRef<{
     x1: number;
     y1: number;
@@ -109,7 +111,32 @@ export function useMarqueeSelection({
     marqueeRafRef.current = 0;
     pendingMarqueeRef.current = null;
     marqueeStartRef.current = { x, y };
+    hadToolbarRef.current = selectedIds.length > 0;
     setMarquee({ x1: x, y1: y, x2: x, y2: y });
+  };
+
+  const collectMarqueeIds = (
+    m: { x1: number; y1: number; x2: number; y2: number },
+    body: HTMLElement,
+  ): string[] => {
+    const rect = body.getBoundingClientRect();
+    const x1 = Math.min(m.x1, m.x2) - body.scrollLeft;
+    const x2 = Math.max(m.x1, m.x2) - body.scrollLeft;
+    const y1 = Math.min(m.y1, m.y2) - body.scrollTop;
+    const y2 = Math.max(m.y1, m.y2) - body.scrollTop;
+    if (x2 - x1 < 4 && y2 - y1 < 4) return []; // 点空白：空选择
+    const ids: string[] = [];
+    body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+      if (el.dataset.dndGroup === "effects") return;
+      const r = el.getBoundingClientRect();
+      const rx = r.left - rect.left;
+      const ry = r.top - rect.top;
+      if (rx < x2 && rx + r.width > x1 && ry < y2 && ry + r.height > y1) {
+        const id = el.dataset.dndId;
+        if (id) ids.push(id);
+      }
+    });
+    return ids;
   };
 
   const onBodyPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -124,7 +151,17 @@ export function useMarqueeSelection({
       marqueeRafRef.current = requestAnimationFrame(() => {
         marqueeRafRef.current = 0;
         const m = pendingMarqueeRef.current;
-        if (m) setMarquee(m);
+        if (m) {
+          setMarquee(m);
+          // 实时框选：拖动过程中同步高亮被框住的卡片
+          const body = bodyRef.current;
+          if (body) {
+            const next = collectMarqueeIds(m, body);
+            setSelectedIds((prev) =>
+              prev.length === next.length && prev.join(",") === next.join(",") ? prev : next,
+            );
+          }
+        }
       });
     }
   };
@@ -141,31 +178,8 @@ export function useMarqueeSelection({
     marqueeStartRef.current = null;
     setMarquee(null);
     if (!s || !body || !m) return;
-    const rect = body.getBoundingClientRect();
-    // 把内容坐标系换算回可视坐标再求交：拖动期间若 scrollTop/Left 被布局变化
-    // （视图收窄、滚动条出现/消失等）钳制，内容坐标会整体漂移，导致命中为空。
-    // 卡片矩形同样要换算成容器内可视坐标（减去容器自身在视口中的偏移）。
-    const x1 = Math.min(m.x1, m.x2) - body.scrollLeft;
-    const x2 = Math.max(m.x1, m.x2) - body.scrollLeft;
-    const y1 = Math.min(m.y1, m.y2) - body.scrollTop;
-    const y2 = Math.max(m.y1, m.y2) - body.scrollTop;
-    if (x2 - x1 < 4 && y2 - y1 < 4) {
-      // 点空白：清空选择
-      setSelectedIds([]);
-      return;
-    }
-    const ids: string[] = [];
-    body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
-      if (el.dataset.dndGroup === "effects") return;
-      const r = el.getBoundingClientRect();
-      const rx = r.left - rect.left;
-      const ry = r.top - rect.top;
-      if (rx < x2 && rx + r.width > x1 && ry < y2 && ry + r.height > y1) {
-        const id = el.dataset.dndId;
-        if (id) ids.push(id);
-      }
-    });
-    setSelectedIds(ids);
+    // 实时框选期间已同步；抬手用最终矩形收尾（点空白时 helper 返回空 = 清空选择）
+    setSelectedIds(collectMarqueeIds(m, body));
   };
 
   const deleteSelectedCards = useCallback(() => {
@@ -404,6 +418,7 @@ export function useMarqueeSelection({
     copyOpen,
     setCopyOpen,
     marquee,
+    marqueeToolbarSuppressed: !!marquee && !hadToolbarRef.current,
     selGeom,
     selGeomReady,
     selGeomTick,
