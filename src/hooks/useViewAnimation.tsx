@@ -305,7 +305,7 @@ export function useViewAnimation({
       if (!b) return "group-card";
       return view === "preset"
         ? `group-card standalone${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}`
-        : `band-card${b.enabled ? " enabled" : " disabled"}`;
+        : `band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}`;
     },
     [blocks, view],
   );
@@ -313,9 +313,11 @@ export function useViewAnimation({
   // 拖拽悬浮/飞行副本携带组配色，组名+叉的 chip 使用真实组色
   const overlayStyleForKey = useCallback(
     (key: string): React.CSSProperties | undefined => {
-      if (view !== "preset") return undefined;
       const b = blocks.find((x) => x.id === key);
-      return b ? accentStyle(accentOfRef.current(b)) : undefined;
+      if (!b) return undefined;
+      const style = accentStyle(accentOfRef.current(b));
+      // preset 沿用原逻辑（全部带组色）；参数视图只有组卡片带组色
+      return view === "preset" || b.group ? style : undefined;
     },
     [view, blocks, accentOfRef],
   );

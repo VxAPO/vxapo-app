@@ -396,6 +396,11 @@
   border-color: rgba(71, 195, 209, 0.55);
 }
 
+/* 参数视图：带组的卡片描边跟随组主题色（与语义视图 group-card 一致） */
+.band-card.enabled.sem-group {
+  border-color: color-mix(in srgb, var(--card-accent, var(--brand)) 55%, transparent);
+}
+
 .band-card.disabled .b-type,
 .band-card.disabled .field-label,
 .band-card.disabled input {

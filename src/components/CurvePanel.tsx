@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../lib/model";
 import { channelLabel } from "../lib/channels";
 import { t } from "../lib/i18n/core";
+import { useGlassRing } from "../hooks/useGlassRing";
 import CurvePlot from "./CurvePlot";
 import VxSelect from "./VxSelect";
 
@@ -38,6 +39,7 @@ function CurvePanel({
     }
   });
   const curveRef = useRef<HTMLDivElement | null>(null);
+  const fxRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef(0);
   const visibleBlocks = useMemo(
     () =>
@@ -74,25 +76,29 @@ function CurvePanel({
     };
   }, []);
 
+  useGlassRing(fxRef);
+
   return (
-    <div className="curve-wrap" ref={curveRef}>
-      <div className="curve-head">
-        <span className="t">{t("freqResponse")}</span>
-        <VxSelect
-          value={curveChannel}
-          options={channelOptions}
-          onValueChange={onCurveChannelChange}
-          ariaLabel={t("channels")}
+    <div className="fx fx-curve" ref={fxRef}>
+      <div className="curve-wrap" ref={curveRef}>
+        <div className="curve-head">
+          <span className="t">{t("freqResponse")}</span>
+          <VxSelect
+            value={curveChannel}
+            options={channelOptions}
+            onValueChange={onCurveChannelChange}
+            ariaLabel={t("channels")}
+          />
+        </div>
+        <CurvePlot
+          blocks={visibleBlocks}
+          fs={fs}
+          curveW={curveW}
+          yTop={yTop}
+          yBottom={yBottom}
+          preampGainDb={preampGainDb}
         />
       </div>
-      <CurvePlot
-        blocks={visibleBlocks}
-        fs={fs}
-        curveW={curveW}
-        yTop={yTop}
-        yBottom={yBottom}
-        preampGainDb={preampGainDb}
-      />
     </div>
   );
 }

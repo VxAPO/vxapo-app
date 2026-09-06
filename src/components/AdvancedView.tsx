@@ -1,7 +1,7 @@
 import { Fragment, memo } from "react";
 import { t } from "../lib/i18n/core";
 import type { Block, EffectItem } from "../lib/model";
-import type { BandPatch } from "../lib/blocks";
+import { accentStyle, type BandPatch } from "../lib/blocks";
 import { channelLabel } from "../lib/channels";
 import DragCard from "./DragCard";
 import BandParamCard from "./BandParamCard";
@@ -12,6 +12,7 @@ interface AdvancedViewProps {
   showFilterEmptyHint: boolean;
   showEffectEmptyHint: boolean;
   hintShift: number;
+  accentOf: (b: Block) => string;
   channelOn: boolean;
   channelNames: string[];
   firstChannel: string;
@@ -40,6 +41,7 @@ function AdvancedView({
   showFilterEmptyHint,
   showEffectEmptyHint,
   hintShift,
+  accentOf,
   channelOn,
   channelNames,
   firstChannel,
@@ -104,7 +106,8 @@ function AdvancedView({
               <Fragment key={b.id ?? bi}>
                 <DragCard
                   id={b.id ?? String(bi)}
-                  className={`band-card${b.enabled ? " enabled" : " disabled"}${activeKey === (b.id ?? String(bi)) || flyKey === (b.id ?? String(bi)) ? " is-dragging" : ""}${selectedIds.includes(b.id ?? String(bi)) ? " is-selected" : ""}`}
+                  className={`band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${activeKey === (b.id ?? String(bi)) || flyKey === (b.id ?? String(bi)) ? " is-dragging" : ""}${selectedIds.includes(b.id ?? String(bi)) ? " is-selected" : ""}`}
+                  style={b.group ? accentStyle(accentOf(b)) : undefined}
                   onDragStart={onDragStart}
                 >
                   <BandParamCard

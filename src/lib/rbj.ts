@@ -48,32 +48,35 @@ function biquadDb(
   return 20 * Math.log10(num / den);
 }
 
-function lowPassDb(freq: number, fc: number, q: number, fs: number): number {
+function lowPassDb(freq: number, fc: number, gainDb: number, q: number, fs: number): number {
   const center = Math.max(10, Math.min(fs * 0.49, fc));
   const qq = Math.max(0.1, Math.min(20, q));
+  const lin = Math.pow(10, gainDb / 20);
   const w0 = (2 * Math.PI * center) / fs;
   const cw = Math.cos(w0);
   const sw = Math.sin(w0);
   const alpha = sw / (2 * qq);
-  const b0 = (1 - cw) / 2;
-  const b1 = 1 - cw;
-  const b2 = (1 - cw) / 2;
+  // 增益作用于通带：分子乘线性增益（与 driver biquad 一致，0 dB 纯滤波）。
+  const b0 = ((1 - cw) / 2) * lin;
+  const b1 = (1 - cw) * lin;
+  const b2 = ((1 - cw) / 2) * lin;
   const a0 = 1 + alpha;
   const a1 = -2 * cw;
   const a2 = 1 - alpha;
   return biquadDb(freq, fs, b0, b1, b2, a0, a1, a2);
 }
 
-function highPassDb(freq: number, fc: number, q: number, fs: number): number {
+function highPassDb(freq: number, fc: number, gainDb: number, q: number, fs: number): number {
   const center = Math.max(10, Math.min(fs * 0.49, fc));
   const qq = Math.max(0.1, Math.min(20, q));
+  const lin = Math.pow(10, gainDb / 20);
   const w0 = (2 * Math.PI * center) / fs;
   const cw = Math.cos(w0);
   const sw = Math.sin(w0);
   const alpha = sw / (2 * qq);
-  const b0 = (1 + cw) / 2;
-  const b1 = -(1 + cw);
-  const b2 = (1 + cw) / 2;
+  const b0 = ((1 + cw) / 2) * lin;
+  const b1 = -(1 + cw) * lin;
+  const b2 = ((1 + cw) / 2) * lin;
   const a0 = 1 + alpha;
   const a1 = -2 * cw;
   const a2 = 1 - alpha;
@@ -128,9 +131,9 @@ export function bandDb(
     case "high_shelf":
       return highShelfDb(freq, band.fc, band.gain_db, band.q, fs);
     case "low_pass":
-      return lowPassDb(freq, band.fc, band.q, fs);
+      return lowPassDb(freq, band.fc, band.gain_db, band.q, fs);
     case "high_pass":
-      return highPassDb(freq, band.fc, band.q, fs);
+      return highPassDb(freq, band.fc, band.gain_db, band.q, fs);
     case "peaking":
     default:
       return peakingDb(freq, band.fc, band.gain_db, band.q, fs);

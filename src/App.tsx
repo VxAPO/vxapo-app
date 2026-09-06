@@ -20,6 +20,7 @@ import { t } from "./lib/i18n/core";
 import { useWindowControls } from "./hooks/useWindowControls";
 import OverlayScrollbar from "./components/OverlayScrollbar";
 import { useChannelState } from "./hooks/useChannelState";
+import { useGlassRing } from "./hooks/useGlassRing";
 import { usePresetActions } from "./hooks/usePresetActions";
 import { useMarqueeSelection } from "./hooks/useMarqueeSelection";
 import { useViewAnimation, VIEW_COLLAPSE_MS } from "./hooks/useViewAnimation";
@@ -156,6 +157,8 @@ export default function App() {
 
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [bodyNode, setBodyNode] = useState<HTMLDivElement | null>(null);
+  const devFxRef = useRef<HTMLDivElement | null>(null);
+  useGlassRing(devFxRef);
   // 设备切换时滚动容器会重挂载：用回调 ref 把当前节点同步给滚动条，
   // 滚动条组件本身不卸载，才能做平滑淡出。
   const setBodyRef = useCallback((el: HTMLDivElement | null) => {
@@ -646,6 +649,7 @@ export default function App() {
                     showFilterEmptyHint={blocks.length === 0}
                     showEffectEmptyHint={visibleEffects.length === 0}
                     hintShift={hintShift}
+                    accentOf={accentOf}
                     channelOn={channelOn}
                     channelNames={channelNames}
                     firstChannel={channelNames[0] ?? "L"}
@@ -701,14 +705,16 @@ export default function App() {
             )}
             </div>
             <div className="bottom-row">
-              <DevicePropsCard
-                device={selected}
-                peakGain={peakGain}
-                totalBands={totalBands}
-                channelOn={channelOn}
-                channelCounts={channelCounts}
-                onNormalize={normalizeGain}
-              />
+              <div className="fx fx-dev" ref={devFxRef}>
+                <DevicePropsCard
+                  device={selected}
+                  peakGain={peakGain}
+                  totalBands={totalBands}
+                  channelOn={channelOn}
+                  channelCounts={channelCounts}
+                  onNormalize={normalizeGain}
+                />
+              </div>
               <CurvePanel
                 blocks={blocks}
                 fs={selected?.sample_rate ?? 48000}

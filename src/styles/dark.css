@@ -117,13 +117,14 @@
 }
 
 :root[data-theme="dark"] .sel-toolbar {
-  background: color-mix(in srgb, var(--card) 78%, transparent);
-  border: 1px solid #3f4348;
-  backdrop-filter: blur(28px) saturate(1.2);
-  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  /* 不用高对比度的整圈白描边：极淡边界勾勒外形，光只从顶部打进来、
+     底部收光，形成方向性的轮廓感（与浅色“近表面色 + 顶部高光”同理） */
+  border: 1px solid transparent; /* 描边由外侧环带替代 */
+  backdrop-filter: blur(8px) saturate(1.15);
+  -webkit-backdrop-filter: blur(8px) saturate(1.15);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 6px 16px rgba(var(--shadow-ink), 0.5);
+    0 6px 16px -6px rgba(var(--shadow-ink), 0.5);
 }
 
 @keyframes sel-toolbar-in-dark {
@@ -131,15 +132,13 @@
     opacity: 0;
     transform: translateX(-50%) translateY(6px);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.04),
       var(--hover-shadow);
   }
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 6px 16px rgba(var(--shadow-ink), 0.45);
+     0 6px 16px -6px rgba(var(--shadow-ink), 0.5);
   }
 }
 
@@ -159,6 +158,11 @@
 }
 
 :root[data-theme="dark"] .group-card.enabled.sem-group {
+  border-color: color-mix(in srgb, var(--card-accent-dark, var(--card-accent, var(--brand))) 55%, transparent);
+}
+
+/* 参数视图：带组 band-card 深色描边跟随组主题色 */
+:root[data-theme="dark"] .band-card.enabled.sem-group {
   border-color: color-mix(in srgb, var(--card-accent-dark, var(--card-accent, var(--brand))) 55%, transparent);
 }
 
@@ -196,12 +200,41 @@
   border-left-color: var(--border-strong);
 }
 
-/* 深色模式：曲线卡片与设备属性毛玻璃更实，避免透底发灰 */
+/* 深色模式：曲线卡片与设备属性毛玻璃更实，避免透底发灰；
+   描边/光影与悬浮选项栏同套：极淡边界 + 顶部受光 + 底部收光 + 连续底部投影 */
 :root[data-theme="dark"] .curve-wrap,
 :root[data-theme="dark"] .dev-props-card {
-  background-color: color-mix(in srgb, var(--card) 82%, transparent);
-  backdrop-filter: blur(28px) saturate(1.15);
-  -webkit-backdrop-filter: blur(28px) saturate(1.15);
+  background-color: color-mix(in srgb, var(--card) 84%, transparent);
+  border-color: transparent; /* 描边由外侧环带替代 */
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  box-shadow:
+    0 6px 16px -6px rgba(var(--shadow-ink), 0.5);
+}
+
+/* 深色描边染色环：适度提亮让环境色可见，避免过饱和造成的偏蓝 */
+:root[data-theme="dark"] .fx-curve::after,
+:root[data-theme="dark"] .fx-dev::after,
+:root[data-theme="dark"] .fx-toolbar::after {
+  opacity: 0.8;
+  /* 深色贴角径向受光：左上/右下亮、右上/左下暗，随距离衰减，不随宽高比变形 */
+  background:
+    radial-gradient(50% 50% at 0% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(50% 50% at 100% 100%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(20% 20% at 84% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 68%),
+    radial-gradient(20% 20% at 26% 100%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 68%),
+    /* 顶/底中亮、左右中暗的竖直渐变 */
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0.02) 60%, rgba(255, 255, 255, 0.08) 100%),
+    rgba(255, 255, 255, 0.035); /* 极淡白底，压住圆角暗点 */
+  backdrop-filter: blur(14px) saturate(1.9) brightness(1.18);
+  -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.18);
+}
+
+/* 深色曲线/设备卡内容较靠内，放大采样半径让内部内容颜色染上描边 */
+:root[data-theme="dark"] .fx-curve::after,
+:root[data-theme="dark"] .fx-dev::after {
+  backdrop-filter: blur(18px) saturate(2.2) brightness(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(2.2) brightness(1.18);
 }
 
 .sem-label {

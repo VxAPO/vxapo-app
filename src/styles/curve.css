@@ -1,16 +1,20 @@
 .curve-wrap {
-  background: color-mix(in srgb, var(--card) 56%, transparent);
-  border: 1px solid var(--border);
+  width: 100%;
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  border: 1px solid transparent; /* 描边颜色已掺进外侧环带 */
   border-radius: 16px;
   padding: 10px 18px 14px;
   flex: 1;
   min-width: 0;
   flex-shrink: 0;
-  box-shadow: var(--card-shadow);
+  /* 与悬浮选项栏同套：近表面低对比描边 + 顶部受光 + 连续底部投影 */
+  box-shadow:
+    0 5px 12px -4px rgba(15, 23, 42, 0.1);
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(40px) saturate(1.4);
-  -webkit-backdrop-filter: blur(40px) saturate(1.4);
+  /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏 */
+  backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
   pointer-events: auto;
 }
 
@@ -66,18 +70,104 @@
   flex: none;
   width: auto;
   min-width: 240px;
-  background-color: color-mix(in srgb, var(--card) 56%, transparent);
-  border: 1px solid var(--border);
+  background-color: color-mix(in srgb, var(--card) 72%, transparent);
+  border: 1px solid transparent; /* 描边颜色已掺进外侧环带 */
   border-radius: 16px;
   padding: 10px 18px 12px;
-  box-shadow: var(--card-shadow);
+  /* 与悬浮选项栏同套：近表面低对比描边 + 顶部受光 + 连续底部投影 */
+  box-shadow:
+    0 5px 12px -4px rgba(15, 23, 42, 0.1);
   display: flex;
   flex-direction: column;
   gap: 10px;
   transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(40px) saturate(1.4);
-  -webkit-backdrop-filter: blur(40px) saturate(1.4);
+  /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏 */
+  backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
   pointer-events: auto;
+}
+
+/* 外层 fx 帧：本身不带 backdrop-filter，染色环挂在它上面时，
+   才能采样到“面板背后”的内容而不是卡片内部。 */
+.fx {
+  position: relative;
+}
+
+.fx-curve,
+.fx-dev {
+  display: flex;
+  min-width: 0;
+}
+
+.fx-curve {
+  flex: 1;
+  border-radius: 16px;
+}
+
+.fx-dev {
+  flex: none;
+  min-width: 240px;
+  border-radius: 16px;
+}
+
+.fx-curve > .curve-wrap,
+.fx-dev > .dev-props-card {
+  width: 100%;
+}
+
+.fx-toolbar {
+  position: absolute;
+  z-index: 30;
+  border-radius: 14px;
+}
+
+/* 玻璃描边环境染色：环带横跨描边内外各 1px（完美贴合圆角），
+   只对环带做独立背板采样（小半径模糊 + 提饱和），
+   底下内容颜色不同时，描边会随位置染出渐变。 */
+.fx-curve::after,
+.fx-dev::after,
+.fx-toolbar::after {
+  content: "";
+  position: absolute;
+  inset: -2px; /* 外 2px 采外部调音卡片，内 1px 补上边缘缝隙 */
+  padding: 3px;
+  border-radius: 17px;
+  z-index: -1; /* 画到面板之下，避免面板内容挡在采样前面 */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0.8;
+  /* 环带 = 描边灰(半透) 底 + 贴角径向受光 + 背板环境染色
+     亮度从四个角按距离径向衰减，不随宽高比变形：
+     左上/右下亮、右上/左下暗，两暗角前各一撮点缀 */
+  background:
+    radial-gradient(50% 50% at 0% 0%, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(50% 50% at 100% 100%, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(20% 20% at 84% 0%, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 68%),
+    radial-gradient(20% 20% at 26% 100%, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 68%),
+    /* 顶亮、底/两侧中亮（浅色取消左右中暗） */
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.22) 45%, rgba(255, 255, 255, 0.22) 100%),
+    color-mix(in srgb, var(--border) 25%, transparent);
+  backdrop-filter: blur(12px) saturate(3) brightness(1);
+  -webkit-backdrop-filter: blur(12px) saturate(3) brightness(1);
+  pointer-events: none;
+}
+
+.fx-toolbar::after {
+  border-radius: 15px;
+}
+
+/* 曲线/设备卡内容较靠内，放大环带采样半径才能像工具栏那颗胶囊一样
+   把内部内容颜色染到描边上（工具栏保持原位，不改变已喜欢的观感） */
+.fx-curve::after,
+.fx-dev::after {
+  backdrop-filter: blur(18px) saturate(3.4) brightness(1);
+  -webkit-backdrop-filter: blur(18px) saturate(3.4) brightness(1);
 }
 
 .dev-props-title {

@@ -226,21 +226,24 @@
 
 /* 选中工具栏：圆角矩形，浮动在选中网格下方，按选中宽度动态居中 */
 .sel-toolbar {
-  position: absolute;
-  z-index: 30;
+  position: relative; /* 由外层 .fx-toolbar 定位（染色环采样不能挂在自身 backdrop-filter 下） */
+  width: max-content;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
   padding: 10px 12px;
   border-radius: 14px;
-  background: color-mix(in srgb, var(--card) 45%, transparent);
-  backdrop-filter: blur(32px) saturate(1.3);
-  -webkit-backdrop-filter: blur(32px) saturate(1.3);
-  border: 1px solid color-mix(in srgb, var(--border) 55%, #ffffff);
+  /* 小半径模糊 + 适中透明度：背板颜色透出更多，又不至于出现生硬分层 */
+  background: color-mix(in srgb, var(--card) 58%, transparent);
+  /* 浅色：提亮背板采样并降低饱和,避免背后暗影/彩灰把玻璃染脏 */
+  backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
+  border: 1px solid transparent; /* 描边颜色已掺进外侧环带 */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 6px 16px rgba(0, 0, 0, 0.15);
+    /* 单层连续投影：负扩散把近端收回贴住下缘，从底部起连续衰减，
+       不产生断层，也不会向上糊到顶缘 */
+    0 6px 16px -6px rgba(15, 23, 42, 0.16);
 }
 
 .sel-toolbar-label {
@@ -361,15 +364,13 @@
     opacity: 0;
     transform: translateX(-50%) translateY(6px);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
       var(--hover-shadow);
   }
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.4),
-      0 6px 16px rgba(0, 0, 0, 0.15);
+      0 6px 16px -6px rgba(15, 23, 42, 0.16);
   }
 }
 
