@@ -182,6 +182,16 @@
   initial-value: #ffffff;
 }
 
+/* 环带染色 token：浅/深各一组，随主题插值 */
+@property --ring-g1 { syntax: '<number>'; inherits: true; initial-value: 0.3; }
+@property --ring-g2 { syntax: '<number>'; inherits: true; initial-value: 0.26; }
+@property --ring-s1 { syntax: '<number>'; inherits: true; initial-value: 0.32; }
+@property --ring-s2 { syntax: '<number>'; inherits: true; initial-value: 0.28; }
+@property --ring-t  { syntax: '<number>'; inherits: true; initial-value: 0.3; }
+@property --ring-m  { syntax: '<number>'; inherits: true; initial-value: 0.22; }
+@property --ring-b  { syntax: '<number>'; inherits: true; initial-value: 0.22; }
+@property --ring-base { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0); }
+
 
 :root[data-theme="light"] {
   --frame: #f0f3f6;
@@ -216,6 +226,14 @@
   --scrollbar-hover: #c2c7d1;
   --disabled-fill: #b8bec9;
   --tab-active-bg: #e9edf1;
+  --ring-g1: 0.3;
+  --ring-g2: 0.26;
+  --ring-s1: 0.32;
+  --ring-s2: 0.28;
+  --ring-t: 0.3;
+  --ring-m: 0.22;
+  --ring-b: 0.22;
+  --ring-base: rgba(217, 222, 231, 0.25);
 }
 
 :root[data-theme="dark"] {
@@ -254,6 +272,14 @@
   --tab-inactive: #2f3135;
   --tab-active: #45474c;
   --tab-active-bg: #45474c;
+  --ring-g1: 0.12;
+  --ring-g2: 0.1;
+  --ring-s1: 0.12;
+  --ring-s2: 0.1;
+  --ring-t: 0.11;
+  --ring-m: 0.02;
+  --ring-b: 0.08;
+  --ring-base: rgba(255, 255, 255, 0.035);
 }
 
 /* 切换主题的瞬间给整页元素加颜色过渡，结束后移除，避免日常全局过渡的卡顿 */
@@ -289,7 +315,15 @@
     --disabled-fill 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --tab-inactive 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     --tab-active 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    --tab-active-bg 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    --tab-active-bg 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-g1 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-g2 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-s1 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-s2 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-t 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-m 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-b 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    --ring-base 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 主题切换期间以下元素直接跟随根变量变化，避免自身 transition 叠加造成节奏不一致 */
@@ -326,6 +360,18 @@
 
 .theme-transition .preset-card {
   box-shadow: inset 3px 0 0 var(--preset-accent, var(--brand)) !important;
+}
+
+/* 主题过渡期间这三个阴影淡出（同结构透明），结束后靠自身 box-shadow 过渡淡入 */
+.theme-transition .vx-dialog-content {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0) !important;
+  transition: box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-transition .dev-props-card,
+.theme-transition .curve-wrap {
+  box-shadow: 0 6px 14px -4px rgba(15, 23, 42, 0) !important;
+  transition: box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 

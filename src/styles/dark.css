@@ -124,7 +124,7 @@
   backdrop-filter: blur(8px) saturate(1.15);
   -webkit-backdrop-filter: blur(8px) saturate(1.15);
   box-shadow:
-    0 6px 16px -6px rgba(var(--shadow-ink), 0.5);
+    0 6px 16px -6px rgba(var(--shadow-ink), 0.65);
 }
 
 @keyframes sel-toolbar-in-dark {
@@ -186,6 +186,11 @@
   outline-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
 }
 
+/* 暗色下飞行卡片保持框选加粗描边 */
+:root[data-theme="dark"] .drag-fly.is-selected {
+  outline-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
+}
+
 :root[data-theme="dark"] .drag-card.is-selected:not(.is-dragging) {
   box-shadow: var(--hover-shadow);
 }
@@ -217,15 +222,7 @@
 :root[data-theme="dark"] .fx-dev::after,
 :root[data-theme="dark"] .fx-toolbar::after {
   opacity: 0.8;
-  /* 深色贴角径向受光：左上/右下亮、右上/左下暗，随距离衰减，不随宽高比变形 */
-  background:
-    radial-gradient(50% 50% at 0% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 60%),
-    radial-gradient(50% 50% at 100% 100%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 60%),
-    radial-gradient(20% 20% at 84% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 68%),
-    radial-gradient(20% 20% at 26% 100%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 68%),
-    /* 顶/底中亮、左右中暗的竖直渐变 */
-    linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0.02) 60%, rgba(255, 255, 255, 0.08) 100%),
-    rgba(255, 255, 255, 0.035); /* 极淡白底，压住圆角暗点 */
+  /* 颜色走基础规则的 --ring-* token，随主题插值 */
   backdrop-filter: blur(14px) saturate(1.9) brightness(1.18);
   -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.18);
 }

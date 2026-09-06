@@ -15,6 +15,8 @@ interface UseViewAnimationOptions {
   bodyRef: React.RefObject<HTMLDivElement | null>;
   blocks: Block[];
   effects: EffectItem[];
+  /** 事件期读取（框选集合）——由 App 在 hook 后填充，绕 opening 顺序/依赖环。 */
+  selectedIdsRef: React.MutableRefObject<string[]>;
   setBlocks: React.Dispatch<React.SetStateAction<Block[]>>;
   setEffects: React.Dispatch<React.SetStateAction<EffectItem[]>>;
   channelNames: string[];
@@ -40,6 +42,7 @@ export function useViewAnimation({
   bodyRef,
   blocks,
   effects,
+  selectedIdsRef,
   setBlocks,
   setEffects,
   channelNames,
@@ -304,10 +307,10 @@ export function useViewAnimation({
       const b = blocks.find((x) => x.id === key);
       if (!b) return "group-card";
       return view === "preset"
-        ? `group-card standalone${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}`
-        : `band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}`;
+        ? `group-card standalone${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${selectedIdsRef.current.includes(key) ? " is-selected" : ""}`
+        : `band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${selectedIdsRef.current.includes(key) ? " is-selected" : ""}`;
     },
-    [blocks, view],
+    [blocks, view, selectedIdsRef],
   );
 
   // 拖拽悬浮/飞行副本携带组配色，组名+叉的 chip 使用真实组色
@@ -317,7 +320,8 @@ export function useViewAnimation({
       if (!b) return undefined;
       const style = accentStyle(accentOfRef.current(b));
       // preset 沿用原逻辑（全部带组色）；参数视图只有组卡片带组色
-      return view === "preset" || b.group ? style : undefined;
+      // 只有组卡片带组色；无组卡不设 --card-accent，描边回退到品牌色
+      return b.group ? style : undefined;
     },
     [view, blocks, accentOfRef],
   );

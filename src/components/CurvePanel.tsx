@@ -41,6 +41,7 @@ function CurvePanel({
   const curveRef = useRef<HTMLDivElement | null>(null);
   const fxRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef(0);
+  const latestWRef = useRef(0);
   const visibleBlocks = useMemo(
     () =>
       channelOn
@@ -61,11 +62,12 @@ function CurvePanel({
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
+      latestWRef.current = w || 0;
       if (!w || w <= 0 || rafRef.current) return;
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = 0;
-        // 跟随窗口收窄，低于 660px 才进入遮挡
-        const next = Math.max(660, Math.floor(w + 20));
+        // 跟随窗口收窄，低于 660px 才进入遮挡；读最新宽度而非回调闭包的旧值
+        const next = Math.max(660, Math.floor(latestWRef.current + 20));
         setCurveW((prev) => (prev === next ? prev : next));
       });
     });

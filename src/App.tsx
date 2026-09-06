@@ -191,6 +191,7 @@ export default function App() {
 
   // 事件期跨 hook 引用（打破 preset↔marquee↔view 依赖环）
   const accentOfRef = useRef<(b: Block) => string>(() => "#519741");
+  const selectedIdsRef = useRef<string[]>([]);
   const cancelToolbarAnimRef = useRef<() => void>(() => {});
   const bumpSelGeomTickRef = useRef<() => void>(() => {});
 
@@ -220,6 +221,7 @@ export default function App() {
     bodyRef,
     blocks,
     effects,
+    selectedIdsRef,
     setBlocks,
     setEffects,
     channelNames,
@@ -304,6 +306,7 @@ export default function App() {
     clearSelection: () => setSelectedIds([]),
   });
   accentOfRef.current = accentOf;
+  selectedIdsRef.current = selectedIds;
 
   // 设备切换时保存旧设备通道状态并恢复新设备通道状态（逐设备记忆，
   // 原逻辑在通道记忆 effect 内一并清空选中）。

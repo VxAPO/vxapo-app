@@ -206,6 +206,12 @@
   outline-offset: -2px;
 }
 
+/* 被拖的（飞行）卡片保持框选加粗描边 */
+.drag-fly.is-selected {
+  outline: 2px solid var(--card-accent, var(--brand));
+  outline-offset: -2px;
+}
+
 /* 被框选的卡片阴影与鼠标 hover 一致 */
 .drag-card.is-selected:not(.is-dragging) {
   box-shadow: var(--hover-shadow);

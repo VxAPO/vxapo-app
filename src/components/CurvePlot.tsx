@@ -1,10 +1,9 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
 import { useCurveHover } from "../hooks/useCurveHover";
-import { useThrottledCompute } from "../hooks/useThrottledCompute";
 import CurveGrid from "./CurveGrid";
 
 function freqPath(
@@ -48,17 +47,12 @@ interface CurvePlotProps {
 }
 
 function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }: CurvePlotProps) {
-  // 路径生成同样较重：固定间隔重算，渲染用上一帧路径，避免拖滑块时每帧算路径。
-  const deferredPath = useThrottledCompute(
-    () => {
-      const freqs = buildEvalFreqs(blocks);
-      return freqPath(blocks, fs, curveW, yTop, preampGainDb, freqs, yBottom);
-    },
+  // 曲线路径始终按当前 curveW/blocks 重算，保证与网格/viewBox 完全一致，
+  // 拖拽改宽度时不会出现"旧宽度的线配当前宽度网格"导致的越界。
+  const curveD = useMemo(
+    () => freqPath(blocks, fs, curveW, yTop, preampGainDb, buildEvalFreqs(blocks), yBottom),
     [blocks, fs, curveW, yTop, preampGainDb, yBottom],
   );
-  const curveD =
-    deferredPath ??
-    freqPath(blocks, fs, curveW, yTop, preampGainDb, buildEvalFreqs(blocks), yBottom);
   const plotTop = dbY(yTop, yTop, yBottom);
   const plotBottom = dbY(yBottom, yTop, yBottom);
   const { hoverPt, tipPos, svgRef, tipRef, onSvgMove, onMouseLeave } = useCurveHover({
@@ -75,12 +69,12 @@ function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }
       <svg
         ref={svgRef}
         viewBox={`0 0 ${curveW} 220`}
-        width={curveW}
         height="220"
         preserveAspectRatio="none"
         role="img"
         aria-label={t("freqResponse")}
         style={{
+          width: "calc(100% + 28px)",
           cursor:
             'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'><g stroke=\'%23000\' stroke-width=\'1.8\'><path d=\'M6 0v3M6 9v3M0 6h3M9 6h3\'/></g><g stroke=\'%23fff\' stroke-width=\'0.8\'><path d=\'M6 0v3M6 9v3M0 6h3M9 6h3\'/></g></svg>") 6 6, crosshair',
         }}
