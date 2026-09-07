@@ -55,7 +55,6 @@ let raf = 0;
 let running = false;
 let themeObserver: MutationObserver | null = null;
 let layoutObserver: MutationObserver | null = null;
-let interval = 0;
 let scrollIdleTimer = 0;
 let selectionTimer = 0;
 let paintMode: "tool" | "full" = "full";
@@ -1236,7 +1235,6 @@ function start(): void {
     attributes: true,
     attributeFilter: ["class", "style", "data-dnd-id", "data-dnd-group"],
   });
-  interval = window.setInterval(() => schedule("full"), 250);
   schedule();
 }
 
@@ -1258,8 +1256,6 @@ function stop(): void {
   themeObserver = null;
   layoutObserver?.disconnect();
   layoutObserver = null;
-  window.clearInterval(interval);
-  interval = 0;
   colorCache = new WeakMap();
   canvas?.remove();
   canvas = null;
