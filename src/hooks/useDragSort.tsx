@@ -20,7 +20,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [dragSize, setDragSize] = useState<{ width: number; height: number } | null>(null);
   const [overlayNum, setOverlayNum] = useState(0);
-  const [, setTick] = useState(0);
+  const [dragTick, setTick] = useState(0);
   const [fly, setFly] = useState<FlyState | null>(null);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -451,7 +451,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       dragRef.current && !settlingRef.current
         ? dragRef.current.virtual.get(key) ?? null
         : null,
-    [],
+    [dragTick],
   );
 
   const completeFly = useCallback((id: number) => {
