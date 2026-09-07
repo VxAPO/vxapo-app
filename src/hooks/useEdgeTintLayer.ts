@@ -135,6 +135,7 @@ let layoutObserver: MutationObserver | null = null;
 let scrollIdleTimer = 0;
 let selectionTimer = 0;
 let paintMode: "tool" | "full" = "full";
+let scrollingNow = false;
 let fadePending = false;
 let autoScanTimer = 0;
 let autoMo: MutationObserver | null = null;
@@ -864,6 +865,9 @@ function drawPanel(
   const toolFade = tool
     ? Math.max(0, Math.min(1, parseFloat(cs.opacity) || 0))
     : 1;
+  const movingTool = tool && scrollingNow;
+  const fadeK = movingTool ? 1 : FADE_K;
+  const colorK = movingTool ? 1 : COLOR_K;
   const panelBase = panelBaseLum(el);
 
   const pts = ringPoints(x0, y0, x1, y1, rc);
@@ -903,12 +907,12 @@ function drawPanel(
         : cardSample;
     const targetA = sample ? sample.s : 0;
     const aDelta = targetA - st.a[i];
-    st.a[i] += aDelta * FADE_K;
+    st.a[i] += aDelta * fadeK;
     if (Math.abs(aDelta) > 0.004) fadePending = true;
     const c = sample ? sample.c : null;
     if (c) {
       const fresh = st.a[i] < 0.01 && targetA > 0;
-      const k = fresh ? 1 : COLOR_K;
+      const k = fresh ? 1 : colorK;
       st.r[i] += (c.r - st.r[i]) * k;
       st.g[i] += (c.g - st.g[i]) * k;
       st.b[i] += (c.b - st.b[i]) * k;
@@ -993,7 +997,7 @@ function drawPanel(
   const rawSh = new Array<number>(rawN).fill(0);
   for (let i = 0; i < rawGl.length; i++) {
     const glDelta = rawGl[i] - ist.gl[i];
-    ist.gl[i] += glDelta * FADE_K;
+    ist.gl[i] += glDelta * fadeK;
     if (Math.abs(glDelta) > 0.004) fadePending = true;
     let targetSh = 0;
     let localPeak = shadeGl[i];
@@ -1039,7 +1043,7 @@ function drawPanel(
       }
     }
     const shDelta = sum / wsum - ist.sh[i];
-    ist.sh[i] += shDelta * FADE_K;
+    ist.sh[i] += shDelta * fadeK;
     if (Math.abs(shDelta) > 0.004) fadePending = true;
   }
   // 暗部不是压暗，而是在该处停止绘制内光（lit=0），
@@ -1305,11 +1309,15 @@ function schedule(mode: "tool" | "full" = "full"): void {
 }
 
 function onScroll(): void {
-  // 滚动中只重绘移动的工具栏；底卡是固定在视口的，
-  // 等滚动停顿后再整层刷新，避免滚得快时帧内成本过高。
+  // 绘制本身已足够快：滚动期间直接全量刷新，
+  // 避免底卡/曲线染色要等停顿后才更新。
   window.clearTimeout(scrollIdleTimer);
-  scrollIdleTimer = window.setTimeout(() => schedule("full"), 140);
-  schedule("tool");
+  scrollingNow = true;
+  scrollIdleTimer = window.setTimeout(() => {
+    scrollingNow = false;
+    schedule("full");
+  }, 140);
+  schedule("full");
 }
 
 function onResize(): void {
