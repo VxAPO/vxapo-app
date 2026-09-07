@@ -114,10 +114,6 @@ let prevBaseDirty: { x: number; y: number; w: number; h: number } | null =
   null;
 let prevToolDirty: { x: number; y: number; w: number; h: number } | null =
   null;
-let lowData: Uint8ClampedArray | null = null;
-let lowDataW = 0;
-let lowDataH = 0;
-let lowDataDpr = 1;
 let softCanvas: HTMLCanvasElement | null = null;
 let softCtx: CanvasRenderingContext2D | null = null;
 let ssCanvas: HTMLCanvasElement | null = null;
@@ -139,7 +135,6 @@ let layoutObserver: MutationObserver | null = null;
 let scrollIdleTimer = 0;
 let selectionTimer = 0;
 let paintMode: "tool" | "full" = "full";
-let scrollFast = false;
 let fadePending = false;
 let autoScanTimer = 0;
 let autoMo: MutationObserver | null = null;
@@ -379,6 +374,7 @@ function sampleColor(
   radiusFor?: (r: DOMRect) => number,
 ): EdgeSample {
   let wSum = 0;
+  let wMax = 0;
   let r = 0;
   let g = 0;
   let b = 0;
@@ -392,13 +388,14 @@ function sampleColor(
     const w = Math.pow(1 - d / sr, 2) * p;
     if (w <= 0) continue;
     wSum += w;
+    if (w > wMax) wMax = w;
     r += c.color.r * w;
     g += c.color.g * w;
     b += c.color.b * w;
   }
   if (wSum <= 0) return null;
-  // 光源等级：数字徽标 > 框选描边 > 默认描边；上限放开到 2.4 保留梯度
-  return { c: { r: r / wSum, g: g / wSum, b: b / wSum }, s: Math.min(2.4, wSum) };
+  // 同一采样点多个光源只取最强一个的强度，避免选中数量增加导致亮度叠加。
+  return { c: { r: r / wSum, g: g / wSum, b: b / wSum }, s: Math.min(2.4, wMax) };
 }
 
 function sampleColorGrid(
@@ -410,6 +407,7 @@ function sampleColorGrid(
   radiusFor?: (r: DOMRect) => number,
 ): EdgeSample {
   let wSum = 0;
+  let wMax = 0;
   let r = 0;
   let g = 0;
   let b = 0;
@@ -424,6 +422,7 @@ function sampleColorGrid(
     const w = Math.pow(1 - d / sr, 2) * p;
     if (w <= 0) return;
     wSum += w;
+    if (w > wMax) wMax = w;
     r += c.color.r * w;
     g += c.color.g * w;
     b += c.color.b * w;
@@ -431,7 +430,7 @@ function sampleColorGrid(
   if (wSum <= 0) return null;
   return {
     c: { r: r / wSum, g: g / wSum, b: b / wSum },
-    s: Math.min(2.4, wSum),
+    s: Math.min(2.4, wMax),
   };
 }
 
@@ -597,86 +596,6 @@ function panelRectsForTool(): DOMRect[] {
   return [...document.querySelectorAll<HTMLElement>(".fx-curve, .fx-dev")]
     .map((el) => el.getBoundingClientRect())
     .filter((r) => r.width > 2 && r.height > 2);
-}
-
-function syncLowCache(): void {
-  if (!canvas || !ctx) return;
-  const toolEl = document.querySelector(".fx-toolbar");
-  if (!toolEl) return;
-  const tr = toolEl.getBoundingClientRect();
-  const overlaps = [...document.querySelectorAll(".fx-curve, .fx-dev")].some(
-    (el) => {
-      const r = el.getBoundingClientRect();
-      return (
-        tr.left < r.right &&
-        tr.right > r.left &&
-        tr.top < r.bottom &&
-        tr.bottom > r.top
-      );
-    },
-  );
-  if (!overlaps) {
-    lowData = null;
-    return;
-  }
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const w = canvas.width;
-  const h = canvas.height;
-  try {
-    const img = ctx.getImageData(0, 0, w, h);
-    lowData = img.data;
-    lowDataW = w;
-    lowDataH = h;
-    lowDataDpr = dpr;
-  } catch {
-    lowData = null;
-  }
-}
-
-/** 从低层 Canvas 读设备/曲线卡环带颜色（屏幕坐标）。 */
-function sampleLowLayer(x: number, y: number): EdgeSample {
-  if (!canvas || !ctx) return null;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const px = Math.max(2, Math.min((lowDataW || canvas.width) - 3, Math.round(x * (lowDataDpr || dpr))));
-  const py = Math.max(2, Math.min((lowDataH || canvas.height) - 3, Math.round(y * (lowDataDpr || dpr))));
-  let ta = 0;
-  let tr = 0;
-  let tg = 0;
-  let tb = 0;
-  if (lowData) {
-    for (let oy = -2; oy <= 2; oy++) {
-      for (let ox = -2; ox <= 2; ox++) {
-        const i = ((py + oy) * lowDataW + (px + ox)) * 4;
-        const a = lowData[i + 3];
-        if (a <= 0) continue;
-        ta += a;
-        tr += lowData[i] * a;
-        tg += lowData[i + 1] * a;
-        tb += lowData[i + 2] * a;
-      }
-    }
-  } else {
-    try {
-      const data = ctx.getImageData(px - 2, py - 2, 5, 5).data;
-      for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3];
-        if (a <= 0) continue;
-        ta += a;
-        tr += data[i] * a;
-        tg += data[i + 1] * a;
-        tb += data[i + 2] * a;
-      }
-    } catch {
-      return null;
-    }
-  }
-  const avg = ta / (255 * 25);
-  if (avg < 0.02) return null;
-  return {
-    c: { r: tr / ta, g: tg / ta, b: tb / ta },
-    // 归一化到和 DOM 采样相同的强度空间，保留徽标 > 框选 > 描边的亮度差
-    s: Math.min(2.4, avg / LINE_ALPHA),
-  };
 }
 
 function insetRing(
@@ -976,14 +895,12 @@ function drawPanel(
         y >= p.top - 4 &&
         y <= p.bottom + 4,
     );
-    const lowSample = overPanel ? sampleLowLayer(x, y) : null;
     const curveSample = sampleColor(x, y, nearCurve, SAMPLE_R);
-    const sample = overPanel
-      ? curveSample &&
-        (!lowSample || curveSample.s >= lowSample.s * 0.75)
+    const cardSample = sampleColorGrid(x, y, cards.colorGrid, SAMPLE_R);
+    const sample =
+      overPanel && curveSample && (!cardSample || curveSample.s >= cardSample.s)
         ? curveSample
-        : lowSample
-      : sampleColorGrid(x, y, cards.colorGrid, SAMPLE_R);
+        : cardSample;
     const targetA = sample ? sample.s : 0;
     const aDelta = targetA - st.a[i];
     st.a[i] += aDelta * FADE_K;
@@ -997,19 +914,6 @@ function drawPanel(
       st.b[i] += (c.b - st.b[i]) * k;
     }
   }
-  if (tool && scrollFast) {
-    // 滚动低配：只画外圈基础环，内光采样/光晕在停止后补全
-    strokeChunkBand(
-      ctx2,
-      pts,
-      LINE_W,
-      (i) => st.a[i] * LINE_ALPHA,
-      (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
-      toolFade,
-    );
-    return;
-  }
-
   // 内光直接在内圈路径上逐点采样，不再从外圈做序号映射，
   // 圆角处的采样点与绘制点一一对应。
   for (let j = 0; j < mainPts.length; j++) {
@@ -1376,7 +1280,6 @@ function paint(): void {
         cards,
         "base",
       );
-      if (els.some(isToolbar)) syncLowCache();
     }
     paintLayerPair(
       toolCanvas,
@@ -1405,11 +1308,7 @@ function onScroll(): void {
   // 滚动中只重绘移动的工具栏；底卡是固定在视口的，
   // 等滚动停顿后再整层刷新，避免滚得快时帧内成本过高。
   window.clearTimeout(scrollIdleTimer);
-  scrollFast = true;
-  scrollIdleTimer = window.setTimeout(() => {
-    scrollFast = false;
-    schedule("full");
-  }, 140);
+  scrollIdleTimer = window.setTimeout(() => schedule("full"), 140);
   schedule("tool");
 }
 
