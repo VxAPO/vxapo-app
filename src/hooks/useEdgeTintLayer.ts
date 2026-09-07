@@ -496,6 +496,24 @@ function panelRectsForTool(): DOMRect[] {
 
 function syncLowCache(): void {
   if (!canvas || !ctx) return;
+  const toolEl = document.querySelector(".fx-toolbar");
+  if (!toolEl) return;
+  const tr = toolEl.getBoundingClientRect();
+  const overlaps = [...document.querySelectorAll(".fx-curve, .fx-dev")].some(
+    (el) => {
+      const r = el.getBoundingClientRect();
+      return (
+        tr.left < r.right &&
+        tr.right > r.left &&
+        tr.top < r.bottom &&
+        tr.bottom > r.top
+      );
+    },
+  );
+  if (!overlaps) {
+    lowData = null;
+    return;
+  }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = canvas.width;
   const h = canvas.height;
