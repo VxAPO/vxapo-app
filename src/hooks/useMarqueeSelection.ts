@@ -127,7 +127,12 @@ export function useMarqueeSelection({
     const y2 = Math.max(m.y1, m.y2) - body.scrollTop;
     if (x2 - x1 < 4 && y2 - y1 < 4) return []; // 点空白：空选择
     const ids: string[] = [];
-    body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+    // 只扫当前视图 stage；切视图动画期间旧 stage 可能仍挂在 DOM 里，
+    // 全 body 扫描会把退场卡也框进来。
+    const scope = body.querySelector<HTMLElement>(
+      `[data-view="${viewRef.current}"]`,
+    ) ?? body;
+    scope.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
       if (el.dataset.dndGroup === "effects") return;
       const r = el.getBoundingClientRect();
       const rx = r.left - rect.left;
@@ -161,7 +166,10 @@ export function useMarqueeSelection({
             // 实时高亮直接改 DOM class，避免每帧触发 React 重渲；
             // React 状态低频提交，松手再最终同步一次。
             const liveSet = new Set(next);
-            body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+            const scope = body.querySelector<HTMLElement>(
+              `[data-view="${viewRef.current}"]`,
+            ) ?? body;
+            scope.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
               const id = el.dataset.dndId;
               el.classList.toggle("is-selected", !!id && liveSet.has(id));
             });

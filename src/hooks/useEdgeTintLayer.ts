@@ -39,18 +39,25 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let toolCanvas: HTMLCanvasElement | null = null;
 let toolCtx: CanvasRenderingContext2D | null = null;
+let prevBaseDirty: { x: number; y: number; w: number; h: number } | null =
+  null;
+let prevToolDirty: { x: number; y: number; w: number; h: number } | null =
+  null;
 let lowData: Uint8ClampedArray | null = null;
 let lowDataW = 0;
 let lowDataH = 0;
 let lowDataDpr = 1;
 let softCanvas: HTMLCanvasElement | null = null;
 let softCtx: CanvasRenderingContext2D | null = null;
+let ssCanvas: HTMLCanvasElement | null = null;
+let ssCtx: CanvasRenderingContext2D | null = null;
 let raf = 0;
 let running = false;
 let themeObserver: MutationObserver | null = null;
 let layoutObserver: MutationObserver | null = null;
 let interval = 0;
 let scrollIdleTimer = 0;
+let selectionTimer = 0;
 let paintMode: "tool" | "full" = "full";
 let autoScanTimer = 0;
 let autoMo: MutationObserver | null = null;
@@ -323,7 +330,6 @@ function ringPoints(
   rc: number,
 ): Array<RingPoint> {
   const pts: Array<RingPoint> = [];
-  const snap = (v: number): number => Math.round(v * 4) / 4;
   const addLine = (
     ax: number,
     ay: number,
@@ -337,8 +343,8 @@ function ringPoints(
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       pts.push({
-        x: snap(ax + (bx - ax) * t),
-        y: snap(ay + (by - ay) * t),
+        x: ax + (bx - ax) * t,
+        y: ay + (by - ay) * t,
         brk: brk && i === 0,
       });
     }
@@ -357,8 +363,8 @@ function ringPoints(
     for (let i = 0; i < n; i++) {
       const a = a0 + (a1 - a0) * (i / n);
       pts.push({
-        x: snap(cx + Math.cos(a) * rc),
-        y: snap(cy + Math.sin(a) * rc),
+        x: cx + Math.cos(a) * rc,
+        y: cy + Math.sin(a) * rc,
         brk: brk && i === 0,
       });
     }
@@ -597,6 +603,74 @@ function ensureSoftCanvas(w: number, h: number): void {
     softCanvas.width = Math.max(softCanvas.width, needW);
     softCanvas.height = Math.max(softCanvas.height, needH);
   }
+}
+
+function ensureSsCanvas(w: number, h: number): void {
+  if (!ssCanvas) {
+    ssCanvas = document.createElement("canvas");
+    ssCtx = ssCanvas.getContext("2d");
+    if (!ssCtx) {
+      ssCanvas.remove();
+      ssCanvas = null;
+      ssCtx = null;
+      return;
+    }
+  }
+  if (ssCanvas.width < w || ssCanvas.height < h) {
+    ssCanvas.width = Math.max(ssCanvas.width, Math.ceil(w));
+    ssCanvas.height = Math.max(ssCanvas.height, Math.ceil(h));
+  }
+}
+
+function strokeHighQualityBand(
+  bandCtx: CanvasRenderingContext2D,
+  pts: Array<RingPoint>,
+  lineWidth: number | ((i: number) => number),
+  alphaAt: (i: number) => number,
+  colorAt: (i: number) => Rgb,
+  toolFade: number,
+): void {
+  if (pts.length < 2) return;
+  const SCALE = 3;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pts) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const PAD = 8;
+  const ox = Math.floor(minX - PAD);
+  const oy = Math.floor(minY - PAD);
+  const ow = Math.ceil(maxX - minX + PAD * 2);
+  const oh = Math.ceil(maxY - minY + PAD * 2);
+  ensureSsCanvas(ow * SCALE, oh * SCALE);
+  if (!ssCanvas || !ssCtx) {
+    strokeChunkBand(bandCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
+    return;
+  }
+  ssCtx.setTransform(1, 0, 0, 1, 0, 0);
+  ssCtx.clearRect(0, 0, ssCanvas.width, ssCanvas.height);
+  ssCtx.setTransform(SCALE, 0, 0, SCALE, -ox * SCALE, -oy * SCALE);
+  strokeChunkBand(ssCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
+  const smoothing = bandCtx.imageSmoothingEnabled;
+  bandCtx.imageSmoothingEnabled = true;
+  bandCtx.imageSmoothingQuality = "high";
+  bandCtx.drawImage(
+    ssCanvas,
+    0,
+    0,
+    ow * SCALE,
+    oh * SCALE,
+    ox,
+    oy,
+    ow,
+    oh,
+  );
+  bandCtx.imageSmoothingEnabled = smoothing;
 }
 
 function strokeGlowBand(
@@ -886,7 +960,7 @@ function drawPanel(
       : { r: 255, g: 255, b: 255 };
 
   // 外圈染色高光
-  strokeChunkBand(
+  strokeHighQualityBand(
     ctx2,
     pts,
     LINE_W,
@@ -964,27 +1038,76 @@ function isToolbar(el: HTMLElement): boolean {
   return el.classList.contains("fx-toolbar");
 }
 
+function dirtyForEls(
+  els: HTMLElement[],
+): { x: number; y: number; w: number; h: number } | null {
+  if (!els.length) return null;
+  const PAD = 24;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue;
+    if (r.left - PAD < minX) minX = r.left - PAD;
+    if (r.top - PAD < minY) minY = r.top - PAD;
+    if (r.right + PAD > maxX) maxX = r.right + PAD;
+    if (r.bottom + PAD > maxY) maxY = r.bottom + PAD;
+  }
+  if (!Number.isFinite(minX)) return null;
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+function clearDirtyUnion(
+  k: CanvasRenderingContext2D,
+  a: { x: number; y: number; w: number; h: number } | null,
+  b: { x: number; y: number; w: number; h: number } | null,
+): void {
+  if (!a && !b) return;
+  if (!a) {
+    k.clearRect(b!.x, b!.y, b!.w, b!.h);
+    return;
+  }
+  if (!b) {
+    k.clearRect(a.x, a.y, a.w, a.h);
+    return;
+  }
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const x2 = Math.max(a.x + a.w, b.x + b.w);
+  const y2 = Math.max(a.y + a.h, b.y + b.h);
+  k.clearRect(x, y, x2 - x, y2 - y);
+}
+
 function paintLayerPair(
   c: HTMLCanvasElement | null,
   k: CanvasRenderingContext2D | null,
   els: HTMLElement[],
   cards: LightSet,
+  kind: "base" | "tool",
 ): void {
   if (!c || !k) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = window.innerWidth;
   const h = window.innerHeight;
+  const sized = c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr);
   c.style.width = `${w}px`;
   c.style.height = `${h}px`;
-  if (
-    c.width !== Math.round(w * dpr) ||
-    c.height !== Math.round(h * dpr)
-  ) {
+  if (sized) {
     c.width = Math.round(w * dpr);
     c.height = Math.round(h * dpr);
   }
   k.setTransform(dpr, 0, 0, dpr, 0, 0);
-  k.clearRect(0, 0, w, h);
+  const prev = kind === "base" ? prevBaseDirty : prevToolDirty;
+  const next = dirtyForEls(els);
+  if (sized) {
+    k.clearRect(0, 0, w, h);
+  } else {
+    clearDirtyUnion(k, prev, next);
+  }
+  if (kind === "base") prevBaseDirty = next;
+  else prevToolDirty = next;
   if (!els.length) return;
   els.forEach((el) => drawPanel(el, k, cards));
 }
@@ -1001,6 +1124,7 @@ function paint(): void {
         ctx,
         els.filter((el) => !isToolbar(el)),
         cards,
+        "base",
       );
       if (els.some(isToolbar)) syncLowCache();
     }
@@ -1009,6 +1133,7 @@ function paint(): void {
       toolCtx,
       els.filter(isToolbar),
       cards,
+      "tool",
     );
   } catch (err) {
     console.error("[edgeTint] paint failed", err);
@@ -1069,13 +1194,22 @@ function start(): void {
         m.target instanceof HTMLElement &&
         m.target.classList.contains("fx-toolbar"),
     );
-    if (
+    const selectionChanged = records.some(
+      (m) =>
+        m.type === "attributes" &&
+        m.attributeName === "class" &&
+        m.target instanceof HTMLElement &&
+        m.target.hasAttribute("data-dnd-id"),
+    );
+    const structureChanged =
       records.some(
         (m) =>
           m.type === "childList" ||
-          (m.type === "attributes" && m.attributeName !== "style"),
-      )
-    ) {
+          (m.type === "attributes" &&
+            (m.attributeName === "data-dnd-id" ||
+              m.attributeName === "data-dnd-group")),
+      );
+    if (structureChanged) {
       refreshCardNodes();
     }
     if (toolbarMoved) {
@@ -1085,6 +1219,13 @@ function start(): void {
       raf = 0;
       paintMode = "tool";
       paint();
+      return;
+    }
+    if (selectionChanged) {
+      // 框选拖动会每帧改 is-selected；不立即全量重绘，
+      // 停顿后刷新一次，让选中描边权重收敛。
+      window.clearTimeout(selectionTimer);
+      selectionTimer = window.setTimeout(() => schedule("full"), 160);
       return;
     }
     schedule("full");
@@ -1111,6 +1252,8 @@ function stop(): void {
   document.removeEventListener("visibilitychange", onVisibilityChange);
   window.clearTimeout(scrollIdleTimer);
   scrollIdleTimer = 0;
+  window.clearTimeout(selectionTimer);
+  selectionTimer = 0;
   themeObserver?.disconnect();
   themeObserver = null;
   layoutObserver?.disconnect();
@@ -1127,6 +1270,9 @@ function stop(): void {
   softCanvas?.remove();
   softCanvas = null;
   softCtx = null;
+  ssCanvas?.remove();
+  ssCanvas = null;
+  ssCtx = null;
 }
 
 function registerTarget(el: HTMLElement): void {
