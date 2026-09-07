@@ -295,13 +295,14 @@ function smoothstep(a: number, b: number, x: number): number {
 }
 
 /** 暗部凸起：以“离局部峰值的路径距离”为自变量。
- *  0~4px 用 smoothstep 缓入，4px 处最强，4~10px 缓出，10px 外归 0。
- *  这样暗部既不会太硬地切入亮斑，也不会在中后段衰减带残留。 */
+ *  0~3px 完全无暗部（光源紧贴时留空），3~5px 缓入，
+ *  5px 处最强，5~10px 缓出，10px 外归 0。 */
 function shadeBumpAt(d: number): number {
-  const PEAK_R = 4;
+  const MIN_R = 3;
+  const PEAK_R = 5;
   const ZERO_R = 10;
-  if (d <= 0 || d >= ZERO_R) return 0;
-  if (d < PEAK_R) return smoothstep(0, PEAK_R, d);
+  if (d <= MIN_R || d >= ZERO_R) return 0;
+  if (d < PEAK_R) return smoothstep(MIN_R, PEAK_R, d);
   return 1 - smoothstep(PEAK_R, ZERO_R, d);
 }
 
