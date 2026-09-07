@@ -39,6 +39,10 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let toolCanvas: HTMLCanvasElement | null = null;
 let toolCtx: CanvasRenderingContext2D | null = null;
+let lowData: Uint8ClampedArray | null = null;
+let lowDataW = 0;
+let lowDataH = 0;
+let lowDataDpr = 1;
 let softCanvas: HTMLCanvasElement | null = null;
 let softCtx: CanvasRenderingContext2D | null = null;
 let raf = 0;
@@ -46,6 +50,8 @@ let running = false;
 let themeObserver: MutationObserver | null = null;
 let layoutObserver: MutationObserver | null = null;
 let interval = 0;
+let scrollIdleTimer = 0;
+let paintMode: "tool" | "full" = "full";
 let autoScanTimer = 0;
 let autoMo: MutationObserver | null = null;
 let autoStarted = false;
@@ -317,6 +323,7 @@ function ringPoints(
   rc: number,
 ): Array<RingPoint> {
   const pts: Array<RingPoint> = [];
+  const snap = (v: number): number => Math.round(v * 4) / 4;
   const addLine = (
     ax: number,
     ay: number,
@@ -330,8 +337,8 @@ function ringPoints(
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       pts.push({
-        x: ax + (bx - ax) * t,
-        y: ay + (by - ay) * t,
+        x: snap(ax + (bx - ax) * t),
+        y: snap(ay + (by - ay) * t),
         brk: brk && i === 0,
       });
     }
@@ -350,8 +357,8 @@ function ringPoints(
     for (let i = 0; i < n; i++) {
       const a = a0 + (a1 - a0) * (i / n);
       pts.push({
-        x: cx + Math.cos(a) * rc,
-        y: cy + Math.sin(a) * rc,
+        x: snap(cx + Math.cos(a) * rc),
+        y: snap(cy + Math.sin(a) * rc),
         brk: brk && i === 0,
       });
     }
@@ -424,28 +431,58 @@ function panelRectsForTool(): DOMRect[] {
     .filter((r) => r.width > 2 && r.height > 2);
 }
 
+function syncLowCache(): void {
+  if (!canvas || !ctx) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = canvas.width;
+  const h = canvas.height;
+  try {
+    const img = ctx.getImageData(0, 0, w, h);
+    lowData = img.data;
+    lowDataW = w;
+    lowDataH = h;
+    lowDataDpr = dpr;
+  } catch {
+    lowData = null;
+  }
+}
+
 /** 从低层 Canvas 读设备/曲线卡环带颜色（屏幕坐标）。 */
 function sampleLowLayer(x: number, y: number): EdgeSample {
   if (!canvas || !ctx) return null;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const px = Math.max(2, Math.min(canvas.width - 3, Math.round(x * dpr)));
-  const py = Math.max(2, Math.min(canvas.height - 3, Math.round(y * dpr)));
+  const px = Math.max(2, Math.min((lowDataW || canvas.width) - 3, Math.round(x * (lowDataDpr || dpr))));
+  const py = Math.max(2, Math.min((lowDataH || canvas.height) - 3, Math.round(y * (lowDataDpr || dpr))));
   let ta = 0;
   let tr = 0;
   let tg = 0;
   let tb = 0;
-  try {
-    const data = ctx.getImageData(px - 2, py - 2, 5, 5).data;
-    for (let i = 0; i < data.length; i += 4) {
-      const a = data[i + 3];
-      if (a <= 0) continue;
-      ta += a;
-      tr += data[i] * a;
-      tg += data[i + 1] * a;
-      tb += data[i + 2] * a;
+  if (lowData) {
+    for (let oy = -2; oy <= 2; oy++) {
+      for (let ox = -2; ox <= 2; ox++) {
+        const i = ((py + oy) * lowDataW + (px + ox)) * 4;
+        const a = lowData[i + 3];
+        if (a <= 0) continue;
+        ta += a;
+        tr += lowData[i] * a;
+        tg += lowData[i + 1] * a;
+        tb += lowData[i + 2] * a;
+      }
     }
-  } catch {
-    return null;
+  } else {
+    try {
+      const data = ctx.getImageData(px - 2, py - 2, 5, 5).data;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a <= 0) continue;
+        ta += a;
+        tr += data[i] * a;
+        tg += data[i + 1] * a;
+        tb += data[i + 2] * a;
+      }
+    } catch {
+      return null;
+    }
   }
   const avg = ta / (255 * 25);
   if (avg < 0.02) return null;
@@ -958,12 +995,15 @@ function paint(): void {
     if (!running || !targets.size) return;
     const cards = collectCards();
     const els = [...targets];
-    paintLayerPair(
-      canvas,
-      ctx,
-      els.filter((el) => !isToolbar(el)),
-      cards,
-    );
+    if (paintMode !== "tool") {
+      paintLayerPair(
+        canvas,
+        ctx,
+        els.filter((el) => !isToolbar(el)),
+        cards,
+      );
+      if (els.some(isToolbar)) syncLowCache();
+    }
     paintLayerPair(
       toolCanvas,
       toolCtx,
@@ -975,23 +1015,44 @@ function paint(): void {
   }
 }
 
-function schedule(): void {
+function schedule(mode: "tool" | "full" = "full"): void {
   if (!running) return;
+  paintMode = mode;
   if (raf) return;
   raf = requestAnimationFrame(paint);
+}
+
+function onScroll(): void {
+  // 滚动中只重绘移动的工具栏；底卡是固定在视口的，
+  // 等滚动停顿后再整层刷新，避免滚得快时帧内成本过高。
+  window.clearTimeout(scrollIdleTimer);
+  scrollIdleTimer = window.setTimeout(() => schedule("full"), 140);
+  schedule("tool");
+}
+
+function onResize(): void {
+  schedule("full");
+}
+
+function onFocus(): void {
+  schedule("full");
+}
+
+function onVisibilityChange(): void {
+  schedule("full");
 }
 
 function start(): void {
   if (running) return;
   ensureCanvas();
   running = true;
-  window.addEventListener("scroll", schedule, {
+  window.addEventListener("scroll", onScroll, {
     capture: true,
     passive: true,
   });
-  window.addEventListener("resize", schedule);
-  window.addEventListener("focus", schedule);
-  document.addEventListener("visibilitychange", schedule);
+  window.addEventListener("resize", onResize);
+  window.addEventListener("focus", onFocus);
+  document.addEventListener("visibilitychange", onVisibilityChange);
   themeObserver = new MutationObserver(() => {
     colorCache = new WeakMap();
     schedule();
@@ -1001,6 +1062,13 @@ function start(): void {
     attributeFilter: ["data-theme"],
   });
   layoutObserver = new MutationObserver((records) => {
+    const toolbarMoved = records.some(
+      (m) =>
+        m.type === "attributes" &&
+        m.attributeName === "style" &&
+        m.target instanceof HTMLElement &&
+        m.target.classList.contains("fx-toolbar"),
+    );
     if (
       records.some(
         (m) =>
@@ -1010,7 +1078,16 @@ function start(): void {
     ) {
       refreshCardNodes();
     }
-    schedule();
+    if (toolbarMoved) {
+      // 工具栏位移动画每帧改 style；MutationObserver 在该帧渲染前触发，
+      // 同步重画可以对齐当前帧位置，避免 Canvas 永远慢半拍。
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      paintMode = "tool";
+      paint();
+      return;
+    }
+    schedule("full");
   });
   layoutObserver.observe(document.body, {
     childList: true,
@@ -1018,7 +1095,7 @@ function start(): void {
     attributes: true,
     attributeFilter: ["class", "style", "data-dnd-id", "data-dnd-group"],
   });
-  interval = window.setInterval(schedule, 250);
+  interval = window.setInterval(() => schedule("full"), 250);
   schedule();
 }
 
@@ -1026,12 +1103,14 @@ function stop(): void {
   running = false;
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
-  window.removeEventListener("scroll", schedule, {
+  window.removeEventListener("scroll", onScroll, {
     capture: true,
   } as EventListenerOptions);
-  window.removeEventListener("resize", schedule);
-  window.removeEventListener("focus", schedule);
-  document.removeEventListener("visibilitychange", schedule);
+  window.removeEventListener("resize", onResize);
+  window.removeEventListener("focus", onFocus);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  window.clearTimeout(scrollIdleTimer);
+  scrollIdleTimer = 0;
   themeObserver?.disconnect();
   themeObserver = null;
   layoutObserver?.disconnect();
@@ -1063,7 +1142,7 @@ function registerTarget(el: HTMLElement): void {
     ensureCanvas(nextHost);
   }
   targets.add(el);
-  const ro = new ResizeObserver(schedule);
+  const ro = new ResizeObserver(() => schedule("full"));
   ro.observe(el);
   targetRos.set(el, ro);
 }

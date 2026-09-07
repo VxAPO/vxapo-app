@@ -68,6 +68,7 @@ export function useMarqueeSelection({
     x2: number;
     y2: number;
   } | null>(null);
+  const lastLiveCommitRef = useRef(0);
   const toolbarElRef = useRef<HTMLDivElement | null>(null);
   const [toolbarH, setToolbarH] = useState(64);
   const [toolbarW, setToolbarW] = useState(280);
@@ -157,9 +158,18 @@ export function useMarqueeSelection({
           const body = bodyRef.current;
           if (body) {
             const next = collectMarqueeIds(m, body);
-            setSelectedIds((prev) =>
-              prev.length === next.length && prev.join(",") === next.join(",") ? prev : next,
-            );
+            // 实时高亮直接改 DOM class，避免每帧触发 React 重渲；
+            // React 状态低频提交，松手再最终同步一次。
+            const liveSet = new Set(next);
+            body.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+              const id = el.dataset.dndId;
+              el.classList.toggle("is-selected", !!id && liveSet.has(id));
+            });
+            const now = performance.now();
+            if (now - lastLiveCommitRef.current > 90) {
+              lastLiveCommitRef.current = now;
+              setSelectedIds(next);
+            }
           }
         }
       });
@@ -176,6 +186,7 @@ export function useMarqueeSelection({
     const m = pendingMarqueeRef.current ?? marquee;
     pendingMarqueeRef.current = null;
     marqueeStartRef.current = null;
+    lastLiveCommitRef.current = 0;
     setMarquee(null);
     if (!s || !body || !m) return;
     // 实时框选期间已同步；抬手用最终矩形收尾（点空白时 helper 返回空 = 清空选择）
@@ -229,27 +240,6 @@ export function useMarqueeSelection({
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
   }, [copyOpen]);
-
-  // 滚动时实时重测选中卡片几何，避免浮窗与卡片脱节。
-  useEffect(() => {
-    if (selectedIds.length === 0) return;
-    const body = bodyRef.current;
-    if (!body) return;
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(() => {
-        raf = 0;
-        setSelGeomTick((v) => v + 1);
-      });
-    };
-    body.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      body.removeEventListener("scroll", onScroll);
-      if (raf) window.cancelAnimationFrame(raf);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds.length > 0]);
 
   // 工具栏高度变化（如复制到声道菜单展开）时重新避让，避免被顶部/底部裁剪
   useLayoutEffect(() => {
