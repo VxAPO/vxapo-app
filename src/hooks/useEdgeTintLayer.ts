@@ -35,7 +35,76 @@ type LightSet = {
   lums: LumSource[];
   /** 曲线 SVG 路径的离散点光源，用于影响更高层工具栏 */
   curve: ColorSource[];
+  colorGrid: Grid<ColorSource>;
+  lumGrid: Grid<LumSource>;
 };
+
+type Grid<T> = {
+  cell: number;
+  buckets: Map<number, number[]>;
+  list: T[];
+  marks: Uint8Array;
+  gen: number;
+};
+
+function buildGrid<T extends { r: DOMRect }>(
+  list: T[],
+  cell = 64,
+): Grid<T> {
+  const buckets = new Map<number, number[]>();
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i].r;
+    const minX = Math.floor(r.left / cell);
+    const maxX = Math.floor(r.right / cell);
+    const minY = Math.floor(r.top / cell);
+    const maxY = Math.floor(r.bottom / cell);
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const key = y * 100000 + x;
+        const arr = buckets.get(key);
+        if (arr) arr.push(i);
+        else buckets.set(key, [i]);
+      }
+    }
+  }
+  return {
+    cell,
+    buckets,
+    list,
+    marks: new Uint8Array(list.length),
+    gen: 0,
+  };
+}
+
+function queryGrid<T>(
+  grid: Grid<T>,
+  x: number,
+  y: number,
+  radius: number,
+  visit: (entry: T) => void,
+): void {
+  const cell = grid.cell;
+  const minX = Math.floor((x - radius) / cell);
+  const maxX = Math.floor((x + radius) / cell);
+  const minY = Math.floor((y - radius) / cell);
+  const maxY = Math.floor((y + radius) / cell);
+  grid.gen++;
+  const gen = grid.gen;
+  const marks = grid.marks;
+  const buckets = grid.buckets;
+  const list = grid.list;
+  for (let gy = minY; gy <= maxY; gy++) {
+    for (let gx = minX; gx <= maxX; gx++) {
+      const arr = buckets.get(gy * 100000 + gx);
+      if (!arr) continue;
+      for (const idx of arr) {
+        if (marks[idx] === gen) continue;
+        marks[idx] = gen;
+        visit(list[idx]);
+      }
+    }
+  }
+}
 
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
@@ -70,6 +139,7 @@ let layoutObserver: MutationObserver | null = null;
 let scrollIdleTimer = 0;
 let selectionTimer = 0;
 let paintMode: "tool" | "full" = "full";
+let scrollFast = false;
 let fadePending = false;
 let autoScanTimer = 0;
 let autoMo: MutationObserver | null = null;
@@ -331,26 +401,61 @@ function sampleColor(
   return { c: { r: r / wSum, g: g / wSum, b: b / wSum }, s: Math.min(2.4, wSum) };
 }
 
-function sampleLum(
+function sampleColorGrid(
   x: number,
   y: number,
-  sources: LumSource[],
+  grid: Grid<ColorSource>,
+  radius: number,
+  innerOnly = false,
+  radiusFor?: (r: DOMRect) => number,
+): EdgeSample {
+  let wSum = 0;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  const qr = radius * Math.sqrt(MAX_POWER);
+  queryGrid(grid, x, y, qr, (c) => {
+    if (innerOnly && !c.inner) return;
+    const d = c.border ? distToBorder(x, y, c.r) : distToRect(x, y, c.r);
+    const p = c.power ?? 1;
+    const sr =
+      radius * Math.sqrt(p) * (radiusFor ? radiusFor(c.r) : 1);
+    if (d >= sr) return;
+    const w = Math.pow(1 - d / sr, 2) * p;
+    if (w <= 0) return;
+    wSum += w;
+    r += c.color.r * w;
+    g += c.color.g * w;
+    b += c.color.b * w;
+  });
+  if (wSum <= 0) return null;
+  return {
+    c: { r: r / wSum, g: g / wSum, b: b / wSum },
+    s: Math.min(2.4, wSum),
+  };
+}
+
+function sampleLumGrid(
+  x: number,
+  y: number,
+  grid: Grid<LumSource>,
   radius: number,
   radiusFor?: (r: DOMRect) => number,
 ): { lum: number; prox: number } | null {
   let wSum = 0;
   let lum = 0;
-  for (const s of sources) {
+  const qr = radius * Math.sqrt(MAX_POWER);
+  queryGrid(grid, x, y, qr, (s) => {
     const d = s.border ? distToBorder(x, y, s.r) : distToRect(x, y, s.r);
     const p = s.power ?? 1;
     const sr =
       radius * Math.sqrt(p) * (radiusFor ? radiusFor(s.r) : 1);
-    if (d >= sr) continue;
+    if (d >= sr) return;
     const w = Math.pow(1 - d / sr, 2) * p;
-    if (w <= 0) continue;
+    if (w <= 0) return;
     wSum += w;
     lum += s.lum * w;
-  }
+  });
   if (wSum <= 0) return null;
   return { lum: lum / wSum, prox: Math.min(1, wSum / 1.2) };
 }
@@ -827,29 +932,6 @@ function drawPanel(
   const rc = corner + o;
 
   const R = MAX_SOURCE_R;
-  const near = cards.colors.filter(
-    (c) =>
-      c.r.right >= x0 - R &&
-      c.r.left <= x1 + R &&
-      c.r.bottom >= y0 - R &&
-      c.r.top <= y1 + R,
-  );
-  const nearLums = cards.lums.filter(
-    (c) =>
-      c.inner &&
-      c.r.right >= x0 - R &&
-      c.r.left <= x1 + R &&
-      c.r.bottom >= y0 - R &&
-      c.r.top <= y1 + R,
-  );
-  const innerColors = cards.colors.filter(
-    (c) =>
-      c.inner &&
-      c.r.right >= x0 - R &&
-      c.r.left <= x1 + R &&
-      c.r.bottom >= y0 - R &&
-      c.r.top <= y1 + R,
-  );
   const nearCurve = cards.curve.filter(
     (c) =>
       c.r.right >= x0 - R &&
@@ -901,7 +983,7 @@ function drawPanel(
         (!lowSample || curveSample.s >= lowSample.s * 0.75)
         ? curveSample
         : lowSample
-      : sampleColor(x, y, near, SAMPLE_R);
+      : sampleColorGrid(x, y, cards.colorGrid, SAMPLE_R);
     const targetA = sample ? sample.s : 0;
     const aDelta = targetA - st.a[i];
     st.a[i] += aDelta * FADE_K;
@@ -915,26 +997,39 @@ function drawPanel(
       st.b[i] += (c.b - st.b[i]) * k;
     }
   }
+  if (tool && scrollFast) {
+    // 滚动低配：只画外圈基础环，内光采样/光晕在停止后补全
+    strokeChunkBand(
+      ctx2,
+      pts,
+      LINE_W,
+      (i) => st.a[i] * LINE_ALPHA,
+      (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
+      toolFade,
+    );
+    return;
+  }
 
   // 内光直接在内圈路径上逐点采样，不再从外圈做序号映射，
   // 圆角处的采样点与绘制点一一对应。
   for (let j = 0; j < mainPts.length; j++) {
     const glowP = mainPts[j];
-    const lumSample = sampleLum(
+    const lumSample = sampleLumGrid(
       glowP.x,
       glowP.y,
-      nearLums,
+      cards.lumGrid,
       INNER_SAMPLE_R,
       outsideFade,
     );
     const lum = lumSample?.lum ?? panelBase;
     const prox = lumSample?.prox ?? 0;
     const contrast = Math.abs(lum - panelBase) / 255;
-    const innerTint = sampleColor(
+    const innerTint = sampleColorGrid(
       glowP.x,
       glowP.y,
-      innerColors,
+      cards.colorGrid,
       INNER_SAMPLE_R,
+      true,
       outsideFade,
     );
     const colorEnergy = innerTint
@@ -1125,7 +1220,13 @@ function collectCards(): LightSet {
       lums.push({ r: sr, lum: rgbLuminance(color), power, inner: true });
     });
   });
-  return { colors, lums, curve };
+  return {
+    colors,
+    lums,
+    curve,
+    colorGrid: buildGrid(colors),
+    lumGrid: buildGrid(lums),
+  };
 }
 
 function isToolbar(el: HTMLElement): boolean {
@@ -1304,7 +1405,11 @@ function onScroll(): void {
   // 滚动中只重绘移动的工具栏；底卡是固定在视口的，
   // 等滚动停顿后再整层刷新，避免滚得快时帧内成本过高。
   window.clearTimeout(scrollIdleTimer);
-  scrollIdleTimer = window.setTimeout(() => schedule("full"), 140);
+  scrollFast = true;
+  scrollIdleTimer = window.setTimeout(() => {
+    scrollFast = false;
+    schedule("full");
+  }, 140);
   schedule("tool");
 }
 
