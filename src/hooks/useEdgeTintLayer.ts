@@ -33,6 +33,8 @@ type LumSource = {
 type LightSet = {
   colors: ColorSource[];
   lums: LumSource[];
+  /** 曲线 SVG 路径的离散点光源，用于影响更高层工具栏 */
+  curve: ColorSource[];
 };
 
 let canvas: HTMLCanvasElement | null = null;
@@ -51,6 +53,16 @@ let softCanvas: HTMLCanvasElement | null = null;
 let softCtx: CanvasRenderingContext2D | null = null;
 let ssCanvas: HTMLCanvasElement | null = null;
 let ssCtx: CanvasRenderingContext2D | null = null;
+type PanelBuffer = {
+  c: HTMLCanvasElement;
+  k: CanvasRenderingContext2D;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  dpr: number;
+};
+const panelBuffers = new WeakMap<HTMLElement, PanelBuffer>();
 let raf = 0;
 let running = false;
 let themeObserver: MutationObserver | null = null;
@@ -58,6 +70,7 @@ let layoutObserver: MutationObserver | null = null;
 let scrollIdleTimer = 0;
 let selectionTimer = 0;
 let paintMode: "tool" | "full" = "full";
+let fadePending = false;
 let autoScanTimer = 0;
 let autoMo: MutationObserver | null = null;
 let autoStarted = false;
@@ -80,6 +93,51 @@ function refreshCardNodes(): CardNode[] {
     }),
   );
   return cardNodes;
+}
+
+const curvePointCache = new WeakMap<
+  SVGPathElement,
+  { key: string; pts: ColorSource[] }
+>();
+
+function curvePointSources(): ColorSource[] {
+  const path = document.querySelector<SVGPathElement>(
+    ".fx-curve svg path[stroke]",
+  );
+  if (!path) return [];
+  const rect = path.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) return [];
+  const key = `${rect.width.toFixed(1)}|${rect.height.toFixed(1)}|${
+    path.getAttribute("d")?.length ?? 0
+  }`;
+  const hit = curvePointCache.get(path);
+  if (hit && hit.key === key) return hit.pts;
+  const cs = getComputedStyle(path);
+  const color =
+    parseColor(cs.stroke) ||
+    parseColor(
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--curve-path")
+        .trim(),
+    ) ||
+    (isDark() ? { r: 71, g: 195, b: 209 } : { r: 0, g: 154, b: 162 });
+  const ctm = path.getScreenCTM();
+  if (!ctm) return [];
+  const pts: ColorSource[] = [];
+  const len = path.getTotalLength();
+  const STEP = 16;
+  for (let d = 0; d <= len; d += STEP) {
+    const p = path.getPointAtLength(Math.min(len, d));
+    const s = p.matrixTransform(ctm);
+    pts.push({
+      r: new DOMRect(s.x - 1, s.y - 1, 2, 2),
+      color,
+      power: 0.9,
+      inner: true,
+    });
+  }
+  curvePointCache.set(path, { key, pts });
+  return pts;
 }
 
 const SAMPLE_R = 32;
@@ -774,6 +832,13 @@ function drawPanel(
       c.r.bottom >= y0 - R &&
       c.r.top <= y1 + R,
   );
+  const nearCurve = cards.curve.filter(
+    (c) =>
+      c.r.right >= x0 - R &&
+      c.r.left <= x1 + R &&
+      c.r.bottom >= y0 - R &&
+      c.r.top <= y1 + R,
+  );
   const tool = isToolbar(el);
   const panels = tool ? panelRectsForTool() : null;
   // 工具栏自带淡入/淡出动画，Canvas 环带直接跟随其透明度，避免退场比工具栏慢
@@ -811,11 +876,18 @@ function drawPanel(
         y >= p.top - 4 &&
         y <= p.bottom + 4,
     );
+    const lowSample = overPanel ? sampleLowLayer(x, y) : null;
+    const curveSample = sampleColor(x, y, nearCurve, SAMPLE_R);
     const sample = overPanel
-      ? sampleLowLayer(x, y)
+      ? curveSample &&
+        (!lowSample || curveSample.s >= lowSample.s * 0.75)
+        ? curveSample
+        : lowSample
       : sampleColor(x, y, near, SAMPLE_R);
     const targetA = sample ? sample.s : 0;
-    st.a[i] += (targetA - st.a[i]) * FADE_K;
+    const aDelta = targetA - st.a[i];
+    st.a[i] += aDelta * FADE_K;
+    if (Math.abs(aDelta) > 0.004) fadePending = true;
     const c = sample ? sample.c : null;
     if (c) {
       const fresh = st.a[i] < 0.01 && targetA > 0;
@@ -903,7 +975,9 @@ function drawPanel(
 
   const rawSh = new Array<number>(rawN).fill(0);
   for (let i = 0; i < rawGl.length; i++) {
-    ist.gl[i] += (rawGl[i] - ist.gl[i]) * FADE_K;
+    const glDelta = rawGl[i] - ist.gl[i];
+    ist.gl[i] += glDelta * FADE_K;
+    if (Math.abs(glDelta) > 0.004) fadePending = true;
     let targetSh = 0;
     let localPeak = shadeGl[i];
     let localPeakIdx = i;
@@ -947,7 +1021,9 @@ function drawPanel(
         wsum += w;
       }
     }
-    ist.sh[i] += ((sum / wsum) - ist.sh[i]) * FADE_K;
+    const shDelta = sum / wsum - ist.sh[i];
+    ist.sh[i] += shDelta * FADE_K;
+    if (Math.abs(shDelta) > 0.004) fadePending = true;
   }
   // 暗部不是压暗，而是在该处停止绘制内光（lit=0），
   // 让底层默认高光样式的暗部自己透出来；shade 只是控制这个“留空”的平滑形状。
@@ -995,6 +1071,7 @@ function drawPanel(
 function collectCards(): LightSet {
   const colors: ColorSource[] = [];
   const lums: LumSource[] = [];
+  const curve = curvePointSources();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const nodes = cardNodes ?? refreshCardNodes();
@@ -1030,7 +1107,7 @@ function collectCards(): LightSet {
       lums.push({ r: sr, lum: rgbLuminance(color), power, inner: true });
     });
   });
-  return { colors, lums };
+  return { colors, lums, curve };
 }
 
 function isToolbar(el: HTMLElement): boolean {
@@ -1041,7 +1118,7 @@ function dirtyForEls(
   els: HTMLElement[],
 ): { x: number; y: number; w: number; h: number } | null {
   if (!els.length) return null;
-  const PAD = 24;
+  const PAD = 32;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -1056,6 +1133,49 @@ function dirtyForEls(
   }
   if (!Number.isFinite(minX)) return null;
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+function renderToPanelBuffer(
+  el: HTMLElement,
+  cards: LightSet,
+): PanelBuffer | null {
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) return null;
+  const PAD = 28;
+  const x = rect.left - PAD;
+  const y = rect.top - PAD;
+  const w = rect.width + PAD * 2;
+  const h = rect.height + PAD * 2;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let buf = panelBuffers.get(el);
+  if (
+    !buf ||
+    buf.w !== w ||
+    buf.h !== h ||
+    buf.dpr !== dpr ||
+    buf.c.width !== Math.ceil(w * dpr) ||
+    buf.c.height !== Math.ceil(h * dpr)
+  ) {
+    const c = document.createElement("canvas");
+    const k = c.getContext("2d");
+    if (!k) return null;
+    buf = { c, k, x, y, w, h, dpr };
+    panelBuffers.set(el, buf);
+  }
+  buf.x = x;
+  buf.y = y;
+  if (
+    buf.c.width !== Math.ceil(w * dpr) ||
+    buf.c.height !== Math.ceil(h * dpr)
+  ) {
+    buf.c.width = Math.ceil(w * dpr);
+    buf.c.height = Math.ceil(h * dpr);
+  }
+  buf.k.setTransform(1, 0, 0, 1, 0, 0);
+  buf.k.clearRect(0, 0, buf.c.width, buf.c.height);
+  buf.k.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
+  drawPanel(el, buf.k, cards);
+  return buf;
 }
 
 function clearDirtyUnion(
@@ -1108,13 +1228,25 @@ function paintLayerPair(
   if (kind === "base") prevBaseDirty = next;
   else prevToolDirty = next;
   if (!els.length) return;
-  els.forEach((el) => drawPanel(el, k, cards));
+  els.forEach((el) => {
+    const buf = renderToPanelBuffer(el, cards);
+    if (buf) {
+      k.drawImage(
+        buf.c,
+        buf.x,
+        buf.y,
+        buf.w,
+        buf.h,
+      );
+    }
+  });
 }
 
 function paint(): void {
   raf = 0;
   try {
     if (!running || !targets.size) return;
+    fadePending = false;
     const cards = collectCards();
     const els = [...targets];
     if (paintMode !== "tool") {
@@ -1134,6 +1266,10 @@ function paint(): void {
       cards,
       "tool",
     );
+    if (paintMode === "full" && fadePending) {
+      // 状态平滑一次只收敛一部分；光源移出后继续补帧直到褪色完成。
+      window.setTimeout(() => schedule("full"), 33);
+    }
   } catch (err) {
     console.error("[edgeTint] paint failed", err);
   }
@@ -1293,6 +1429,11 @@ function removeTarget(el: HTMLElement): void {
   targetRos.get(el)?.disconnect();
   targetRos.delete(el);
   targets.delete(el);
+  const buf = panelBuffers.get(el);
+  if (buf) {
+    buf.c.remove();
+    panelBuffers.delete(el);
+  }
   if (!targets.size) stop();
 }
 
