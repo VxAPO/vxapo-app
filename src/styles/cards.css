@@ -162,6 +162,10 @@
   transition: transform 0.18s ease;
 }
 
+.adv-pill .adv-plus svg {
+  shape-rendering: crispEdges;
+}
+
 .adv-pill:hover:not(:disabled) {
   box-shadow: var(--hover-shadow);
   transform: translateY(-1px);

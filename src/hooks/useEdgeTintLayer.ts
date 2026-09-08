@@ -134,6 +134,8 @@ let themeObserver: MutationObserver | null = null;
 let layoutObserver: MutationObserver | null = null;
 let scrollIdleTimer = 0;
 let selectionTimer = 0;
+let themePaintTimer = 0;
+let viewAnimUntil = 0;
 let paintMode: "tool" | "full" = "full";
 let scrollingNow = false;
 let fadePending = false;
@@ -861,6 +863,16 @@ function drawPanel(
   );
   const tool = isToolbar(el);
   const panels = tool ? panelRectsForTool() : null;
+  const toolOverPanel =
+    !!panels &&
+    panels.length > 0 &&
+    panels.some(
+      (p) =>
+        rect.left < p.right &&
+        rect.right > p.left &&
+        rect.top < p.bottom &&
+        rect.bottom > p.top,
+    );
   // 工具栏自带淡入/淡出动画，Canvas 环带直接跟随其透明度，避免退场比工具栏慢
   const toolFade = tool
     ? Math.max(0, Math.min(1, parseFloat(cs.opacity) || 0))
@@ -900,7 +912,20 @@ function drawPanel(
         y <= p.bottom + 4,
     );
     const curveSample = sampleColor(x, y, nearCurve, SAMPLE_R);
-    const cardSample = sampleColorGrid(x, y, cards.colorGrid, SAMPLE_R);
+    // 工具栏叠在曲线/设备卡上时，底下的整卡描边/底色已被玻璃模糊，
+    // 视觉上仍清晰的只有开关/圆点/chip，因此只采 inner 光源。
+    const rawCardSample = sampleColorGrid(
+      x,
+      y,
+      cards.colorGrid,
+      SAMPLE_R,
+      overPanel,
+    );
+    // 叠卡时开关/圆点虽然可见，但隔着玻璃已衰减：强度倍率降低
+    const cardSample =
+      rawCardSample && overPanel
+        ? { ...rawCardSample, s: rawCardSample.s * 0.5 }
+        : rawCardSample;
     const sample =
       overPanel && curveSample && (!cardSample || curveSample.s >= cardSample.s)
         ? curveSample
@@ -940,11 +965,14 @@ function drawPanel(
       true,
       outsideFade,
     );
+    const innerFade = toolOverPanel ? 0.75 : 1;
     const colorEnergy = innerTint
-      ? Math.min(1, innerTint.s / 1.1)
+      ? Math.min(1, (innerTint.s * innerFade) / 1.1)
       : 0;
     const lumEnergy =
-      Math.min(1, contrast * 1.6) * Math.pow(prox, 0.8);
+      Math.min(1, contrast * 1.6) *
+      Math.pow(prox, 0.8) *
+      innerFade;
     const targetGl = Math.min(1, colorEnergy + lumEnergy * 0.55);
     rawGl[j] = targetGl;
     if (innerTint) {
@@ -1293,8 +1321,12 @@ function paint(): void {
       "tool",
     );
     if (paintMode === "full" && fadePending) {
-      // 状态平滑一次只收敛一部分；光源移出后继续补帧直到褪色完成。
       window.setTimeout(() => schedule("full"), 33);
+    } else if (paintMode === "full" && viewAnimUntil > performance.now()) {
+      window.setTimeout(() => schedule("full"), 16);
+    }
+    if (paintMode === "full" && viewAnimUntil <= performance.now()) {
+      viewAnimUntil = 0;
     }
   } catch (err) {
     console.error("[edgeTint] paint failed", err);
@@ -1345,7 +1377,13 @@ function start(): void {
   document.addEventListener("visibilitychange", onVisibilityChange);
   themeObserver = new MutationObserver(() => {
     colorCache = new WeakMap();
-    schedule();
+    if (document.documentElement.classList.contains("theme-transition")) {
+      // 主题过渡期间不抢帧；等 DOM 动画结束后做一次最终刷新。
+      window.clearTimeout(themePaintTimer);
+      themePaintTimer = window.setTimeout(() => schedule("full"), 460);
+    } else {
+      schedule("full");
+    }
   });
   themeObserver.observe(document.documentElement, {
     attributes: true,
@@ -1374,6 +1412,20 @@ function start(): void {
             (m.attributeName === "data-dnd-id" ||
               m.attributeName === "data-dnd-group")),
       );
+    const viewStyleChanged = records.some(
+      (m) =>
+        m.type === "attributes" &&
+        m.attributeName === "style" &&
+        m.target instanceof HTMLElement &&
+        m.target.closest(".view-stage"),
+    );
+    const dragStyleChanged = records.some(
+      (m) =>
+        m.type === "attributes" &&
+        m.attributeName === "style" &&
+        m.target instanceof HTMLElement &&
+        m.target.hasAttribute("data-dnd-id"),
+    );
     if (structureChanged) {
       refreshCardNodes();
     }
@@ -1386,6 +1438,16 @@ function start(): void {
       paint();
       return;
     }
+    if (viewStyleChanged) {
+      if (!viewAnimUntil) {
+        viewAnimUntil = performance.now() + 420;
+        schedule("full");
+      }
+      return;
+    }
+    if (dragStyleChanged) {
+      return;
+    }
     if (selectionChanged) {
       // 框选拖动会每帧改 is-selected；不立即全量重绘，
       // 停顿后刷新一次，让选中描边权重收敛。
@@ -1393,7 +1455,7 @@ function start(): void {
       selectionTimer = window.setTimeout(() => schedule("full"), 160);
       return;
     }
-    schedule("full");
+    if (!records.length) return;
   });
   layoutObserver.observe(document.body, {
     childList: true,
@@ -1402,6 +1464,11 @@ function start(): void {
     attributeFilter: ["class", "style", "data-dnd-id", "data-dnd-group"],
   });
   schedule();
+  // HMR/刷新后 DOM 可能晚于模块初始化：分几拍再全量采样，
+  // 避免“要滚动一下才开始染色”。
+  [80, 220, 500].forEach((ms) =>
+    window.setTimeout(() => schedule("full"), ms),
+  );
 }
 
 function stop(): void {
@@ -1418,6 +1485,9 @@ function stop(): void {
   scrollIdleTimer = 0;
   window.clearTimeout(selectionTimer);
   selectionTimer = 0;
+  window.clearTimeout(themePaintTimer);
+  themePaintTimer = 0;
+  viewAnimUntil = 0;
   themeObserver?.disconnect();
   themeObserver = null;
   layoutObserver?.disconnect();
