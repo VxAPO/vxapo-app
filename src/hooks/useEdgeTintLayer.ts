@@ -110,6 +110,10 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let toolCanvas: HTMLCanvasElement | null = null;
 let toolCtx: CanvasRenderingContext2D | null = null;
+let shadeCanvas: HTMLCanvasElement | null = null;
+let shadeCtx: CanvasRenderingContext2D | null = null;
+let toolShadeCanvas: HTMLCanvasElement | null = null;
+let toolShadeCtx: CanvasRenderingContext2D | null = null;
 let prevBaseDirty: { x: number; y: number; w: number; h: number } | null =
   null;
 let prevToolDirty: { x: number; y: number; w: number; h: number } | null =
@@ -121,6 +125,8 @@ let ssCtx: CanvasRenderingContext2D | null = null;
 type PanelBuffer = {
   c: HTMLCanvasElement;
   k: CanvasRenderingContext2D;
+  sc: HTMLCanvasElement;
+  sk: CanvasRenderingContext2D;
   x: number;
   y: number;
   w: number;
@@ -213,8 +219,7 @@ const INNER_SAMPLE_R = 16;
 const MAX_POWER = 2.4;
 const MAX_SOURCE_R = Math.ceil(SAMPLE_R * Math.sqrt(MAX_POWER));
 const RING_STEP = 8;
-const ARC_STEP = 1.5;
-const LINE_W = 2;
+const ARC_STEP = 1;
 const LINE_ALPHA = 0.3;
 const FADE_K = 0.3;
 const COLOR_K = 0.4;
@@ -228,16 +233,23 @@ const MENISCUS_BLUR = 1.2;
 const MENISCUS_HALO_WIDTH = 8;
 const MENISCUS_HALO_ALPHA = 0.18;
 const MENISCUS_HALO_BLUR = 4;
+const DARK_DEPTH = 8;
+const DARK_ALPHA = 0.3;
 const Z_BASE = 25;
 const Z_TOOL = 35;
+const Z_SHADE = 26;
+const Z_TOOL_SHADE = 36;
 
-function makeLayer(z: number): {
+function makeLayer(
+  z: number,
+  blend: "screen" | "multiply" = "screen",
+): {
   c: HTMLCanvasElement;
   k: CanvasRenderingContext2D;
 } | null {
   const c = document.createElement("canvas");
   c.style.cssText =
-    `position:fixed;left:0;top:0;pointer-events:none;z-index:${z};mix-blend-mode:screen;`;
+    `position:fixed;left:0;top:0;pointer-events:none;z-index:${z};mix-blend-mode:${blend};`;
   const k = c.getContext("2d");
   if (!k) {
     c.remove();
@@ -252,19 +264,49 @@ function ensureCanvas(h: HTMLElement | null = null): void {
   if (!host) host = document.body;
   const mount = host.isConnected ? host : document.body;
   if (canvas && canvas.parentElement !== mount) mount.appendChild(canvas);
+  if (shadeCanvas && shadeCanvas.parentElement !== mount) {
+    mount.appendChild(shadeCanvas);
+  }
   if (toolCanvas && toolCanvas.parentElement !== mount) {
     mount.appendChild(toolCanvas);
   }
-  if (canvas && ctx && toolCanvas && toolCtx) return;
+  if (toolShadeCanvas && toolShadeCanvas.parentElement !== mount) {
+    mount.appendChild(toolShadeCanvas);
+  }
+  if (
+    canvas &&
+    ctx &&
+    shadeCanvas &&
+    shadeCtx &&
+    toolCanvas &&
+    toolCtx &&
+    toolShadeCanvas &&
+    toolShadeCtx
+  ) {
+    return;
+  }
   const base = canvas && ctx ? null : makeLayer(Z_BASE);
+  const shade = shadeCanvas && shadeCtx ? null : makeLayer(Z_SHADE, "multiply");
   const tool = toolCanvas && toolCtx ? null : makeLayer(Z_TOOL);
+  const toolShade =
+    toolShadeCanvas && toolShadeCtx
+      ? null
+      : makeLayer(Z_TOOL_SHADE, "multiply");
   if (base) {
     canvas = base.c;
     ctx = base.k;
   }
+  if (shade) {
+    shadeCanvas = shade.c;
+    shadeCtx = shade.k;
+  }
   if (tool) {
     toolCanvas = tool.c;
     toolCtx = tool.k;
+  }
+  if (toolShade) {
+    toolShadeCanvas = toolShade.c;
+    toolShadeCtx = toolShade.k;
   }
 }
 
@@ -293,6 +335,20 @@ function parseColor(s: string): Rgb | null {
 
 function isDark(): boolean {
   return document.documentElement.dataset.theme === "dark";
+}
+
+function edgeShadeRgb(): Rgb {
+  const root = getComputedStyle(document.documentElement);
+  const c = parseColor(root.getPropertyValue("--edge-shade").trim());
+  if (c) return c;
+  return isDark() ? { r: 8, g: 10, b: 13 } : { r: 74, g: 84, b: 102 };
+}
+
+function ringBaseRgb(): Rgb {
+  const root = getComputedStyle(document.documentElement);
+  const c = parseColor(root.getPropertyValue("--ring-base").trim());
+  if (c) return c;
+  return isDark() ? { r: 255, g: 255, b: 255 } : { r: 120, g: 128, b: 140 };
 }
 
 function rgbLuminance(c: Rgb): number {
@@ -484,6 +540,24 @@ function shadeBumpAt(d: number): number {
 }
 
 type RingPoint = { x: number; y: number; brk?: boolean };
+
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
 
 /** 沿圆角矩形路径生成连续采样点，并用 brk 标记每条直边/圆角起点。 */
 function ringPoints(
@@ -688,6 +762,43 @@ function strokeChunkBand(
   }
 }
 
+function strokeUniformBand(
+  bandCtx: CanvasRenderingContext2D,
+  pts: Array<RingPoint>,
+  lineWidth: number,
+  alpha: number,
+  color: Rgb,
+  toolFade: number,
+): void {
+  if (pts.length < 2 || alpha <= 0) return;
+  const segs = pts.length - 1;
+  let start = 0;
+  while (start < segs) {
+    let end = segs;
+    for (let j = start + 1; j < segs; j++) {
+      if (pts[j].brk) {
+        end = j;
+        break;
+      }
+    }
+    if (end <= start) {
+      start += 1;
+      continue;
+    }
+    bandCtx.strokeStyle = rgba(color, alpha * toolFade);
+    bandCtx.lineWidth = lineWidth;
+    bandCtx.lineCap = "butt";
+    bandCtx.lineJoin = "round";
+    bandCtx.beginPath();
+    bandCtx.moveTo(pts[start].x, pts[start].y);
+    for (let i = start + 1; i <= end; i++) {
+      bandCtx.lineTo(pts[i].x, pts[i].y);
+    }
+    bandCtx.stroke();
+    start = end;
+  }
+}
+
 function ensureSoftCanvas(w: number, h: number): void {
   const needW = Math.max(1, Math.ceil(w));
   const needH = Math.max(1, Math.ceil(h));
@@ -733,7 +844,7 @@ function strokeHighQualityBand(
   toolFade: number,
 ): void {
   if (pts.length < 2) return;
-  const SCALE = 3;
+  const SCALE = 4;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -838,6 +949,7 @@ function strokeGlowBand(
 function drawPanel(
   el: HTMLElement,
   ctx2: CanvasRenderingContext2D,
+  shadeCtx2: CanvasRenderingContext2D,
   cards: LightSet,
 ): void {
   const rect = el.getBoundingClientRect();
@@ -1076,24 +1188,66 @@ function drawPanel(
   }
   // 暗部不是压暗，而是在该处停止绘制内光（lit=0），
   // 让底层默认高光样式的暗部自己透出来；shade 只是控制这个“留空”的平滑形状。
-  const litAt = (i: number): number =>
-    ist.gl[i] * Math.max(0, 1 - ist.sh[i]);
+  // 暗部改为独立乘式层叠暗，内光不再被 shade 停光
+  const litAt = (i: number): number => ist.gl[i];
   const tintAt = (i: number): Rgb =>
     litAt(i) > 0.02
       ? { r: ist.ir[i], g: ist.ig[i], b: ist.ib[i] }
       : { r: 255, g: 255, b: 255 };
 
   // 外圈染色高光
+  const baseRgb = ringBaseRgb();
+  if (isDark()) {
+    strokeUniformBand(
+      ctx2,
+      pts,
+      0.9,
+      0,
+      baseRgb,
+      toolFade,
+    );
+  } else {
+    strokeUniformBand(
+      shadeCtx2,
+      pts,
+      0.9,
+      0,
+      baseRgb,
+      toolFade,
+    );
+  }
   strokeHighQualityBand(
     ctx2,
     pts,
-    LINE_W,
+    1,
     (i) => st.a[i] * LINE_ALPHA,
     (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
     toolFade,
   );
-  // 细光核：在内光上做暗部衰减，贴住高光带内侧，不另画黑线；
-  // 宽度随亮度微调，靠近光源时略宽，融合更自然。
+  // 宽层只在高亮处显现：亮粗暗细由 alpha 控制，避免逐点线宽造成小点
+  strokeHighQualityBand(
+    ctx2,
+    pts,
+    2.6,
+    (i) => Math.pow(st.a[i] / 2.4, 2) * 0.26,
+    (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
+    toolFade,
+  );
+  // 染色向内侧轻微 blur：裁剪到卡片内部，避免向外发糊
+  ctx2.save();
+  roundedRectPath(ctx2, rect.left, rect.top, rect.width, rect.height, corner);
+  ctx2.clip();
+  strokeGlowBand(
+    ctx2,
+    pts,
+    3,
+    2,
+    (i) => st.a[i] * LINE_ALPHA * 0.3,
+    (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
+    toolFade,
+  );
+  ctx2.restore();
+  // 细光核与近光晕：宽度随亮度微调
   const coreW = (i: number): number =>
     Math.max(0.6, MENISCUS_WIDTH * (0.3 + 0.85 * litAt(i)));
   strokeGlowBand(
@@ -1115,6 +1269,25 @@ function drawPanel(
     (i) => tintAt(i),
     toolFade,
   );
+
+  // 暗部：独立乘式层，从高光内侧向卡片内部线性衰减
+  const darkRgb = edgeShadeRgb();
+  const mapDark = (n: number, i: number): number =>
+    Math.round((i / Math.max(1, n - 1)) * (mainPts.length - 1));
+  for (let depth = 1; depth <= DARK_DEPTH; depth++) {
+    const darkPts = insetRing(rect, corner, depth);
+    if (darkPts.length < 2) continue;
+    const falloff = 1 - depth / (DARK_DEPTH + 1);
+    strokeChunkBand(
+      shadeCtx2,
+      darkPts,
+      1,
+      (i) =>
+        ist.sh[mapDark(darkPts.length, i)] * falloff * DARK_ALPHA,
+      () => darkRgb,
+      toolFade,
+    );
+  }
 }
 
 function collectCards(): LightSet {
@@ -1209,12 +1382,16 @@ function renderToPanelBuffer(
     buf.h !== h ||
     buf.dpr !== dpr ||
     buf.c.width !== Math.ceil(w * dpr) ||
-    buf.c.height !== Math.ceil(h * dpr)
+    buf.c.height !== Math.ceil(h * dpr) ||
+    !buf.sc ||
+    !buf.sk
   ) {
     const c = document.createElement("canvas");
     const k = c.getContext("2d");
-    if (!k) return null;
-    buf = { c, k, x, y, w, h, dpr };
+    const sc = document.createElement("canvas");
+    const sk = sc.getContext("2d");
+    if (!k || !sk) return null;
+    buf = { c, k, sc, sk, x, y, w, h, dpr };
     panelBuffers.set(el, buf);
   }
   buf.x = x;
@@ -1226,10 +1403,20 @@ function renderToPanelBuffer(
     buf.c.width = Math.ceil(w * dpr);
     buf.c.height = Math.ceil(h * dpr);
   }
+  if (
+    buf.sc.width !== Math.ceil(w * dpr) ||
+    buf.sc.height !== Math.ceil(h * dpr)
+  ) {
+    buf.sc.width = Math.ceil(w * dpr);
+    buf.sc.height = Math.ceil(h * dpr);
+  }
   buf.k.setTransform(1, 0, 0, 1, 0, 0);
   buf.k.clearRect(0, 0, buf.c.width, buf.c.height);
   buf.k.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
-  drawPanel(el, buf.k, cards);
+  buf.sk.setTransform(1, 0, 0, 1, 0, 0);
+  buf.sk.clearRect(0, 0, buf.sc.width, buf.sc.height);
+  buf.sk.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
+  drawPanel(el, buf.k, buf.sk, cards);
   return buf;
 }
 
@@ -1257,28 +1444,37 @@ function clearDirtyUnion(
 function paintLayerPair(
   c: HTMLCanvasElement | null,
   k: CanvasRenderingContext2D | null,
+  sc: HTMLCanvasElement | null,
+  sk: CanvasRenderingContext2D | null,
   els: HTMLElement[],
   cards: LightSet,
   kind: "base" | "tool",
 ): void {
-  if (!c || !k) return;
+  if (!c || !k || !sc || !sk) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = window.innerWidth;
   const h = window.innerHeight;
   const sized = c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr);
   c.style.width = `${w}px`;
   c.style.height = `${h}px`;
+  sc.style.width = `${w}px`;
+  sc.style.height = `${h}px`;
   if (sized) {
     c.width = Math.round(w * dpr);
     c.height = Math.round(h * dpr);
+    sc.width = Math.round(w * dpr);
+    sc.height = Math.round(h * dpr);
   }
   k.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sk.setTransform(dpr, 0, 0, dpr, 0, 0);
   const prev = kind === "base" ? prevBaseDirty : prevToolDirty;
   const next = dirtyForEls(els);
   if (sized) {
     k.clearRect(0, 0, w, h);
+    sk.clearRect(0, 0, w, h);
   } else {
     clearDirtyUnion(k, prev, next);
+    clearDirtyUnion(sk, prev, next);
   }
   if (kind === "base") prevBaseDirty = next;
   else prevToolDirty = next;
@@ -1288,6 +1484,13 @@ function paintLayerPair(
     if (buf) {
       k.drawImage(
         buf.c,
+        buf.x,
+        buf.y,
+        buf.w,
+        buf.h,
+      );
+      sk.drawImage(
+        buf.sc,
         buf.x,
         buf.y,
         buf.w,
@@ -1308,6 +1511,8 @@ function paint(): void {
       paintLayerPair(
         canvas,
         ctx,
+        shadeCanvas,
+        shadeCtx,
         els.filter((el) => !isToolbar(el)),
         cards,
         "base",
@@ -1316,6 +1521,8 @@ function paint(): void {
     paintLayerPair(
       toolCanvas,
       toolCtx,
+      toolShadeCanvas,
+      toolShadeCtx,
       els.filter(isToolbar),
       cards,
       "tool",
@@ -1496,9 +1703,15 @@ function stop(): void {
   canvas?.remove();
   canvas = null;
   ctx = null;
+  shadeCanvas?.remove();
+  shadeCanvas = null;
+  shadeCtx = null;
   toolCanvas?.remove();
   toolCanvas = null;
   toolCtx = null;
+  toolShadeCanvas?.remove();
+  toolShadeCanvas = null;
+  toolShadeCtx = null;
   softCanvas?.remove();
   softCanvas = null;
   softCtx = null;
@@ -1532,6 +1745,7 @@ function removeTarget(el: HTMLElement): void {
   const buf = panelBuffers.get(el);
   if (buf) {
     buf.c.remove();
+    buf.sc.remove();
     panelBuffers.delete(el);
   }
   if (!targets.size) stop();

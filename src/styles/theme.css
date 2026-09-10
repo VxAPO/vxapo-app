@@ -234,7 +234,7 @@
   --ring-s1: 0.3;
   --ring-l: 0.08;
   --ring-r: 0.04;
-  --ring-t: 0.26;
+  --ring-t: 0.36;
   --ring-b: 0.14;
   --ring-base: rgba(217, 222, 231, 0.25);
   --edge-shade: rgba(74, 84, 102, 0.9);
@@ -281,7 +281,7 @@
   --ring-s1: 0.12;
   --ring-l: 0.035;
   --ring-r: 0.018;
-  --ring-t: 0.09;
+  --ring-t: 0.13;
   --ring-b: 0.05;
   --ring-base: rgba(255, 255, 255, 0.035);
   --edge-shade: rgba(8, 10, 13, 0.9);
