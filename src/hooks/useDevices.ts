@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { deviceListsEqual, friendlyError, isInstalled, listDevices, uninstallDevice } from "../lib/api";
-import type { Device } from "../lib/model";
+import {
+  cleanupStaleInstall,
+  deviceListsEqual,
+  friendlyError,
+  isInstalled,
+  listDevices,
+  listStaleInstalls,
+  migrateStaleInstall,
+  uninstallDevice,
+} from "../lib/api";
+import type { Device, MigrationReport, StaleInstall } from "../lib/model";
 import { useInterval } from "./useInterval";
 
 export function useDevices(
@@ -9,6 +18,8 @@ export function useDevices(
   paused?: boolean,
 ) {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [staleInstalls, setStaleInstalls] = useState<StaleInstall[]>([]);
+  const [staleBusy, setStaleBusy] = useState(false);
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<Device | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
@@ -25,10 +36,17 @@ export function useDevices(
 
   const load = useCallback(() => {
     if (firstLoadRef.current) setLoading(true);
-    listDevices()
-      .then((ds) => {
+    Promise.allSettled([listDevices(), listStaleInstalls()])
+      .then(([devRes, staleRes]) => {
         if (!mountedRef.current) return;
+        if (devRes.status === "rejected") throw devRes.reason;
+        const ds = devRes.value;
         setDevices((prev) => (deviceListsEqual(prev, ds) ? prev : ds));
+        setStaleInstalls(
+          staleRes.status === "fulfilled"
+            ? staleRes.value
+            : [],
+        );
         setSelectedGuid((prev) => {
           if (prev && ds.some((d) => d.guid === prev && isInstalled(d))) return prev;
           return ds.find(isInstalled)?.guid ?? null;
@@ -58,8 +76,12 @@ export function useDevices(
 
   const refresh = useCallback(async () => {
     try {
-      const ds = await listDevices();
+      const [ds, stale] = await Promise.all([
+        listDevices(),
+        listStaleInstalls().catch(() => [] as StaleInstall[]),
+      ]);
       setDevices((prev) => (deviceListsEqual(prev, ds) ? prev : ds));
+      setStaleInstalls(stale);
       setSelectedGuid((prev) =>
         prev && ds.some((d) => d.guid === prev && isInstalled(d))
           ? prev
@@ -69,6 +91,38 @@ export function useDevices(
       onError(friendlyError(e));
     }
   }, [onError]);
+
+  const migrateStale = useCallback(
+    async (
+      from: string,
+      to: string,
+      configFrom?: string | null,
+      snapshotFrom?: string | null,
+    ): Promise<MigrationReport | null> => {
+      setStaleBusy(true);
+      try {
+        const report = await migrateStaleInstall(from, to, configFrom, snapshotFrom);
+        await refresh();
+        return report;
+      } finally {
+        setStaleBusy(false);
+      }
+    },
+    [refresh],
+  );
+
+  const cleanupStale = useCallback(
+    async (guid: string) => {
+      setStaleBusy(true);
+      try {
+        await cleanupStaleInstall(guid);
+        await refresh();
+      } finally {
+        setStaleBusy(false);
+      }
+    },
+    [refresh],
+  );
 
   const confirmUninstall = useCallback(async () => {
     if (!uninstallTarget) return;
@@ -90,6 +144,8 @@ export function useDevices(
 
   return {
     devices,
+    staleInstalls,
+    staleBusy,
     loading,
     refresh,
     selectedGuid,
@@ -100,5 +156,7 @@ export function useDevices(
     setUninstallTarget,
     uninstalling,
     confirmUninstall,
+    migrateStale,
+    cleanupStale,
   };
 }

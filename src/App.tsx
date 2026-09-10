@@ -39,6 +39,7 @@ import SavePresetDialog from "./components/SavePresetDialog";
 import SelectionToolbar from "./components/SelectionToolbar";
 import SettingsDialog from "./components/SettingsDialog";
 import Sidebar from "./components/Sidebar";
+import StaleInstallBanner from "./components/StaleInstallBanner";
 import Toast from "./components/Toast";
 import TopBar from "./components/TopBar";
 import UninstallDialog from "./components/UninstallDialog";
@@ -68,7 +69,39 @@ export default function App() {
     setUninstallTarget,
     uninstalling,
     confirmUninstall,
+    staleInstalls,
+    staleBusy,
+    migrateStale,
+    cleanupStale,
   } = useDevices(onError, handleUninstalled, installBusy);
+
+  const handleStaleMigrate = useCallback(
+    async (
+      from: string,
+      to: string,
+      configFrom?: string | null,
+      snapshotFrom?: string | null,
+    ) => {
+      try {
+        return await migrateStale(from, to, configFrom, snapshotFrom);
+      } catch (e: unknown) {
+        onError(friendlyError(e));
+        return null;
+      }
+    },
+    [migrateStale, onError],
+  );
+
+  const handleStaleCleanup = useCallback(
+    async (guid: string) => {
+      try {
+        await cleanupStale(guid);
+      } catch (e: unknown) {
+        onError(friendlyError(e));
+      }
+    },
+    [cleanupStale, onError],
+  );
 
   const channelNames = useMemo(() => channelNamesFor(selected?.channels), [selected?.channels]);
   const { channelOn, setChannelOn, setActiveChannel, effActiveChannel, firstChannel } =
@@ -555,6 +588,14 @@ export default function App() {
             onUninstall={openUninstall}
             onAdd={openInstall}
           />
+          <StaleInstallBanner
+            items={staleInstalls}
+            selectedGuid={selectedGuid}
+            busy={staleBusy}
+            onMigrate={handleStaleMigrate}
+            onCleanup={handleStaleCleanup}
+            onDone={notify}
+          />
 
           <div className="device-body">
             <AnimatePresence mode="wait" initial={false}>
@@ -757,6 +798,9 @@ export default function App() {
         onOpenChange={setSettingsOpen}
         theme={theme}
         onThemeChange={setTheme}
+        staleUnmatched={staleInstalls.filter((s) => s.target_state === "unmatched")}
+        staleBusy={staleBusy}
+        onCleanupStale={handleStaleCleanup}
       />
       <SavePresetDialog
         open={savePresetOpen}

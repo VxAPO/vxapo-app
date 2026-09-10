@@ -179,6 +179,8 @@
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 12px 14px;
+  min-height: 80px;
+  box-sizing: border-box;
   grid-column: 1 / -1;
   width: auto;
   max-width: 100%;
@@ -222,6 +224,7 @@
   gap: 10px;
   margin-bottom: 12px;
   padding-right: 24px;
+  position: relative;
 }
 
 .ord {
@@ -428,6 +431,16 @@
   gap: 8px;
   margin-bottom: 8px;
   padding-right: 22px;
+  position: relative;
+}
+
+/* 效果卡同款：close-x 放进 header flex 尾部，绝对居中居右 */
+.group-card .close-x,
+.band-card .close-x {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
 }
 
 .b-type {

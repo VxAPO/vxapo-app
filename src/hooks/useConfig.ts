@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { friendlyError, readConfig, writeConfig } from "../lib/api";
+import { friendlyError, readConfig, repairStaleAcl, writeConfig } from "../lib/api";
 import type { Block, EffectItem, PeqBandKind, PresetLibraryEntry } from "../lib/model";
 import { buildToml, parseConfigWithTail, type ChannelCtx } from "../lib/toml";
 import { applySemanticStrength, defaultEffectParams, effectsEqual } from "../lib/effects";
@@ -43,7 +43,31 @@ export function useConfig(
   const dirtyRef = useRef(false);
   const tailRef = useRef("");
   const initReqRef = useRef<Set<string>>(new Set());
+  const aclRepairRef = useRef<Set<string>>(new Set());
   const [reloadNonce, setReloadNonce] = useState(0);
+
+  // 旧 GUID 迁移由提权 CLI 完成，config.toml 可能继承管理员 ACL；
+  // 首次写入遇到权限错误时提权修一次 ACL，再重试原写入。
+  const writeConfigSafe = useCallback(
+    async (guid: string, content: string) => {
+      try {
+        await writeConfig(guid, content);
+        return;
+      } catch (e: unknown) {
+        const msg = String(e);
+        const denied =
+          /os error 5|access is denied|拒绝访问|permission/i.test(msg);
+        if (denied && !aclRepairRef.current.has(guid)) {
+          aclRepairRef.current.add(guid);
+          await repairStaleAcl(guid);
+          await writeConfig(guid, content);
+          return;
+        }
+        throw e;
+      }
+    },
+    [],
+  );
 
   // 设备列表加载后：为每个未缓存的设备读取启用状态，
   // 保证标签页调音开关初次打开就显示正确（不再默认“开”）。
@@ -169,14 +193,14 @@ export function useConfig(
     saveTimer.current = window.setTimeout(() => {
       const effective = tuningMap[selectedGuid] ?? true;
       const content = buildToml(blocks, effective, effects, channelCtx) + tailRef.current;
-      writeConfig(selectedGuid, content)
+      writeConfigSafe(selectedGuid, content)
         .then(() => {
           dirtyRef.current = false;
         })
         .catch((e: unknown) => onError(friendlyError(e)));
     }, 300);
     return () => window.clearTimeout(saveTimer.current);
-  }, [blocks, effects, tuningMap, selectedGuid, loaded, channelCtx.mode, channelCtx.first]);
+  }, [blocks, effects, tuningMap, selectedGuid, loaded, channelCtx.mode, channelCtx.first, writeConfigSafe]);
 
   const writableBlocks = useMemo(
     () =>
@@ -358,12 +382,12 @@ export function useConfig(
             const content =
               buildToml(parsed.blocks, next, normalizeEffects(parsed.effects), channelCtx) +
               parsed.tail;
-            return writeConfig(guid, content);
+            return writeConfigSafe(guid, content);
           })
           .catch((e: unknown) => onError(friendlyError(e)));
       }
     },
-    [deviceTuningOn, selectedGuid, channelCtx, onError, markDirty],
+    [deviceTuningOn, selectedGuid, channelCtx, onError, markDirty, writeConfigSafe],
   );
 
   return {

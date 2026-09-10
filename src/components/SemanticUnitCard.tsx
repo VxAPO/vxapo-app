@@ -31,11 +31,6 @@ function SemanticUnitCard({
 }: SemanticUnitCardProps) {
   return (
     <>
-      {!groupLabel && (
-        <button className="close-x" type="button" aria-label={t("aria.delete")} onClick={() => onRemoveBlock(bi)}>
-          <X size={12} strokeWidth={2.5} />
-        </button>
-      )}
       <div className="group-head">
         <button
           className={`enable-dot ${b.enabled ? "on" : ""}`}
@@ -60,13 +55,18 @@ function SemanticUnitCard({
             <X size={10} strokeWidth={2.5} />
           </button>
         ) : (
-          <input
-            type="number"
-            className="num fc-num"
-            value={b.bands[0]?.fc ?? 1000}
-            aria-label={t("frequency")}
-            onChange={(e) => onPatchBand(bi, 0, { fc: Number(e.target.value) })}
-          />
+          <>
+            <input
+              type="number"
+              className="num fc-num"
+              value={b.bands[0]?.fc ?? 1000}
+              aria-label={t("frequency")}
+              onChange={(e) => onPatchBand(bi, 0, { fc: Number(e.target.value) })}
+            />
+            <button className="close-x" type="button" aria-label={t("aria.delete")} onClick={() => onRemoveBlock(bi)}>
+              <X size={12} strokeWidth={2.5} />
+            </button>
+          </>
         )}
       </div>
       <div className="fader-row semantic">

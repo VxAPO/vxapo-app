@@ -9,6 +9,7 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmText?: string;
+  confirmVariant?: "danger" | "primary";
   onConfirm: () => void;
 }
 
@@ -19,6 +20,7 @@ function ConfirmDialog({
   title,
   message,
   confirmText = t("delete"),
+  confirmVariant = "danger",
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -38,7 +40,7 @@ function ConfirmDialog({
           <div className="vx-dialog-actions">
             <Dialog.Close className="vx-btn ghost" type="button">{t("cancel")}</Dialog.Close>
             <button
-              className="vx-btn danger"
+              className={`vx-btn ${confirmVariant}`}
               type="button"
               onClick={() => {
                 onConfirm();

@@ -127,6 +127,7 @@ type PanelBuffer = {
   k: CanvasRenderingContext2D;
   sc: HTMLCanvasElement;
   sk: CanvasRenderingContext2D;
+  at: number;
   x: number;
   y: number;
   w: number;
@@ -223,9 +224,8 @@ const ARC_STEP = 1;
 const LINE_ALPHA = 0.3;
 const FADE_K = 0.3;
 const COLOR_K = 0.4;
-const SHADE_WINDOW_R = 12;
 const SHADE_SMOOTH_R = 4;
-const SHADE_OUT_SMOOTH_R = 8;
+const SHADE_OUT_SMOOTH_R = 14;
 const MENISCUS_INSET = 2;
 const MENISCUS_WIDTH = 3;
 const MENISCUS_ALPHA = 0.22;
@@ -233,8 +233,6 @@ const MENISCUS_BLUR = 1.2;
 const MENISCUS_HALO_WIDTH = 8;
 const MENISCUS_HALO_ALPHA = 0.18;
 const MENISCUS_HALO_BLUR = 4;
-const DARK_DEPTH = 8;
-const DARK_ALPHA = 0.3;
 const Z_BASE = 25;
 const Z_TOOL = 35;
 const Z_SHADE = 26;
@@ -250,6 +248,7 @@ function makeLayer(
   const c = document.createElement("canvas");
   c.style.cssText =
     `position:fixed;left:0;top:0;pointer-events:none;z-index:${z};mix-blend-mode:${blend};`;
+  if (blend === "multiply") c.classList.add("vx-edge-shade");
   const k = c.getContext("2d");
   if (!k) {
     c.remove();
@@ -344,6 +343,11 @@ function edgeShadeRgb(): Rgb {
   return isDark() ? { r: 8, g: 10, b: 13 } : { r: 74, g: 84, b: 102 };
 }
 
+/** 暗部叠加强度：浅色卡片底色亮，过强会变成灰色填充带。 */
+function edgeShadeAlpha(): number {
+  return isDark() ? 0.22 : 0.10;
+}
+
 function ringBaseRgb(): Rgb {
   const root = getComputedStyle(document.documentElement);
   const c = parseColor(root.getPropertyValue("--ring-base").trim());
@@ -399,10 +403,18 @@ function cardColor(el: HTMLElement): Rgb | null {
   const accent =
     cs.getPropertyValue(isDark() ? darkKey : lightKey).trim() ||
     cs.getPropertyValue(lightKey).trim();
+  const fallbackBrand =
+    parseColor(cs.getPropertyValue("--brand").trim()) ||
+    parseColor(
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--brand")
+        .trim(),
+    );
   const color =
     parseColor(accent) ||
-    (el.dataset.dndGroup === "effects"
-      ? parseColor(cs.getPropertyValue("--brand").trim())
+    (el.dataset.dndGroup === "effects" ||
+    !el.classList.contains("sem-group")
+      ? fallbackBrand
       : null);
   colorCache.set(el, { at: performance.now(), color });
   return color;
@@ -473,6 +485,8 @@ function sampleColorGrid(
   const qr = radius * Math.sqrt(MAX_POWER);
   queryGrid(grid, x, y, qr, (c) => {
     if (innerOnly && !c.inner) return;
+    // 黑色/暗色内容不是光源：不参与玻璃染色与高光。
+    if (rgbLuminance(c.color) < 60) return;
     const d = c.border ? distToBorder(x, y, c.r) : distToRect(x, y, c.r);
     const p = c.power ?? 1;
     const sr =
@@ -525,18 +539,6 @@ function rgba(c: Rgb, a: number): string {
 function smoothstep(a: number, b: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
-}
-
-/** 暗部凸起：以“离局部峰值的路径距离”为自变量。
- *  0~3px 完全无暗部（光源紧贴时留空），3~5px 缓入，
- *  5px 处最强，5~10px 缓出，10px 外归 0。 */
-function shadeBumpAt(d: number): number {
-  const MIN_R = 3;
-  const PEAK_R = 5;
-  const ZERO_R = 10;
-  if (d <= MIN_R || d >= ZERO_R) return 0;
-  if (d < PEAK_R) return smoothstep(MIN_R, PEAK_R, d);
-  return 1 - smoothstep(PEAK_R, ZERO_R, d);
 }
 
 type RingPoint = { x: number; y: number; brk?: boolean };
@@ -688,6 +690,50 @@ function insetRing(
     rect.bottom - inset,
     rad,
   );
+}
+
+/** 按 ringPoints 的 brk 标记切出每段 [start, end]（含端点）。 */
+function segmentRanges(pts: Array<RingPoint>): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  let start = 0;
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i].brk) {
+      if (i - 1 >= start) ranges.push([start, i - 1]);
+      start = i;
+    }
+  }
+  if (start < pts.length) ranges.push([start, pts.length - 1]);
+  return ranges;
+}
+
+/// 把目标环的点映射到参考环：同段（直边/圆角）内按局部比例对齐，
+/// 避免点数不同导致暗部沿路径逐渐斜跑。
+function mapRingToReference(
+  target: Array<RingPoint>,
+  reference: Array<RingPoint>,
+): number[] {
+  const tRanges = segmentRanges(target);
+  const rRanges = segmentRanges(reference);
+  const map = new Array<number>(target.length).fill(0);
+  if (tRanges.length !== rRanges.length || !rRanges.length) {
+    for (let i = 0; i < target.length; i++) {
+      map[i] = Math.round(
+        (i / Math.max(1, target.length - 1)) * (reference.length - 1),
+      );
+    }
+    return map;
+  }
+  for (let s = 0; s < tRanges.length; s++) {
+    const [ts, te] = tRanges[s];
+    const [rs, re] = rRanges[s];
+    const tn = Math.max(1, te - ts);
+    const rn = Math.max(0, re - rs);
+    for (let i = ts; i <= te && i < map.length; i++) {
+      const t = (i - ts) / tn;
+      map[i] = rs + Math.round(t * rn);
+    }
+  }
+  return map;
 }
 
 function strokeChunkBand(
@@ -989,6 +1035,7 @@ function drawPanel(
   const toolFade = tool
     ? Math.max(0, Math.min(1, parseFloat(cs.opacity) || 0))
     : 1;
+  const glowAlpha = 1;
   const movingTool = tool && scrollingNow;
   const fadeK = movingTool ? 1 : FADE_K;
   const colorK = movingTool ? 1 : COLOR_K;
@@ -1068,7 +1115,8 @@ function drawPanel(
     );
     const lum = lumSample?.lum ?? panelBase;
     const prox = lumSample?.prox ?? 0;
-    const contrast = Math.abs(lum - panelBase) / 255;
+      // 只有比玻璃更亮的部分才算“光”；暗色滑块/描边不能把玻璃染脏。
+      const contrast = Math.max(0, lum - panelBase) / 255;
     const innerTint = sampleColorGrid(
       glowP.x,
       glowP.y,
@@ -1139,32 +1187,9 @@ function drawPanel(
     const glDelta = rawGl[i] - ist.gl[i];
     ist.gl[i] += glDelta * fadeK;
     if (Math.abs(glDelta) > 0.004) fadePending = true;
-    let targetSh = 0;
-    let localPeak = shadeGl[i];
-    let localPeakIdx = i;
-    for (const dir of [-1, 1]) {
-      for (let step = 1; step < rawN; step++) {
-        const j = (i + dir * step + rawN) % rawN;
-        if (j === i) break;
-        if (pathDist(i, j) > SHADE_WINDOW_R) break;
-        if (shadeGl[j] > localPeak) {
-          localPeak = shadeGl[j];
-          localPeakIdx = j;
-        }
-      }
-    }
-    // 暗部只出现在局部亮斑外一圈：距离局部峰值约 4px 处最强，
-    // 12px 外归 0。亮度门(peak)与本地亮度门(rawGl)保证暗部随光消失。
-    if (localPeak > 0.12) {
-      const dPeak = pathDist(i, localPeakIdx);
-      const edge = shadeBumpAt(dPeak);
-      const bright = smoothstep(0.12, 0.45, localPeak);
-      // 亮度门：内光亮度低于 0.22 后暗部开始减弱，到 0.55 完全关闭；
-      // 既避免中后段衰减带残留，又不会在亮端切得太硬。
-      const local = smoothstep(0.22, 0.55, rawGl[i]);
-      targetSh = edge * bright * local * 1.0;
-    }
-    rawSh[i] = targetSh;
+    // 暗部只贴在内光带与外光交界处：强度直接跟内光能量走，
+    // 不再沿圆周在亮点两侧做 bump（那会围着内光包一圈）。
+    rawSh[i] = smoothstep(0.08, 0.5, shadeGl[i]);
   }
   // 对暗部目标本身做一次沿路径的宽窗平滑：
   // 圆角点距约 2px，不平滑会把暗部收敛成孤立小点。
@@ -1233,60 +1258,66 @@ function drawPanel(
     (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
     toolFade,
   );
-  // 染色向内侧轻微 blur：裁剪到卡片内部，避免向外发糊
-  ctx2.save();
-  roundedRectPath(ctx2, rect.left, rect.top, rect.width, rect.height, corner);
-  ctx2.clip();
-  strokeGlowBand(
-    ctx2,
-    pts,
-    3,
-    2,
-    (i) => st.a[i] * LINE_ALPHA * 0.3,
-    (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
-    toolFade,
-  );
-  ctx2.restore();
-  // 细光核与近光晕：宽度随亮度微调
-  const coreW = (i: number): number =>
-    Math.max(0.6, MENISCUS_WIDTH * (0.3 + 0.85 * litAt(i)));
-  strokeGlowBand(
-    ctx2,
-    mainPts,
-    coreW,
-    MENISCUS_BLUR,
-    (i) => litAt(i) * MENISCUS_ALPHA,
-    (i) => tintAt(i),
-    toolFade,
-  );
-  // 近光晕：能量越高越宽，亮度降低时半径同步收窄
-  strokeGlowBand(
-    ctx2,
-    mainPts,
-    (i) => Math.max(0.5, MENISCUS_HALO_WIDTH * Math.pow(litAt(i), 1.25)),
-    MENISCUS_HALO_BLUR,
-    (i) => Math.pow(litAt(i), 2) * MENISCUS_HALO_ALPHA,
-    (i) => tintAt(i),
-    toolFade,
-  );
+  // 完整内光 blur：工具栏滚动期间由离屏 buffer 复用承担成本。
+  if (glowAlpha > 0.002) {
+    // 染色向内侧轻微 blur：裁剪到卡片内部，避免向外发糊
+    ctx2.save();
+    roundedRectPath(ctx2, rect.left, rect.top, rect.width, rect.height, corner);
+    ctx2.clip();
+    strokeGlowBand(
+      ctx2,
+      pts,
+      3,
+      2,
+      (i) => st.a[i] * LINE_ALPHA * 0.3 * glowAlpha,
+      (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
+      toolFade,
+    );
+    ctx2.restore();
+    // 细光核与近光晕：宽度随亮度微调
+    const coreW = (i: number): number =>
+      Math.max(0.6, MENISCUS_WIDTH * (0.3 + 0.85 * litAt(i)));
+    strokeGlowBand(
+      ctx2,
+      mainPts,
+      coreW,
+      MENISCUS_BLUR,
+      (i) => litAt(i) * MENISCUS_ALPHA * glowAlpha,
+      (i) => tintAt(i),
+      toolFade,
+    );
+    // 近光晕：能量越高越宽，亮度降低时半径同步收窄
+    strokeGlowBand(
+      ctx2,
+      mainPts,
+      (i) => Math.max(0.5, MENISCUS_HALO_WIDTH * Math.pow(litAt(i), 1.25)),
+      MENISCUS_HALO_BLUR,
+      (i) => Math.pow(litAt(i), 2) * MENISCUS_HALO_ALPHA * glowAlpha,
+      (i) => tintAt(i),
+      toolFade,
+    );
+  }
 
-  // 暗部：独立乘式层，从高光内侧向卡片内部线性衰减
+  // 暗部：独立乘式层。单条软带贴边 + 轻模糊，避免多条 1px 同心环
+  // 在抗锯齿下出现脏边的颗粒感。
   const darkRgb = edgeShadeRgb();
-  const mapDark = (n: number, i: number): number =>
-    Math.round((i / Math.max(1, n - 1)) * (mainPts.length - 1));
-  for (let depth = 1; depth <= DARK_DEPTH; depth++) {
-    const darkPts = insetRing(rect, corner, depth);
-    if (darkPts.length < 2) continue;
-    const falloff = 1 - depth / (DARK_DEPTH + 1);
-    strokeChunkBand(
+  const darkAlpha = edgeShadeAlpha() * glowAlpha;
+  const darkPts = insetRing(rect, corner, 1.4);
+  if (darkAlpha > 0.002 && darkPts.length >= 2) {
+    const mapDark = mapRingToReference(darkPts, mainPts);
+    shadeCtx2.save();
+    roundedRectPath(shadeCtx2, rect.left, rect.top, rect.width, rect.height, corner);
+    shadeCtx2.clip();
+    strokeGlowBand(
       shadeCtx2,
       darkPts,
-      1,
-      (i) =>
-        ist.sh[mapDark(darkPts.length, i)] * falloff * DARK_ALPHA,
+      1.8,
+      1.6,
+      (i) => Math.pow(ist.sh[mapDark[i] ?? 0], 1.3) * darkAlpha,
       () => darkRgb,
       toolFade,
     );
+    shadeCtx2.restore();
   }
 }
 
@@ -1342,6 +1373,55 @@ function isToolbar(el: HTMLElement): boolean {
   return el.classList.contains("fx-toolbar");
 }
 
+/** 经过所有 overflow 祖先裁切后的可见矩形。 */
+function visibleRectOf(el: HTMLElement, pad = 0): {
+  left: number;
+  top: number;
+  w: number;
+  h: number;
+} {
+  const rect = el.getBoundingClientRect();
+  let left = rect.left - pad;
+  let top = rect.top - pad;
+  let right = rect.right + pad;
+  let bottom = rect.bottom + pad;
+  let parent = el.parentElement;
+  while (parent) {
+    const cs = getComputedStyle(parent);
+    const clipX = cs.overflowX !== "visible";
+    const clipY = cs.overflowY !== "visible";
+    if (clipX || clipY) {
+      const pr = parent.getBoundingClientRect();
+      const pl = pr.left + parent.clientLeft;
+      const pt = pr.top + parent.clientTop;
+      const prr = pl + parent.clientWidth;
+      const pb = pt + parent.clientHeight;
+      if (clipX) {
+        left = Math.max(left, pl);
+        right = Math.min(right, prr);
+      }
+      if (clipY) {
+        top = Math.max(top, pt);
+        bottom = Math.min(bottom, pb);
+      }
+    }
+    parent = parent.parentElement;
+  }
+  return {
+    left,
+    top,
+    w: Math.max(0, right - left),
+    h: Math.max(0, bottom - top),
+  };
+}
+
+/** 工具栏绘制裁切：只按 content 可见范围裁。 */
+function clipToolbar(ctx: CanvasRenderingContext2D, vis: { left: number; top: number; w: number; h: number }): void {
+  ctx.beginPath();
+  ctx.rect(vis.left, vis.top, vis.w, vis.h);
+  ctx.clip();
+}
+
 function dirtyForEls(
   els: HTMLElement[],
 ): { x: number; y: number; w: number; h: number } | null {
@@ -1374,6 +1454,19 @@ function renderToPanelBuffer(
   const y = rect.top - PAD;
   const w = rect.width + PAD * 2;
   const h = rect.height + PAD * 2;
+  // 工具栏被滚动容器裁掉/淡出后不再生成 buffer，让上一帧脏区被清掉。
+  if (isToolbar(el)) {
+    const opacity = parseFloat(getComputedStyle(el).opacity);
+    if (!Number.isFinite(opacity) || opacity <= 0.02) return null;
+    if (
+      rect.right < -PAD ||
+      rect.left > window.innerWidth + PAD ||
+      rect.bottom < -PAD ||
+      rect.top > window.innerHeight + PAD
+    ) {
+      return null;
+    }
+  }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   let buf = panelBuffers.get(el);
   if (
@@ -1391,7 +1484,7 @@ function renderToPanelBuffer(
     const sc = document.createElement("canvas");
     const sk = sc.getContext("2d");
     if (!k || !sk) return null;
-    buf = { c, k, sc, sk, x, y, w, h, dpr };
+    buf = { c, k, sc, sk, at: 0, x, y, w, h, dpr };
     panelBuffers.set(el, buf);
   }
   buf.x = x;
@@ -1410,6 +1503,18 @@ function renderToPanelBuffer(
     buf.sc.width = Math.ceil(w * dpr);
     buf.sc.height = Math.ceil(h * dpr);
   }
+  // 工具栏滚动时复用上一帧离屏 buffer：几何相对内容不变，
+  // 只需平移重绘，省掉每帧的全套描边 + blur；周期性重算保证光效不脱节。
+  const now = performance.now();
+  if (
+    isToolbar(el) &&
+    scrollingNow &&
+    buf.at > 0 &&
+    now - buf.at < 140
+  ) {
+    return buf;
+  }
+  buf.at = now;
   buf.k.setTransform(1, 0, 0, 1, 0, 0);
   buf.k.clearRect(0, 0, buf.c.width, buf.c.height);
   buf.k.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
@@ -1482,6 +1587,40 @@ function paintLayerPair(
   els.forEach((el) => {
     const buf = renderToPanelBuffer(el, cards);
     if (buf) {
+      const r = el.getBoundingClientRect();
+      const clipped = visibleRectOf(el, 32);
+      const pl = Math.max(0, r.left - 32);
+      const pt = Math.max(0, r.top - 32);
+      const prr = Math.min(window.innerWidth, r.right + 32);
+      const pb = Math.min(window.innerHeight, r.bottom + 32);
+      const vis =
+        clipped.w >= 0.5 && clipped.h >= 0.5
+          ? clipped
+          : {
+              left: pl,
+              top: pt,
+              w: Math.max(0, prr - pl),
+              h: Math.max(0, pb - pt),
+            };
+      if (toolbar) {
+        const body = document.querySelector<HTMLElement>(".device-body");
+        if (body) {
+          const br = body.getBoundingClientRect();
+          const l = Math.max(vis.left, br.left);
+          const t = Math.max(vis.top, br.top);
+          const rr = Math.min(vis.left + vis.w, br.right);
+          const bb = Math.min(vis.top + vis.h, br.bottom);
+          vis.left = l;
+          vis.top = t;
+          vis.w = Math.max(0, rr - l);
+          vis.h = Math.max(0, bb - t);
+        }
+        if (vis.w < 0.5 || vis.h < 0.5) return;
+      }
+      if (toolbar) {
+        k.save();
+        clipToolbar(k, vis);
+      }
       k.drawImage(
         buf.c,
         buf.x,
@@ -1489,6 +1628,11 @@ function paintLayerPair(
         buf.w,
         buf.h,
       );
+      if (toolbar) k.restore();
+      if (toolbar) {
+        sk.save();
+        clipToolbar(sk, vis);
+      }
       sk.drawImage(
         buf.sc,
         buf.x,
@@ -1496,6 +1640,7 @@ function paintLayerPair(
         buf.w,
         buf.h,
       );
+      if (toolbar) sk.restore();
     }
   });
 }
@@ -1551,9 +1696,11 @@ function onScroll(): void {
   // 绘制本身已足够快：滚动期间直接全量刷新，
   // 避免底卡/曲线染色要等停顿后才更新。
   window.clearTimeout(scrollIdleTimer);
+  document.documentElement.classList.add("is-scrolling");
   scrollingNow = true;
   scrollIdleTimer = window.setTimeout(() => {
     scrollingNow = false;
+    document.documentElement.classList.remove("is-scrolling");
     schedule("full");
   }, 140);
   schedule("full");
@@ -1690,6 +1837,7 @@ function stop(): void {
   document.removeEventListener("visibilitychange", onVisibilityChange);
   window.clearTimeout(scrollIdleTimer);
   scrollIdleTimer = 0;
+  document.documentElement.classList.remove("is-scrolling");
   window.clearTimeout(selectionTimer);
   selectionTimer = 0;
   window.clearTimeout(themePaintTimer);
@@ -1763,6 +1911,7 @@ function syncTargets(): void {
   [...targets].forEach((el) => {
     if (!found.has(el) || !el.isConnected) removeTarget(el);
   });
+  schedule("full");
 }
 
 /** 模块级自动扫描：不依赖 React hook 生命周期，HMR 或晚挂载都能自愈。 */

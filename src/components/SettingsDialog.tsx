@@ -1,7 +1,7 @@
 import { memo, useRef, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import type { ThemeMode } from "../lib/model";
+import type { StaleInstall, ThemeMode } from "../lib/model";
 import { useI18n } from "../lib/i18n";
 import { setLang, t } from "../lib/i18n/core";
 import { writeLang } from "../lib/api";
@@ -11,6 +11,9 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   theme: ThemeMode;
   onThemeChange: (theme: ThemeMode) => void;
+  staleUnmatched?: StaleInstall[];
+  staleBusy?: boolean;
+  onCleanupStale?: (guid: string) => Promise<void>;
 }
 
 const THEME_OPTIONS: { value: ThemeMode; key: string }[] = [
@@ -24,6 +27,9 @@ function SettingsDialog({
   onOpenChange,
   theme,
   onThemeChange,
+  staleUnmatched = [],
+  staleBusy = false,
+  onCleanupStale,
 }: SettingsDialogProps) {
   const lang = useI18n();
   const themeIndex = THEME_OPTIONS.findIndex((o) => o.value === theme);
@@ -121,6 +127,32 @@ function SettingsDialog({
                 ))}
               </div>
             </div>
+
+            {staleUnmatched.length > 0 && (
+              <div className="vx-setting-row">
+                <div className="vx-setting-info">
+                  <span className="vx-setting-name">{t("stale.settings.name")}</span>
+                  <span className="vx-setting-desc">
+                    {t("stale.settings.desc", { count: staleUnmatched.length })}
+                  </span>
+                </div>
+                <button
+                  className="stale-banner-btn"
+                  type="button"
+                  disabled={staleBusy}
+                  onClick={() => {
+                    if (!onCleanupStale) return;
+                    void (async () => {
+                      for (const item of staleUnmatched) {
+                        await onCleanupStale(item.guid);
+                      }
+                    })();
+                  }}
+                >
+                  {t("stale.cleanup")}
+                </button>
+              </div>
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

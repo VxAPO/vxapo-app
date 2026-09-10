@@ -48,9 +48,6 @@ function BandParamCard({
 
   return (
     <>
-      <button className="close-x" type="button" aria-label={t("aria.delete")} onClick={() => onRemoveBlock(bi)}>
-        <X size={12} strokeWidth={2.5} />
-      </button>
       <div className="b-head">
         <button
           className={`enable-dot ${b.enabled ? "on" : ""}`}
@@ -64,6 +61,9 @@ function BandParamCard({
         </button>
         <span className="b-type">{t(typeKey)}</span>
         <span className="grow" />
+        <button className="close-x" type="button" aria-label={t("aria.delete")} onClick={() => onRemoveBlock(bi)}>
+          <X size={12} strokeWidth={2.5} />
+        </button>
       </div>
       <div className="band-params">
         <div className="band-param-row">

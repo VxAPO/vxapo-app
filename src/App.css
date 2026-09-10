@@ -952,3 +952,75 @@ button {
 .dimension-slider input[type="range"] {
   width: 100%;
 }
+
+/* 旧 GUID 残留提示条 */
+.stale-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 12px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--text-primary);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.stale-banner-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--brand-deep);
+}
+
+.stale-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.stale-banner-btn {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stale-banner-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+}
+
+.stale-banner-btn.primary {
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+}
+
+.stale-banner-btn.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 20%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  color: var(--brand-deep);
+}
+
+.stale-banner-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+:root[data-theme="dark"] .stale-banner-btn.primary {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+:root[data-theme="dark"] .stale-banner-btn.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 20%, transparent);
+  border-color: var(--brand);
+  color: var(--brand);
+}

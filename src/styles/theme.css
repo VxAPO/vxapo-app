@@ -229,15 +229,15 @@
   --scrollbar-hover: #c2c7d1;
   --disabled-fill: #b8bec9;
   --tab-active-bg: #e9edf1;
-  --ring-g1: 0.34;
+  --ring-g1: 0.42;
   --ring-g2: 0.24;
   --ring-s1: 0.3;
   --ring-l: 0.08;
   --ring-r: 0.04;
-  --ring-t: 0.36;
+  --ring-t: 0.32;
   --ring-b: 0.14;
   --ring-base: rgba(217, 222, 231, 0.25);
-  --edge-shade: rgba(74, 84, 102, 0.9);
+  --edge-shade: rgba(126, 136, 152, 0.9);
 }
 
 :root[data-theme="dark"] {
@@ -276,12 +276,12 @@
   --tab-inactive: #2f3135;
   --tab-active: #45474c;
   --tab-active-bg: #45474c;
-  --ring-g1: 0.14;
+  --ring-g1: 0.16;
   --ring-g2: 0.09;
   --ring-s1: 0.12;
   --ring-l: 0.035;
   --ring-r: 0.018;
-  --ring-t: 0.13;
+  --ring-t: 0.115;
   --ring-b: 0.05;
   --ring-base: rgba(255, 255, 255, 0.035);
   --edge-shade: rgba(8, 10, 13, 0.9);
@@ -336,6 +336,10 @@
 
 /* 主题切换期间以下元素直接跟随根变量变化，避免自身 transition 叠加造成节奏不一致 */
 .theme-transition .dev-props-card,
+.theme-transition .curve-wrap,
+.theme-transition .stale-banner,
+.theme-transition .stale-banner-btn,
+.theme-transition .stale-banner-icon,
 .theme-transition .view-seg .seg-thumb,
 .theme-transition .side-seg .ind,
 .theme-transition .curve-wrap > svg > path,
@@ -379,7 +383,35 @@
 .theme-transition .dev-props-card,
 .theme-transition .curve-wrap {
   box-shadow: 0 6px 14px -4px rgba(15, 23, 42, 0) !important;
-  transition: box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 主题过渡期间玻璃滤镜淡到通用中性值：保留模糊，去掉会截断成白的亮度/对比。 */
+.theme-transition .curve-wrap,
+.theme-transition .dev-props-card {
+  backdrop-filter: blur(10px) saturate(1.05) contrast(1) brightness(1) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) contrast(1) brightness(1) !important;
+}
+
+.theme-transition .sel-toolbar {
+  backdrop-filter: blur(12px) saturate(1.1) contrast(1) brightness(1) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.1) contrast(1) brightness(1) !important;
+  transition:
+    backdrop-filter 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Canvas 暗部层：主题切换先快速关掉，结束后慢慢淡回来。 */
+.vx-edge-shade {
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-transition .vx-edge-shade {
+  opacity: 0;
+  transition-duration: 0.15s;
 }
 
 

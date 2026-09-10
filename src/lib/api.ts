@@ -2,7 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Device } from "./model";
+import type { Device, MigrationReport, StaleInstall } from "./model";
 import { t } from "./i18n/core";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -41,6 +41,42 @@ export async function listDevices(): Promise<Device[]> {
 export async function uninstallDevice(guid: string): Promise<void> {
   if (!isTauri) return;
   await invoke("uninstall_device", { guid });
+}
+
+/** 旧 GUID 残留列表（只读）。 */
+export async function listStaleInstalls(): Promise<StaleInstall[]> {
+  if (!isTauri) return [];
+  return invoke<StaleInstall[]>("list_stale_installs");
+}
+
+/** 迁移旧 GUID 到当前端点（需要管理员，Tauri 侧自动提权）。 */
+export async function migrateStaleInstall(
+  from: string,
+  to: string,
+  configFrom?: string | null,
+  snapshotFrom?: string | null,
+): Promise<MigrationReport | null> {
+  if (!isTauri) return null;
+  const raw = await invoke<string>("migrate_stale_install", {
+    from,
+    to,
+    configFrom: configFrom ?? null,
+    snapshotFrom: snapshotFrom ?? null,
+  });
+  const line = raw.trim().split("\n").filter(Boolean).pop() ?? "";
+  return line ? (JSON.parse(line) as MigrationReport) : null;
+}
+
+/** 清理无法匹配活跃端点的旧 GUID 残留。 */
+export async function cleanupStaleInstall(guid: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke<string>("cleanup_stale_install", { guid });
+}
+
+/** 修复迁移后 config 的用户 ACL（权限不足时一次性提权修复）。 */
+export async function repairStaleAcl(guid: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke<string>("repair_stale_acl", { guid });
 }
 
 export interface InstallResult {

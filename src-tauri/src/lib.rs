@@ -218,6 +218,10 @@ struct Device {
     name: String,
     guid: String,
     #[serde(default)]
+    device_id: Option<String>,
+    #[serde(default)]
+    connection: Option<String>,
+    #[serde(default)]
     installed_version: Option<String>,
     #[serde(default)]
     install_mode: Option<String>,
@@ -404,7 +408,9 @@ fn run_cli(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
         return Ok(out);
     }
     let msg = if err.is_empty() { out } else { err };
-    if msg.contains("需要管理员权限") {
+    if msg.contains("需要管理员权限")
+        || msg.to_lowercase().contains("administrator privileges")
+    {
         return run_cli_elevated(cli, args, tag);
     }
     Err(if msg.is_empty() {
@@ -468,7 +474,9 @@ fn run_cli_with_events(
     } else {
         err_trim.clone()
     };
-    if msg.contains("需要管理员权限") {
+    if msg.contains("需要管理员权限")
+        || msg.to_lowercase().contains("administrator privileges")
+    {
         let progress = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
         return run_cli_elevated_stream(cli, args, tag, &progress, on_event);
     }
@@ -725,6 +733,61 @@ fn rollback_install(guid: String) -> Result<String, String> {
     run_cli(cli, &["uninstall", "-d", &guid], &tag)
 }
 
+/// 旧 GUID 残留列表（只读，无需提权）。
+#[tauri::command]
+fn list_stale_installs() -> Result<serde_json::Value, String> {
+    let cli = cli_path();
+    let out = run_cli(cli, &["stale", "list", "--json"], "stale_list")?;
+    serde_json::from_str(&out).map_err(|e| format!("stale list 解析失败：{e}"))
+}
+
+/// 迁移旧 GUID 到当前端点（需要管理员，run_cli 会自动提权）。
+#[tauri::command]
+fn migrate_stale_install(
+    from: String,
+    to: String,
+    config_from: Option<String>,
+    snapshot_from: Option<String>,
+) -> Result<String, String> {
+    let cli = cli_path();
+    let tag = format!("stale_migrate_{}", from.replace(['{', '}'], ""));
+    let mut args: Vec<String> = vec![
+        "stale".to_string(),
+        "migrate".to_string(),
+        "--from".to_string(),
+        from,
+        "--to".to_string(),
+        to,
+        "--json".to_string(),
+    ];
+    if let Some(v) = config_from {
+        args.push("--config-from".to_string());
+        args.push(v);
+    }
+    if let Some(v) = snapshot_from {
+        args.push("--snapshot-from".to_string());
+        args.push(v);
+    }
+    let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    run_cli(cli, &refs, &tag)
+}
+
+/// 清理旧 GUID 残留（需要管理员，run_cli 会自动提权）。
+#[tauri::command]
+fn cleanup_stale_install(guid: String) -> Result<String, String> {
+    let cli = cli_path();
+    let tag = format!("stale_cleanup_{}", guid.replace(['{', '}'], ""));
+    run_cli(cli, &["stale", "cleanup", "-d", &guid, "--json"], &tag)
+}
+
+/// 修复迁移后 config/snapshot 的用户 ACL（需要管理员，run_cli 自动提权）。
+#[tauri::command]
+fn repair_stale_acl(guid: String) -> Result<String, String> {
+    let cli = cli_path();
+    let tag = format!("stale_fix_acl_{}", guid.replace(['{', '}'], ""));
+    run_cli(cli, &["stale", "fix-acl", "-d", &guid, "--json"], &tag)
+}
+
 /// 读取安装/卸载进度文本（供 UI 实时展示）。
 #[tauri::command]
 fn read_progress(tag: String) -> String {
@@ -761,6 +824,10 @@ pub fn run() {
             uninstall_device,
             install_device,
             rollback_install,
+            list_stale_installs,
+            migrate_stale_install,
+            cleanup_stale_install,
+            repair_stale_acl,
             read_progress
         ])
         .run(tauri::generate_context!())

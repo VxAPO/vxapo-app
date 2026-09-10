@@ -29,6 +29,8 @@ export interface Device {
   index: number;
   name: string;
   guid: string;
+  device_id?: string | null;
+  connection?: string | null;
   installed_version: string;
   install_mode: string;
   slots: Record<string, string | null>;
@@ -39,6 +41,37 @@ export interface Device {
   volume?: number | null;
   eapo?: string;
   lost_slot?: string;
+}
+
+/** 旧 GUID 安装记录（Windows 重新枚举端点后可能残留） */
+export interface StaleInstall {
+  guid: string;
+  device_instance_id: string;
+  display_name: string;
+  config_path?: string | null;
+  config_mtime_ms?: number | null;
+  snapshot_path?: string | null;
+  snapshot_mtime_ms?: number | null;
+  premix_slot?: string | null;
+  postmix_slot?: string | null;
+  inferred_mode: string;
+  has_child_backup: boolean;
+  has_sysfx_backup: boolean;
+  target_guid?: string | null;
+  target_name?: string | null;
+  target_state: "matched_partial" | "matched_healthy" | "unmatched";
+}
+
+export interface MigrationReport {
+  success: boolean;
+  target_guid: string;
+  config_from?: string | null;
+  snapshot_from?: string | null;
+  config_migrated: boolean;
+  snapshot_migrated: boolean;
+  install_repaired: boolean;
+  removed_guids: string[];
+  warnings: string[];
 }
 
 export interface PresetLibraryEntry {

@@ -1,10 +1,12 @@
 .tab-bar {
+  position: relative;
+  z-index: 40;
   display: flex;
   align-items: stretch;
   height: 38px;
   padding: 0 10px;
   margin-top: 8px;
-  background: transparent;
+  background: var(--content);
   flex: 0 0 auto;
 }
 

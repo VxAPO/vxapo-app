@@ -38,9 +38,9 @@ export default function SelectionToolbar({
     <motion.div
       className="fx fx-toolbar"
       ref={toolbarRef}
-      initial={{ opacity: 0, x: "-50%", scale: 0.92, y: 6 }}
-      animate={{ opacity: 1, x: "-50%", scale: 1, y: 0 }}
-      exit={{ opacity: 0, x: "-50%", scale: 0.92, y: 6 }}
+      initial={{ opacity: 0, x: "-50%", y: 6 }}
+      animate={{ opacity: 1, x: "-50%", y: 0 }}
+      exit={{ opacity: 0, x: "-50%", y: 6 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
     >
       <div className="sel-toolbar">

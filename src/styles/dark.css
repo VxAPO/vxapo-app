@@ -117,7 +117,9 @@
 }
 
 :root[data-theme="dark"] .sel-toolbar {
-  background: color-mix(in srgb, var(--card) 80%, transparent);
+  background: color-mix(in srgb,
+    color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
+    transparent);
   /* 不用高对比度的整圈白描边：极淡边界勾勒外形，光只从顶部打进来、
      底部收光，形成方向性的轮廓感（与浅色“近表面色 + 顶部高光”同理） */
   border: 1px solid transparent; /* 描边由外侧环带替代 */
@@ -210,7 +212,9 @@
    描边/光影与悬浮选项栏同套：极淡边界 + 顶部受光 + 底部收光 + 连续底部投影 */
 :root[data-theme="dark"] .curve-wrap,
 :root[data-theme="dark"] .dev-props-card {
-  background-color: color-mix(in srgb, var(--card) 78%, transparent);
+  background-color: color-mix(in srgb,
+    color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
+    transparent);
   border-color: transparent; /* 描边由外侧环带替代 */
   backdrop-filter: blur(8px) saturate(1.1);
   -webkit-backdrop-filter: blur(8px) saturate(1.1);
@@ -254,6 +258,7 @@
   backdrop-filter: blur(2px) !important;
   -webkit-backdrop-filter: blur(2px) !important;
 }
+
 
 .sem-label {
   font-size: 12px;
@@ -304,12 +309,13 @@
 
 .sem-chip {
   position: absolute;
-  top: 18px;
-  right: 14px;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 20px;
+  height: 22px;
   padding: 0 8px;
   border-radius: 9999px;
   background: color-mix(in srgb, var(--card-accent, var(--brand)) 14%, transparent);

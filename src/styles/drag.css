@@ -241,15 +241,20 @@
   padding: 10px 12px;
   border-radius: 14px;
   /* 小半径模糊 + 适中透明度：背板颜色透出更多，又不至于出现生硬分层 */
-  background: color-mix(in srgb, var(--card) 58%, transparent);
+  background: color-mix(in srgb,
+    color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
+    transparent);
   /* 浅色：提亮背板采样并降低饱和,避免背后暗影/彩灰把玻璃染脏 */
-  backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
+  backdrop-filter: blur(12px) saturate(1.1) contrast(0.55) brightness(1.38);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1) contrast(0.55) brightness(1.38);
   border: 1px solid transparent; /* 描边颜色已掺进外侧环带 */
   box-shadow:
     /* 单层连续投影：负扩散把近端收回贴住下缘，从底部起连续衰减，
        不产生断层，也不会向上糊到顶缘 */
     0 6px 16px -6px rgba(15, 23, 42, 0.16);
+  transition:
+    backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sel-toolbar-label {

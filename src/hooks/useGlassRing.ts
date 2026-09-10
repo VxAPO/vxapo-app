@@ -1,5 +1,8 @@
 import { useLayoutEffect, type RefObject } from "react";
 
+/** HMR 模块实例 token：热更新后强制 effect 重新应用最新常量。 */
+const HOT_TOKEN = (import.meta as unknown as { hot?: unknown }).hot;
+
 /** 按矩形实测宽高计算四个圆角在 conic 渐变里的角度（0°=正上，顺时针），
     注入 --ang-tl/tr/br/bl，让环带的环绕受光真正落在四个角上。 */
 export function applyRingAngles(el: HTMLElement): void {
@@ -25,7 +28,7 @@ export function applyRingAngles(el: HTMLElement): void {
   const xEnd = Math.max(2, w / 2 - corner);
   const yHalf = Math.max(1, h / 2);
   const aEnd = (Math.atan2(xEnd, yHalf) * 180) / Math.PI;
-  const topFadePx = el.classList.contains("fx-curve") ? 22 : 13;
+  const topFadePx = el.classList.contains("fx-curve") ? 30 : 13;
   const aTopFull = (Math.atan2(Math.max(1, xEnd - topFadePx), yHalf) * 180) / Math.PI;
   const fadeDeg = Math.max(0.15, aEnd - aTopFull);
   el.style.setProperty(
@@ -46,38 +49,48 @@ export function applyRingAngles(el: HTMLElement): void {
 /** 观察包裹元素尺寸，动态刷新环带四角角度。 */
 export function useGlassRing(ref: RefObject<HTMLElement | null>): void {
   useLayoutEffect(() => {
-    let el = ref.current;
+    let bound: HTMLElement | null = null;
     let ro: ResizeObserver | null = null;
-    let timer = 0;
+    let scheduled = false;
     const update = () => {
-      if (el) applyRingAngles(el);
+      if (bound) applyRingAngles(bound);
     };
     const bind = () => {
-      if (!el) return;
+      if (bound && !bound.isConnected) {
+        ro?.disconnect();
+        ro = null;
+        bound = null;
+      }
+      const node = ref.current;
+      if (!node || !node.isConnected || node === bound) return;
+      ro?.disconnect();
+      bound = node;
       update();
       ro = new ResizeObserver(update);
-      ro.observe(el);
+      ro.observe(bound);
     };
-    if (el) {
-      bind();
-    } else {
-      // fx 包裹层可能在父组件挂载后才出现（设备卡视图切换/懒挂载），
-      // 轮询到节点后再补量尺寸，避免设备卡一直吃 conic 默认角位。
-      let tries = 0;
-      timer = window.setInterval(() => {
-        const node = ref.current;
-        if (node && node.isConnected) {
-          el = node;
-          bind();
-          window.clearInterval(timer);
-        } else if (++tries > 100) {
-          window.clearInterval(timer);
-        }
-      }, 50);
-    }
+    // 拔插/安装后设备页是晚挂载的，不能只轮询几秒就放弃；
+    // MutationObserver 监听节点出现，长驻 interval 兜底极慢枚举。
+    const mo = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        bind();
+      });
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    const timer = window.setInterval(bind, 1000);
+    const late = window.setTimeout(bind, 300);
+    const onFocus = () => bind();
+    window.addEventListener("focus", onFocus);
+    bind();
     return () => {
+      mo.disconnect();
       window.clearInterval(timer);
+      window.clearTimeout(late);
+      window.removeEventListener("focus", onFocus);
       ro?.disconnect();
     };
-  }, [ref]);
+  }, [ref, HOT_TOKEN]);
 }

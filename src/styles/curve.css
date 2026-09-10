@@ -1,6 +1,8 @@
 .curve-wrap {
   width: 100%;
-  background: color-mix(in srgb, var(--card) 72%, transparent);
+  background: color-mix(in srgb,
+    color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
+    transparent);
   border: 0; /* 描边/边缘交给外侧环带；卡片模糊需覆盖到最外缘 */
   border-radius: 16px;
   padding: 10px 18px 14px;
@@ -12,12 +14,14 @@
   position: relative;
   overflow: hidden;
   /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏 */
-  backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
-  -webkit-backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
+  backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
   transition:
     background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: auto;
 }
 
@@ -73,7 +77,9 @@
   flex: none;
   width: auto;
   min-width: 240px;
-  background-color: color-mix(in srgb, var(--card) 72%, transparent);
+  background-color: color-mix(in srgb,
+    color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
+    transparent);
   border: 0; /* 描边/边缘交给外侧环带；卡片模糊需覆盖到最外缘 */
   border-radius: 16px;
   padding: 10px 18px 12px;
@@ -83,10 +89,15 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1);
   /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏 */
-  backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
-  -webkit-backdrop-filter: blur(10px) saturate(1.05) brightness(1.12);
+  backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
   pointer-events: auto;
 }
 
@@ -158,14 +169,15 @@
     ),
     /* 底部：低亮度，独立一条，沿底边在左下圆角前收住 */
     conic-gradient(
-      from var(--ang-br-edge, 103deg),
-      rgb(255 255 255 / var(--ring-b, 0.14)) 0deg,
+      from var(--ang-br, 103deg),
+      rgb(255 255 255 / 0) 0deg,
+      rgb(255 255 255 / var(--ring-b, 0.14)) var(--ring-fade, 2deg),
       rgb(255 255 255 / var(--ring-b, 0.14))
         calc(
-          var(--ang-bl-edge, 257deg) - var(--ang-br-edge, 103deg) - var(--ring-fade-bl, 2deg)
+          var(--ang-bl, 257deg) - var(--ang-br, 103deg) - var(--ring-fade, 2deg)
         ),
       rgb(255 255 255 / 0)
-        calc(var(--ang-bl-edge, 257deg) - var(--ang-br-edge, 103deg))
+        calc(var(--ang-bl, 257deg) - var(--ang-br, 103deg))
     ),
     /* 左侧：长衰减带，从左上往左下渐隐，左下角前归零 */
     conic-gradient(
@@ -174,7 +186,16 @@
       rgb(255 255 255 / var(--ring-l, 0.08))
         calc(var(--ang-tl, 283deg) - var(--ang-bl, 257deg))
     ),
-    radial-gradient(50% 50% at 0% 0%, rgb(255 255 255 / var(--ring-g1, 0.34)) 0%, rgb(255 255 255 / 0) 44%),
+    /* 右侧：与左侧对称，右下往右上渐隐（右比左暗一档） */
+    conic-gradient(
+      from var(--ang-tr, 77deg),
+      rgb(255 255 255 / 0) 0deg,
+      rgb(255 255 255 / var(--ring-r, 0.04))
+        calc(var(--ang-br-edge, 103deg) - var(--ang-tr, 77deg))
+    ),
+    radial-gradient(28px 28px at 0% 0%,
+      rgb(255 255 255 / var(--ring-g1, 0.34)) 0%,
+      rgb(255 255 255 / 0) 100%),
     radial-gradient(50% 50% at 100% 100%, rgb(255 255 255 / var(--ring-g2, 0.24)) 0%, rgb(255 255 255 / 0) 44%),
     linear-gradient(
       180deg,
@@ -184,13 +205,6 @@
       rgb(255 255 255 / 0) 88%,
       rgb(255 255 255 / 0) 98.8%,
       rgb(255 255 255 / 0) 100%
-    ),
-    linear-gradient(
-      90deg,
-      rgb(255 255 255 / 0) 0%,
-      rgb(255 255 255 / 0) 0.8%,
-      rgb(255 255 255 / 0) 99.2%,
-      rgb(255 255 255 / var(--ring-r, 0.04)) 100%
     ),
     var(--ring-base, color-mix(in srgb, var(--border) 25%, transparent));
   transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
