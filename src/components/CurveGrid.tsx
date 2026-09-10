@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { dbY, logX } from "../lib/curve";
 
 interface CurveGridProps {
@@ -8,7 +8,7 @@ interface CurveGridProps {
 }
 
 /** 频响图坐标轴：虚线网格 + 实线主轴 + 刻度标签（Y 自适应，步长统一）。 */
-export default function CurveGrid({ curveW, yTop, yBottom }: CurveGridProps) {
+function CurveGrid({ curveW, yTop, yBottom }: CurveGridProps) {
   const yStep = yTop - yBottom > 26 ? 4 : 2;
   const yGrid = useMemo(() => {
     const g: { db: number; y: number }[] = [];
@@ -68,3 +68,5 @@ export default function CurveGrid({ curveW, yTop, yBottom }: CurveGridProps) {
     </>
   );
 }
+
+export default memo(CurveGrid);

@@ -80,15 +80,15 @@ export function useGlassRing(ref: RefObject<HTMLElement | null>): void {
       });
     });
     mo.observe(document.body, { childList: true, subtree: true });
-    const timer = window.setInterval(bind, 1000);
     const late = window.setTimeout(bind, 300);
+    const later = window.setTimeout(bind, 1500);
     const onFocus = () => bind();
     window.addEventListener("focus", onFocus);
     bind();
     return () => {
       mo.disconnect();
-      window.clearInterval(timer);
       window.clearTimeout(late);
+      window.clearTimeout(later);
       window.removeEventListener("focus", onFocus);
       ro?.disconnect();
     };

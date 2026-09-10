@@ -12,6 +12,13 @@ import {
 import type { Device, MigrationReport, StaleInstall } from "../lib/model";
 import { useInterval } from "./useInterval";
 
+/** 逐项浅比较，避免轮询无变化时替换数组引用。 */
+function staleListsEqual(a: StaleInstall[], b: StaleInstall[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((s, i) => JSON.stringify(s) === JSON.stringify(b[i]));
+}
+
 export function useDevices(
   onError: (msg: string) => void,
   onUninstalled?: (name: string) => void,
@@ -42,11 +49,13 @@ export function useDevices(
         if (devRes.status === "rejected") throw devRes.reason;
         const ds = devRes.value;
         setDevices((prev) => (deviceListsEqual(prev, ds) ? prev : ds));
-        setStaleInstalls(
-          staleRes.status === "fulfilled"
-            ? staleRes.value
-            : [],
-        );
+        const nextStale =
+          staleRes.status === "fulfilled" ? staleRes.value : [];
+        // 内容未变时保留旧数组引用：否则每 5s 都会换一次引用，触发整树重渲染
+        setStaleInstalls((prev) => {
+          if (staleListsEqual(prev, nextStale)) return prev;
+          return nextStale;
+        });
         setSelectedGuid((prev) => {
           if (prev && ds.some((d) => d.guid === prev && isInstalled(d))) return prev;
           return ds.find(isInstalled)?.guid ?? null;

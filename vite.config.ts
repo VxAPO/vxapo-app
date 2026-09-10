@@ -10,6 +10,14 @@ export default defineConfig(async () => ({
   build: {
     // Tauri 桌面应用无需像 Web 端那样强制拆包，提高阈值避免 500KB 警告
     chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
   },
   server: {
     port: 1420,

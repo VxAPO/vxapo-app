@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import type { Block } from "../lib/model";
 import { snapPx } from "../lib/snap";
 import { dbY, logX } from "../lib/curve";
@@ -78,33 +86,47 @@ export function useCurveHover({
     };
   };
 
+  const moveRafRef = useRef(0);
+  const pendingPtRef = useRef<{ x: number; y: number } | null>(null);
+
+  /** 采集与重算合并到一帧一次：pointermove 可以比帧更快，中间值从未被渲染过。 */
   const onSvgMove = (e: MouseEvent<SVGSVGElement>) => {
-    const svgRect = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - svgRect.left;
-    const py = e.clientY - svgRect.top;
-    const viewX = (px / svgRect.width) * curveW;
-    const viewY = (py / svgRect.height) * 220;
-    const t = (viewX - 40) / (curveW - 80);
-    const f = 20 * Math.pow(10, t * 3);
-    const cl = Math.max(20, Math.min(20000, f));
-    const x = logX(cl, curveW);
-    let db = preampGainDb;
-    for (const b of blocks) {
-      if (!b.enabled) continue;
-      for (const band of b.bands) db += bandDbCached(cl, band, fs);
-    }
-    const clamped = Math.max(yBottom, Math.min(yTop, db));
-    setHoverPt({
-      x,
-      y: dbY(clamped, yTop, yBottom),
-      f: cl,
-      db,
-      cvx: viewX,
-      cvy: viewY,
+    pendingPtRef.current = { x: e.clientX, y: e.clientY };
+    if (moveRafRef.current) return;
+    moveRafRef.current = requestAnimationFrame(() => {
+      moveRafRef.current = 0;
+      const pt = pendingPtRef.current;
+      pendingPtRef.current = null;
+      const svg = svgRef.current;
+      if (!pt || !svg) return;
+      const svgRect = svg.getBoundingClientRect();
+      const px = pt.x - svgRect.left;
+      const py = pt.y - svgRect.top;
+      const viewX = (px / svgRect.width) * curveW;
+      const viewY = (py / svgRect.height) * 220;
+      const t = (viewX - 40) / (curveW - 80);
+      const f = 20 * Math.pow(10, t * 3);
+      const cl = Math.max(20, Math.min(20000, f));
+      const x = logX(cl, curveW);
+      let db = preampGainDb;
+      for (const b of blocks) {
+        if (!b.enabled) continue;
+        for (const band of b.bands) db += bandDbCached(cl, band, fs);
+      }
+      const clamped = Math.max(yBottom, Math.min(yTop, db));
+      setHoverPt({
+        x,
+        y: dbY(clamped, yTop, yBottom),
+        f: cl,
+        db,
+        cvx: viewX,
+        cvy: viewY,
+      });
     });
   };
 
-  const tipPos: TipPos | null = (() => {
+  // 悬浮窗几何只在 hover 点/曲线尺寸变化时算一次：原先每次渲染都要跑两遍全段求和
+  const tipPos: TipPos | null = useMemo(() => {
     if (!hoverPt) return null;
     const g = geomRef.current ?? measureGeom();
     if (!g) return null;
@@ -183,7 +205,7 @@ export function useCurveHover({
       ),
     );
     return { top, left, above, hSide };
-  })();
+  }, [hoverPt, curveW, blocks, fs, yTop, yBottom, preampGainDb]);
 
   // 悬浮窗跟随动画：指数趋近，比鼠标慢半拍、先快后慢；
   // 基准点（上/下、左/右）切换时播一段满速 ease 平移，跨过轴线后回到慢跟随
@@ -262,9 +284,20 @@ export function useCurveHover({
   useEffect(
     () => () => {
       if (tipRafRef.current != null) cancelAnimationFrame(tipRafRef.current);
+      if (moveRafRef.current) cancelAnimationFrame(moveRafRef.current);
     },
     [],
   );
+
+  /** 离开图表：丢弃这一帧尚未处理的移动，避免移出后悬浮点又跳回来一次。 */
+  const onMouseLeave = useCallback(() => {
+    if (moveRafRef.current) {
+      cancelAnimationFrame(moveRafRef.current);
+      moveRafRef.current = 0;
+    }
+    pendingPtRef.current = null;
+    setHoverPt(null);
+  }, []);
 
   useEffect(() => {
     // 图表尺寸变化后重新测量，避免继续用旧几何
@@ -277,6 +310,6 @@ export function useCurveHover({
     svgRef,
     tipRef,
     onSvgMove,
-    onMouseLeave: () => setHoverPt(null),
+    onMouseLeave,
   };
 }

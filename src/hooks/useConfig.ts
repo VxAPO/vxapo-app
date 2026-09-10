@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { friendlyError, readConfig, repairStaleAcl, writeConfig } from "../lib/api";
+import {
+  friendlyError,
+  readConfig,
+  readConfigChecked,
+  repairStaleAcl,
+  writeConfig,
+} from "../lib/api";
 import type { Block, EffectItem, PeqBandKind, PresetLibraryEntry } from "../lib/model";
 import { buildToml, parseConfigWithTail, type ChannelCtx } from "../lib/toml";
 import { applySemanticStrength, defaultEffectParams, effectsEqual } from "../lib/effects";
@@ -44,6 +50,8 @@ export function useConfig(
   const tailRef = useRef("");
   const initReqRef = useRef<Set<string>>(new Set());
   const aclRepairRef = useRef<Set<string>>(new Set());
+  /** 轮询用内容指纹：与后端比对，内容未变则跳过解析。 */
+  const configRevisionRef = useRef<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
   // 旧 GUID 迁移由提权 CLI 完成，config.toml 可能继承管理员 ACL；
@@ -114,6 +122,7 @@ export function useConfig(
   useEffect(() => {
     if (!selectedGuid) return;
     let alive = true;
+    configRevisionRef.current = null;
     setLoaded(false);
     readConfig(selectedGuid)
       .then((text) => {
@@ -151,16 +160,20 @@ export function useConfig(
   // 强制重新读取磁盘配置（导入到当前设备等场景，selectedGuid 未变时不会触发上面的 effect）。
   const forceReload = useCallback(() => {
     dirtyRef.current = false;
+    configRevisionRef.current = null;
     setReloadNonce((n) => n + 1);
   }, []);
 
   // 监控 config 目录热更新：外部/驱动改写 config.toml 时自动刷新 UI（编辑中跳过，避免覆盖手头改动）
   const pollConfig = useCallback(() => {
     if (!selectedGuid || dirtyRef.current) return;
-    readConfig(selectedGuid)
-      .then((text) => {
-        if (dirtyRef.current) return;
-        const parsed = parseConfigWithTail(text);
+    readConfigChecked(selectedGuid, configRevisionRef.current)
+      .then((res) => {
+        if (!res) return;
+        configRevisionRef.current = res.revision;
+        // 内容未变：后端已短路，不回传文本，前端也无需解析
+        if (res.text == null || dirtyRef.current) return;
+        const parsed = parseConfigWithTail(res.text);
         tailRef.current = parsed.tail;
         setConfigChannelMode(parsed.channelMode);
         setTuningMap((prev) =>
@@ -184,7 +197,25 @@ export function useConfig(
       .catch(() => {});
   }, [selectedGuid, channelCtx.first]);
 
-  useInterval(pollConfig, selectedGuid && loaded ? 2000 : null);
+  const pollConfigRef = useRef(pollConfig);
+  pollConfigRef.current = pollConfig;
+
+  // 窗口不可见（最小化/遮挡）时暂停轮询：恢复可见立即补一次，最终状态与常驻轮询一致
+  const [pollPaused, setPollPaused] = useState(false);
+  useEffect(() => {
+    const onVisibility = () => {
+      const hidden = document.visibilityState === "hidden";
+      setPollPaused(hidden);
+      if (!hidden) pollConfigRef.current();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  useInterval(
+    pollConfig,
+    selectedGuid && loaded && !pollPaused ? 2000 : null,
+  );
 
   // 自动保存（300ms 去抖，原子写由 Rust 侧负责）
   useEffect(() => {

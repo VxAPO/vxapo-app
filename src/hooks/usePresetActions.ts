@@ -46,6 +46,8 @@ export function usePresetActions({
     }
     return used;
   }, [blocks, presetMeta]);
+  // 稳定引用：每次渲染新建数组会让 Sidebar 的 memo 失效，造成无关渲染
+  const usedPresetList = useMemo(() => [...usedPresetIds], [usedPresetIds]);
 
   // 卡片配色：预设注册的组色优先，否则按频段感知推导
   const accentOf = useCallback(
@@ -126,7 +128,7 @@ export function usePresetActions({
     savePresetDefaultName,
     deletePresetTarget,
     usedPresetIds,
-    usedPresetList: [...usedPresetIds],
+    usedPresetList,
     accentOf,
     openSavePreset,
     handleApplyPreset,

@@ -109,6 +109,48 @@ fn read_config(guid: String) -> Result<String, String> {
     }
 }
 
+/// 轮询快路径返回值：revision 为内容指纹；内容未变时 text 为 None。
+#[derive(serde::Serialize)]
+struct ConfigRead {
+    revision: String,
+    text: Option<String>,
+}
+
+/// FNV-1a 64 位内容指纹：用于判断 config.toml 是否真的变化。
+fn config_revision(bytes: &[u8]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
+/// 读取 per-device config.toml；内容与 known_revision 相同则不回传文本。
+#[tauri::command]
+fn read_config_checked(
+    guid: String,
+    known_revision: Option<String>,
+) -> Result<ConfigRead, String> {
+    let path = format!(r"C:\ProgramData\VxAPO\{guid}\config.toml");
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(e.to_string()),
+    };
+    let revision = config_revision(&bytes);
+    if known_revision.as_deref() == Some(revision.as_str()) {
+        return Ok(ConfigRead {
+            revision,
+            text: None,
+        });
+    }
+    Ok(ConfigRead {
+        revision,
+        text: Some(String::from_utf8_lossy(&bytes).into_owned()),
+    })
+}
+
 /// 读取导入文件内容（前端拖拽导入时使用）。
 #[tauri::command]
 fn read_import_file(path: String) -> Result<String, String> {
@@ -814,6 +856,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             write_config,
             read_config,
+            read_config_checked,
             read_import_file,
             read_lang,
             write_lang,

@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 
 /** 滚动停止多久后淡出（ms）。 */
 const IDLE_FADE_MS = 1200;
+/** 一次变化信号后继续逐帧核对几何的时长（ms）：覆盖进出场高度动画。静止后不再有任何 rAF。 */
+const SETTLE_MS = 1100;
 
 interface OverlayScrollbarProps {
   targetRef: RefObject<HTMLElement | null>;
@@ -108,29 +110,46 @@ function OverlayScrollbar({
     // 只更新几何、不激活，避免淡出过程中被重新呼出。
     const onScroll = () => {
       update();
+      settle();
     };
     const onUserScroll = () => {
       update();
       show();
+      settle();
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     el.addEventListener("wheel", onUserScroll, { passive: true });
     el.addEventListener("touchmove", onUserScroll, { passive: true });
-    const ro = new ResizeObserver(update);
+    const ro = new ResizeObserver(settle);
     ro.observe(el);
-    // 内容高度变化（进出场动画、列表增删）不改变容器尺寸，ResizeObserver 不触发；
-    // 用 rAF 每帧核对，保证圆头跟随且长度正确。
+    // 容器自身位置会随上方内容高度变化而整体位移：观察祖先链，保证轨道不脱节。
+    for (let p = el.parentElement; p; p = p.parentElement) ro.observe(p);
+    // 内容高度变化（进出场动画、列表增删）不一定改变容器尺寸：用结构/样式变化唤起
+    // 一段有限的 rAF 跟随窗口，动画期间逐帧核对，静止后立刻回到零开销。
+    const mo = new MutationObserver(settle);
+    mo.observe(el, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
     let raf = 0;
-    const loop = () => {
+    let settleUntil = 0;
+    const tick = () => {
+      raf = 0;
       update();
-      raf = requestAnimationFrame(loop);
+      if (performance.now() < settleUntil) raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(loop);
+    function settle() {
+      settleUntil = performance.now() + SETTLE_MS;
+      if (!raf) raf = requestAnimationFrame(tick);
+    }
     return () => {
       el.removeEventListener("scroll", onScroll);
       el.removeEventListener("wheel", onUserScroll);
       el.removeEventListener("touchmove", onUserScroll);
       ro.disconnect();
+      mo.disconnect();
       cancelAnimationFrame(raf);
       window.clearTimeout(idleTimerRef.current);
     };

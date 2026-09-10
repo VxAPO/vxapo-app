@@ -12,6 +12,24 @@ export async function readConfig(guid: string): Promise<string> {
   return invoke<string>("read_config", { guid });
 }
 
+export interface ConfigReadChecked {
+  revision: string;
+  /** 内容与传入 revision 相同时为 null（后端已短路，无需回传/解析）。 */
+  text: string | null;
+}
+
+/** 轮询专用：内容未变时不回传文本，避免每 2s 全量解析 TOML。 */
+export async function readConfigChecked(
+  guid: string,
+  knownRevision: string | null,
+): Promise<ConfigReadChecked | null> {
+  if (!isTauri) return null;
+  return invoke<ConfigReadChecked>("read_config_checked", {
+    guid,
+    knownRevision,
+  });
+}
+
 /** 读取界面语言（"zh" / "en"；无记录返回空串）。 */
 export async function readLang(): Promise<string> {
   if (!isTauri) return "";

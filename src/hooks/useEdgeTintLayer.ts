@@ -148,6 +148,7 @@ let scrollingNow = false;
 let fadePending = false;
 let autoScanTimer = 0;
 let autoMo: MutationObserver | null = null;
+let autoScanRaf = 0;
 let autoStarted = false;
 const targetRos = new Map<HTMLElement, ResizeObserver>();
 const targets = new Set<HTMLElement>();
@@ -1782,6 +1783,8 @@ function start(): void {
     );
     if (structureChanged) {
       refreshCardNodes();
+      // 卡片增减会改变光源集合，必须重绘一次（原逻辑依赖 300ms 轮询兜底）
+      schedule("full");
     }
     if (toolbarMoved) {
       // 工具栏位移动画每帧改 style；MutationObserver 在该帧渲染前触发，
@@ -1868,8 +1871,9 @@ function stop(): void {
   ssCtx = null;
 }
 
-function registerTarget(el: HTMLElement): void {
-  if (targets.has(el)) return;
+/** 注册绘制目标；返回是否真的新增了目标（用于决定是否需要重绘）。 */
+function registerTarget(el: HTMLElement): boolean {
+  if (targets.has(el)) return false;
   const nextHost =
     (el.closest(".device-body") as HTMLElement | null) ?? document.body;
   if (!targets.size) {
@@ -1884,6 +1888,7 @@ function registerTarget(el: HTMLElement): void {
   const ro = new ResizeObserver(() => schedule("full"));
   ro.observe(el);
   targetRos.set(el, ro);
+  return true;
 }
 
 function removeTarget(el: HTMLElement): void {
@@ -1904,21 +1909,60 @@ function syncTargets(): void {
     ".fx-curve, .fx-dev, .fx-toolbar",
   );
   const found = new Set<HTMLElement>();
+  let changed = false;
   nodes.forEach((el) => {
     found.add(el);
-    registerTarget(el);
+    if (registerTarget(el)) changed = true;
   });
   [...targets].forEach((el) => {
-    if (!found.has(el) || !el.isConnected) removeTarget(el);
+    if (!found.has(el) || !el.isConnected) {
+      removeTarget(el);
+      changed = true;
+    }
   });
-  schedule("full");
+  // 集合本身没变时不再无条件重绘：只有几何指纹（目标/卡片/强调块的位置尺寸）
+  // 真的变化时才需要一次全量重绘，其余情况保持上一帧画面。
+  const sig = targetScanSignature();
+  if (changed || sig !== scanSig) {
+    scanSig = sig;
+    schedule("full");
+  }
+}
+
+let scanSig = "";
+
+/** 目标集合与卡片几何指纹：仅用于判断「是否需要重绘」，不参与绘制。 */
+function targetScanSignature(): string {
+  const cards = cardNodes ?? refreshCardNodes();
+  const parts: string[] = [];
+  const push = (r: DOMRect) => {
+    parts.push(
+      `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}`,
+    );
+  };
+  for (const el of targets) {
+    if (el.isConnected) push(el.getBoundingClientRect());
+  }
+  for (const { el, accents } of cards) {
+    if (!el.isConnected) continue;
+    push(el.getBoundingClientRect());
+    for (const a of accents) push(a.getBoundingClientRect());
+  }
+  return parts.join("|");
 }
 
 /** 模块级自动扫描：不依赖 React hook 生命周期，HMR 或晚挂载都能自愈。 */
 function startAuto(): void {
   if (autoStarted) return;
   autoStarted = true;
-  autoMo = new MutationObserver(syncTargets);
+  // 结构变化合并到一帧一次，避免 React 批量更新时反复全量扫描
+  autoMo = new MutationObserver(() => {
+    if (autoScanRaf) return;
+    autoScanRaf = requestAnimationFrame(() => {
+      autoScanRaf = 0;
+      syncTargets();
+    });
+  });
   autoMo.observe(document.documentElement, {
     childList: true,
     subtree: true,
@@ -1928,7 +1972,8 @@ function startAuto(): void {
   } else {
     document.addEventListener("DOMContentLoaded", syncTargets, { once: true });
   }
-  // 兜底扫描：不依赖 MutationObserver 时序，面板出现后最多 300ms 内注册
+  // 兜底扫描：不依赖 MutationObserver 时序，保持与原先相同的 300ms 陈旧度上限；
+  // 区别是扫描本身只做「集合 + 几何指纹」比较，没有变化就完全不重绘。
   autoScanTimer = window.setInterval(syncTargets, 300);
 }
 
@@ -1936,6 +1981,9 @@ function stopAuto(): void {
   autoStarted = false;
   window.clearInterval(autoScanTimer);
   autoScanTimer = 0;
+  if (autoScanRaf) cancelAnimationFrame(autoScanRaf);
+  autoScanRaf = 0;
+  scanSig = "";
   autoMo?.disconnect();
   autoMo = null;
   [...targets].forEach(removeTarget);
