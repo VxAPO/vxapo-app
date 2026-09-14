@@ -66,6 +66,11 @@ export function useViewAnimation({
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [viewTransitionH, setViewTransitionH] = useState<number | null>(null);
   const [viewCollapsing, setViewCollapsing] = useState(false);
+  /**
+   * 非当前视图的显隐：切换完成后把它 display:none，两套视图常驻 DOM 但只有当前视图参与
+   * 布局与绘制，于是反复切换不再重建 31 张卡的 DOM（挂载尖峰消失）。
+   */
+  const [hiddenStage, setHiddenStage] = useState<ViewMode | null>("advanced");
   const viewAnimTimerRef = useRef<number | undefined>(undefined);
   const viewTransitionPendingRef = useRef(false);
   const viewEnterDoneRef = useRef(false);
@@ -164,24 +169,45 @@ export function useViewAnimation({
     viewAnimTimerRef.current = window.setTimeout(() => finishViewAnim(token), 1200);
   }, [finishViewAnim, cancelToolbarAnimRef]);
 
-  const handlePresetStageComplete = useCallback(() => {
-    if (viewRef.current === "preset") {
-      viewEnterDoneRef.current = true;
-      tryFinishViewAnim();
-    }
-  }, [tryFinishViewAnim]);
+  /** 视图变化时把新视图从 display:none 放出来（退场那套在动画结束后再收起来）。 */
+  useEffect(() => {
+    setHiddenStage((h) => (h === view ? null : h));
+  }, [view]);
 
-  const handleAdvancedStageComplete = useCallback(() => {
-    if (viewRef.current === "advanced") {
-      viewEnterDoneRef.current = true;
+  /** 单个 stage 的动画结束：当前视图=进场完成；另一套=退场完成，收进 display:none。 */
+  const handleStageAnimationComplete = useCallback(
+    (v: ViewMode) => {
+      if (v === viewRef.current) {
+        viewEnterDoneRef.current = true;
+        tryFinishViewAnim();
+        return;
+      }
+      setHiddenStage(v);
+      viewExitDoneRef.current = true;
       tryFinishViewAnim();
-    }
-  }, [tryFinishViewAnim]);
+    },
+    [tryFinishViewAnim],
+  );
 
-  const handleViewExitComplete = useCallback(() => {
-    viewExitDoneRef.current = true;
-    tryFinishViewAnim();
-  }, [tryFinishViewAnim]);
+  /** 首屏空闲后再挂载另一套视图，避免拖慢第一帧。 */
+  const [stageWarm, setStageWarm] = useState(false);
+  useEffect(() => {
+    const ric = (
+      window as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      }
+    ).requestIdleCallback;
+    if (ric) {
+      const id = ric(() => setStageWarm(true), { timeout: 600 });
+      return () => {
+        (
+          window as unknown as { cancelIdleCallback?: (id: number) => void }
+        ).cancelIdleCallback?.(id);
+      };
+    }
+    const t = window.setTimeout(() => setStageWarm(true), 350);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const overlayContent = useCallback(
     (key: string, num: number): ReactNode => {
@@ -361,9 +387,9 @@ export function useViewAnimation({
     viewAnimatingRef,
     switchView,
     beginViewAnim,
-    handlePresetStageComplete,
-    handleAdvancedStageComplete,
-    handleViewExitComplete,
+    handleStageAnimationComplete,
+    hiddenStage,
+    stageWarm,
     blocksDragApi,
     effectsDragApi,
     overlayClassForKey,

@@ -130,14 +130,17 @@ type PanelBuffer = {
   k: CanvasRenderingContext2D;
   sc: HTMLCanvasElement;
   sk: CanvasRenderingContext2D;
+  /** 上次完整渲染的时刻（复用窗口以它为基准）。 */
   at: number;
+  /** 自上次完整渲染以来已连续复用的帧数。 */
+  reused: number;
   x: number;
   y: number;
   w: number;
   h: number;
   dpr: number;
 };
-const panelBuffers = new WeakMap<HTMLElement, PanelBuffer>();
+let panelBuffers = new WeakMap<HTMLElement, PanelBuffer>();
 let raf = 0;
 let running = false;
 let themeObserver: MutationObserver | null = null;
@@ -161,7 +164,10 @@ type CardNode = { el: HTMLElement; accents: HTMLElement[] };
 let cardNodes: CardNode[] | null = null;
 
 function refreshCardNodes(): CardNode[] {
-  cardNodes = [...document.querySelectorAll<HTMLElement>("[data-dnd-id]")].map(
+  // 两套视图常驻 DOM：只把当前视图的卡片当作光源，隐藏视图不参与采样
+  const scope =
+    document.querySelector<HTMLElement>(".view-stage.is-active") ?? document;
+  cardNodes = [...scope.querySelectorAll<HTMLElement>("[data-dnd-id]")].map(
     (el) => ({
       el,
       accents: [
@@ -237,6 +243,12 @@ const MENISCUS_BLUR = 1.2;
 const MENISCUS_HALO_WIDTH = 8;
 const MENISCUS_HALO_ALPHA = 0.18;
 const MENISCUS_HALO_BLUR = 4;
+/** 面板离屏缓冲复用窗口：位置由本次 blit 偏移保证精确，只有环带配色最多滞后这么久。 */
+const PANEL_REUSE_MS = 100;
+/** 连续复用上限：保证至少每 3 帧完整重算一次，配色不会长时间停在上一次采样。 */
+const PANEL_REUSE_MAX = 2;
+/** 褪色补帧链的基准步长：插值按「距上次真实渲染过了多少个基准步」推进，保证复用不改褪色时长。 */
+const FADE_FRAME_MS = 33;
 const Z_BASE = 25;
 const Z_TOOL = 35;
 const Z_SHADE = 26;
@@ -361,6 +373,11 @@ function ringBaseRgb(): Rgb {
 
 function rgbLuminance(c: Rgb): number {
   return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+}
+
+/** 把「每帧插值系数」换算成「跨过 n 个基准帧」的等效系数。 */
+function scaleK(k: number, frames: number): number {
+  return frames <= 1 ? k : 1 - Math.pow(1 - k, frames);
 }
 
 /** 取元素实际表面亮度；透明背景回退主题卡片色 */
@@ -1002,6 +1019,7 @@ function drawPanel(
   ctx2: CanvasRenderingContext2D,
   shadeCtx2: CanvasRenderingContext2D,
   cards: LightSet,
+  frameScale = 1,
 ): void {
   const rect = el.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return;
@@ -1042,8 +1060,11 @@ function drawPanel(
     : 1;
   const glowAlpha = 1;
   const movingTool = tool && scrollingNow;
-  const fadeK = movingTool ? 1 : FADE_K;
-  const colorK = movingTool ? 1 : COLOR_K;
+  // 按时间推进：frameScale=1（正常 33ms 补帧）时与原常数逐字等价；
+  // 复用跳帧时按经过的步数放大，保证褪色总时长不变（只是步数更少、每步更大）。
+  const scale = Math.max(1, frameScale);
+  const fadeK = movingTool ? 1 : scaleK(FADE_K, scale);
+  const colorK = movingTool ? 1 : scaleK(COLOR_K, scale);
   const panelBase = panelBaseLum(el);
 
   const pts = ringPoints(x0, y0, x1, y1, rc);
@@ -1141,7 +1162,12 @@ function drawPanel(
     const targetGl = Math.min(1, colorEnergy + lumEnergy * 0.55);
     rawGl[j] = targetGl;
     if (innerTint) {
-      const kg = ist.gl[j] < 0.01 && targetGl > 0 ? 1 : COLOR_K;
+      const kg =
+        ist.gl[j] < 0.01 && targetGl > 0
+          ? 1
+          : movingTool
+            ? COLOR_K
+            : scaleK(COLOR_K, scale);
       ist.ir[j] += (innerTint.c.r - ist.ir[j]) * kg;
       ist.ig[j] += (innerTint.c.g - ist.ig[j]) * kg;
       ist.ib[j] += (innerTint.c.b - ist.ib[j]) * kg;
@@ -1489,7 +1515,7 @@ function renderToPanelBuffer(
     const sc = document.createElement("canvas");
     const sk = sc.getContext("2d");
     if (!k || !sk) return null;
-    buf = { c, k, sc, sk, at: 0, x, y, w, h, dpr };
+    buf = { c, k, sc, sk, at: 0, reused: 0, x, y, w, h, dpr };
     panelBuffers.set(el, buf);
   }
   buf.x = x;
@@ -1508,17 +1534,31 @@ function renderToPanelBuffer(
     buf.sc.width = Math.ceil(w * dpr);
     buf.sc.height = Math.ceil(h * dpr);
   }
-  // 工具栏滚动时复用上一帧离屏 buffer：几何相对内容不变，
-  // 只需平移重绘，省掉每帧的全套描边 + blur；周期性重算保证光效不脱节。
+  // 复用上一帧离屏 buffer：面板绘制（4× 超采样描边 + 整张模糊）是重绘的固定大头，
+  // 而画布原点与 blit 偏移都取自本次 dirtyForEls()，所以环带位置永远精确，
+  // 复用的只是「采样到的配色」——它最多滞后 PANEL_REUSE_MS，且至少每 3 帧重算一次。
   const now = performance.now();
+  // 原有：工具栏滚动期间用更长的 140ms 窗口（滚动时几何相对内容不变）
   if (
     isToolbar(el) &&
     scrollingNow &&
     buf.at > 0 &&
     now - buf.at < 140
   ) {
+    buf.reused += 1;
     return buf;
   }
+  if (
+    buf.at > 0 &&
+    buf.reused < PANEL_REUSE_MAX &&
+    now - buf.at < PANEL_REUSE_MS
+  ) {
+    buf.reused += 1;
+    return buf;
+  }
+  // 距上次真实渲染过了多少个基准步：用于把褪色插值按时间推进（复用不改褪色时长）
+  const frameScale = buf.at > 0 ? (now - buf.at) / FADE_FRAME_MS : 1;
+  buf.reused = 0;
   buf.at = now;
   buf.k.setTransform(1, 0, 0, 1, 0, 0);
   buf.k.clearRect(0, 0, buf.c.width, buf.c.height);
@@ -1526,7 +1566,7 @@ function renderToPanelBuffer(
   buf.sk.setTransform(1, 0, 0, 1, 0, 0);
   buf.sk.clearRect(0, 0, buf.sc.width, buf.sc.height);
   buf.sk.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
-  drawPanel(el, buf.k, buf.sk, cards);
+  drawPanel(el, buf.k, buf.sk, cards, frameScale);
   return buf;
 }
 
@@ -1764,6 +1804,8 @@ function start(): void {
   document.addEventListener("visibilitychange", onVisibilityChange);
   themeObserver = new MutationObserver(() => {
     colorCache = new WeakMap();
+    // 主题切换会整体换色：清掉面板缓冲，避免复用窗口把旧配色留在画面上
+    panelBuffers = new WeakMap();
     if (document.documentElement.classList.contains("theme-transition")) {
       // 主题过渡期间不抢帧；等 DOM 动画结束后做一次最终刷新。
       window.clearTimeout(themePaintTimer);
@@ -1798,6 +1840,14 @@ function start(): void {
           (m.type === "attributes" &&
             (m.attributeName === "data-dnd-id" ||
               m.attributeName === "data-dnd-group")),
+      ) ||
+      // 视图常驻后切换视图只改 .view-stage 的类名：光源集合换了，必须重取卡片
+      records.some(
+        (m) =>
+          m.type === "attributes" &&
+          m.attributeName === "class" &&
+          m.target instanceof HTMLElement &&
+          m.target.classList.contains("view-stage"),
       );
     const viewStyleChanged = records.some(
       (m) =>
@@ -1883,6 +1933,7 @@ function stop(): void {
   layoutObserver?.disconnect();
   layoutObserver = null;
   colorCache = new WeakMap();
+  panelBuffers = new WeakMap();
   canvas?.remove();
   canvas = null;
   ctx = null;

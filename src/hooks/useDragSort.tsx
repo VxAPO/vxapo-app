@@ -16,6 +16,16 @@ import {
   UseDragSortOptions,
 } from "../lib/dragSortTypes";
 
+/**
+ * 卡片查询范围：两套视图常驻 DOM 后必须排除非当前视图，
+ * 否则拖拽会同时命中隐藏视图里的同名卡片。
+ */
+function cardScope(): ParentNode {
+  return (
+    document.querySelector<HTMLElement>(".view-stage.is-active") ?? document
+  );
+}
+
 export function useDragSort({ group, markDirty, overlayContent, commitOrder }: UseDragSortOptions) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [dragSize, setDragSize] = useState<{ width: number; height: number } | null>(null);
@@ -49,7 +59,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   };
 
   const resetCardStyles = () => {
-    document.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+    cardScope().querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
       // 清掉拖拽期间的内联过渡，恢复 CSS 的 hover 阴影淡入
       el.style.transition = "";
       el.style.transform = "none";
@@ -136,6 +146,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     const duration = idx < 0 ? LAYOUT_ANIM_OUTSIDE_MS : LAYOUT_ANIM_MS;
     const trans = `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+    const scope = cardScope();
     for (const [k, v] of d.virtual) {
       if (k === d.key) continue;
       const t = target.get(k);
@@ -144,14 +155,14 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       if (baseIdx == null) continue;
       const baseRect = d.slots[baseIdx].rect;
       const toRect = d.slots[t].rect;
-      const el = document.querySelector<HTMLElement>(`[data-dnd-id="${k}"]`);
+      const el = scope.querySelector<HTMLElement>(`[data-dnd-id="${k}"]`);
       if (el) {
         el.style.transition = trans;
         el.style.transform = `translate(${snapPx(toRect.left - baseRect.left)}px, ${snapPx(toRect.top - baseRect.top)}px)`;
       }
     }
     // 被拖卡自身就地占位：在网格流内移动它，避免出现第二张卡抢占槽位
-    const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
+    const draggedEl = scope.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
     const draggedBase = d.base.get(d.key);
     if (draggedEl && draggedBase != null) {
       const baseRect = d.slots[draggedBase].rect;
@@ -191,7 +202,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
         // 落地瞬间露出占位框虚线；中间帧由 FlyPath 取整保证文字不发虚。
         const box = (r: DOMRect) => ({ left: r.left, top: r.top, width: r.width, height: r.height });
         // 显式锁定原卡片内容隐藏，避免任何渲染时序让它在飞行动画中闪现
-        const draggedEl = document.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
+        const draggedEl = cardScope().querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
         if (draggedEl) draggedEl.setAttribute("data-fly-hidden", "1");
         setActiveKey(null);
         setDragSize(null);
@@ -254,7 +265,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     resetCardStyles();
     pointerDownRef.current = true;
 
-    const els = Array.from(document.querySelectorAll<HTMLElement>(`[data-dnd-group="${group}"]`));
+    const els = Array.from(cardScope().querySelectorAll<HTMLElement>(`[data-dnd-group="${group}"]`));
     const slots = els.map((el) => ({ key: el.dataset.dndId!, rect: el.getBoundingClientRect() }));
     const order = slots.map((s) => s.key);
     const base = new Map(order.map((k, i) => [k, i]));
@@ -265,7 +276,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       setDragSize(null);
       return;
     }
-    const originEl = document.querySelector<HTMLElement>(`[data-dnd-id="${key}"]`);
+    const originEl = cardScope().querySelector<HTMLElement>(`[data-dnd-id="${key}"]`);
     dragRef.current = {
       key,
       slots,

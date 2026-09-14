@@ -244,14 +244,14 @@ export default function App() {
     viewAnimatingRef,
     switchView,
     beginViewAnim,
-    handlePresetStageComplete,
-    handleAdvancedStageComplete,
-    handleViewExitComplete,
     blocksDragApi,
     effectsDragApi,
     overlayClassForKey,
     overlayStyleForKey,
     effectOverlayClassForKey,
+    handleStageAnimationComplete,
+    hiddenStage,
+    stageWarm,
   } = useViewAnimation({
     bodyRef,
     blocks,
@@ -642,18 +642,29 @@ export default function App() {
                 transition: viewCollapsing ? `min-height ${VIEW_COLLAPSE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)` : "none",
               }}
             >
-            <AnimatePresence mode="popLayout" initial={false} onExitComplete={handleViewExitComplete}>
-              {!loadErr && view === "preset" && (
-                <motion.div
-                  key="preset"
-                  data-view="preset"
-                  className="view-stage"
-                  onAnimationComplete={handlePresetStageComplete}
-                  initial={{ x: "-100%", opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: "-100%", opacity: 0 }}
-                  transition={{ duration: 0.32, ease: "easeInOut" }}
-                >
+            {/* 两套视图常驻 DOM：非当前视图 display:none。切换只做动画与显隐，
+                不再重建 31 张卡的 DOM（反复切换的挂载/首帧布局尖峰因此消失）。
+                退场那套先用 is-exiting（绝对定位让出文档流）演完，再收成 is-hidden。 */}
+            {!loadErr &&
+              (["preset", "advanced"] as const).map((v) => {
+                const active = view === v;
+                const hidden = hiddenStage === v;
+                if (!active && !stageWarm) return null;
+                return (
+                  <motion.div
+                    key={v}
+                    data-view={v}
+                    className={`view-stage${active ? " is-active" : hidden ? " is-hidden" : " is-exiting"}`}
+                    initial={false}
+                    animate={
+                      active
+                        ? { x: 0, opacity: 1 }
+                        : { x: v === "preset" ? "-100%" : "100%", opacity: 0 }
+                    }
+                    onAnimationComplete={() => handleStageAnimationComplete(v)}
+                    transition={{ duration: 0.32, ease: "easeInOut" }}
+                  >
+                    {v === "preset" ? (
                   <PresetView
                     blocks={blocks}
                     showFilterEmptyHint={blocks.length === 0}
@@ -677,20 +688,7 @@ export default function App() {
                     onPatchBlock={patchBlock}
                     onPatchBand={patchBand}
                   />
-                </motion.div>
-              )}
-
-              {!loadErr && view === "advanced" && (
-                <motion.div
-                  key="advanced"
-                  data-view="advanced"
-                  className="view-stage"
-                  onAnimationComplete={handleAdvancedStageComplete}
-                  initial={{ x: "100%", opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: "100%", opacity: 0 }}
-                  transition={{ duration: 0.32, ease: "easeInOut" }}
-                >
+                    ) : (
                   <AdvancedView
                     blocks={blocks}
                     showFilterEmptyHint={blocks.length === 0}
@@ -718,9 +716,10 @@ export default function App() {
                     onPatchBlock={patchBlock}
                     onPatchBand={patchBand}
                   />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    )}
+                  </motion.div>
+                );
+              })}
             </div>
 
             <AnimatePresence mode="wait" initial={false}>

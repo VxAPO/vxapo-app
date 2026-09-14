@@ -141,6 +141,19 @@
   min-width: 0;
 }
 
+/* 视图常驻 DOM：退场那套绝对定位让出文档流，演完再用 display:none 收起。
+   试过「保留布局 + visibility:hidden」，反而要重绘整块 31 卡子树，长帧更多，故不采用。 */
+.view-stage.is-exiting {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+}
+
+.view-stage.is-hidden {
+  display: none;
+}
+
 .section-title {
   font-size: 13px;
   font-weight: 700;
