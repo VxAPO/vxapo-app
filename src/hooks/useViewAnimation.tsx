@@ -10,6 +10,13 @@ import SemanticUnitCard from "../components/SemanticUnitCard";
 
 /** 视图切换后内容高度收窄动画时长（ms） */
 export const VIEW_COLLAPSE_MS = 800;
+/** 视图平移动画时长（ms）；App 的 stage transition 与收窄启动时刻共用同一个常量 */
+export const VIEW_SLIDE_MS = 320;
+/** 收窄时长的上下限与按高度差的换算：差值越小收得越快，避免小差值也拖满 800ms 空转 */
+const COLLAPSE_MS_MIN = 260;
+const COLLAPSE_MS_PER_PX = 2;
+/** 小于这个高度差直接对齐、不播动画（这点位移肉眼看不出来，动画只会变成空等） */
+const COLLAPSE_SNAP_PX = 4;
 
 interface UseViewAnimationOptions {
   bodyRef: React.RefObject<HTMLDivElement | null>;
@@ -66,6 +73,8 @@ export function useViewAnimation({
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [viewTransitionH, setViewTransitionH] = useState<number | null>(null);
   const [viewCollapsing, setViewCollapsing] = useState(false);
+  /** 本次收窄实际使用的时长（按高度差缩放），供 App 拼 transition 用 */
+  const [viewCollapseMs, setViewCollapseMs] = useState(VIEW_COLLAPSE_MS);
   /**
    * 非当前视图的显隐：切换完成后把它 display:none，两套视图常驻 DOM 但只有当前视图参与
    * 布局与绘制，于是反复切换不再重建 31 张卡的 DOM（挂载尖峰消失）。
@@ -76,9 +85,14 @@ export function useViewAnimation({
   const viewEnterDoneRef = useRef(false);
   const viewExitDoneRef = useRef(false);
   const viewTransitionTokenRef = useRef(0);
+  /** 平移结束那一刻启动收窄的定时器（不依赖动画完成回调，避免晚 1 帧）。 */
+  const viewCollapseStartTimerRef = useRef<number | undefined>(undefined);
+  /** 收窄结束、清掉 min-height 的定时器。 */
   const viewCollapseTimerRef = useRef<number | undefined>(undefined);
   const viewScrollTopRef = useRef(0);
   const viewHeightLockRef = useRef(false);
+  /** 锁定的旧内容高度（px），收窄时用它与新高度算差值 */
+  const viewLockHeightRef = useRef(0);
   const viewRef = useRef(view);
   const viewAnimatingRef = useRef(viewAnimating);
   viewAnimatingRef.current = viewAnimating;
@@ -89,6 +103,7 @@ export function useViewAnimation({
 
   useEffect(() => () => {
     window.clearTimeout(viewAnimTimerRef.current);
+    window.clearTimeout(viewCollapseStartTimerRef.current);
     window.clearTimeout(viewCollapseTimerRef.current);
   }, []);
 
@@ -101,13 +116,18 @@ export function useViewAnimation({
     }
   }, [viewAnimating]);
 
-  const finishViewAnim = useCallback((token: number) => {
-    if (token !== viewTransitionTokenRef.current) return;
-    window.clearTimeout(viewAnimTimerRef.current);
-    window.clearTimeout(viewCollapseTimerRef.current);
-    viewTransitionPendingRef.current = false;
-    // 只有锁定过高度时才执行收窄动画。
-    if (viewHeightLockRef.current) {
+  /**
+   * 启动高度收窄。由「切换后 VIEW_SLIDE_MS」的定时器触发，正好落在平移最后一帧上，
+   * 不再等 framer-motion 的动画完成回调（回调会晚 1 帧，观感就是平移完了先停一下再滚）。
+   */
+  const startCollapse = useCallback(
+    (token: number) => {
+      if (token !== viewTransitionTokenRef.current) return;
+      if (!viewHeightLockRef.current) {
+        setViewTransitionH(null);
+        setViewCollapsing(false);
+        return;
+      }
       // 终点必须是新视图的**自然高度**，不能是 0：
       // min-height 只在「大于内容高度」时才影响渲染高度，终点给 0 的话，
       // 高度动画走到新内容高度那一刻就停了——高度差越小，这段可见动画占比越小，
@@ -116,12 +136,36 @@ export function useViewAnimation({
         ".view-stage.is-active",
       );
       const naturalH = stage ? Math.round(stage.getBoundingClientRect().height) : 0;
+      const delta = viewLockHeightRef.current - naturalH;
+      if (delta < COLLAPSE_SNAP_PX) {
+        // 差值小到看不出来（含向上变高）：直接对齐，别用 800ms 换一段空等
+        setViewTransitionH(null);
+        setViewCollapsing(false);
+        return;
+      }
+      const ms = Math.round(
+        Math.min(
+          VIEW_COLLAPSE_MS,
+          Math.max(COLLAPSE_MS_MIN, delta * COLLAPSE_MS_PER_PX),
+        ),
+      );
+      setViewCollapseMs(ms);
       setViewTransitionH(naturalH);
       setViewCollapsing(true);
-    } else {
-      setViewTransitionH(null);
-      setViewCollapsing(false);
-    }
+      viewCollapseTimerRef.current = window.setTimeout(() => {
+        if (token !== viewTransitionTokenRef.current) return;
+        setViewCollapsing(false);
+        // 收窄结束就撤掉 min-height：否则之后内容变矮时会被这段残留高度撑住
+        setViewTransitionH(null);
+      }, ms);
+    },
+    [bodyRef],
+  );
+
+  const finishViewAnim = useCallback((token: number) => {
+    if (token !== viewTransitionTokenRef.current) return;
+    window.clearTimeout(viewAnimTimerRef.current);
+    viewTransitionPendingRef.current = false;
     setViewAnimating(false);
     // 平移动画结束后立即重测几何并让浮窗出场；高度收窄仍在后台继续。
     // 收窄期间若发生滚动，scroll 监听会继续重测，浮窗不会跟丢。
@@ -130,13 +174,7 @@ export function useViewAnimation({
       if (token !== viewTransitionTokenRef.current) return;
       setToolbarHidden(false);
     }, 0);
-    viewCollapseTimerRef.current = window.setTimeout(() => {
-      if (token !== viewTransitionTokenRef.current) return;
-      setViewCollapsing(false);
-      // 收窄结束就撤掉 min-height：否则之后内容变矮时会被这段残留高度撑住
-      setViewTransitionH(null);
-    }, VIEW_COLLAPSE_MS);
-  }, [bodyRef, bumpSelGeomTickRef]);
+  }, [bumpSelGeomTickRef]);
 
   const tryFinishViewAnim = useCallback(() => {
     if (!viewTransitionPendingRef.current) return;
@@ -152,6 +190,7 @@ export function useViewAnimation({
     viewEnterDoneRef.current = false;
     viewExitDoneRef.current = false;
     window.clearTimeout(viewAnimTimerRef.current);
+    window.clearTimeout(viewCollapseStartTimerRef.current);
     window.clearTimeout(viewCollapseTimerRef.current);
     cancelToolbarAnimRef.current();
     const body = bodyRef.current;
@@ -166,18 +205,25 @@ export function useViewAnimation({
         // 这样过渡期间的滚动条长度是 max(旧内容, 新内容)，不会先变短再变长。
         const stack = body.querySelector<HTMLElement>(".view-stack");
         const stackH = stack ? Math.round(stack.getBoundingClientRect().height) : 0;
+        viewLockHeightRef.current = stackH;
         setViewTransitionH(stackH);
       } else {
+        viewLockHeightRef.current = 0;
         setViewTransitionH(null);
       }
       setViewCollapsing(false);
     }
     setViewAnimating(true);
     setToolbarHidden(true);
+    // 平移正好结束时启动收窄（同一 task 内量高度 + 设终点），与平移动画严格对齐
+    viewCollapseStartTimerRef.current = window.setTimeout(
+      () => startCollapse(token),
+      VIEW_SLIDE_MS,
+    );
     // 兜底：正常情况下由进场 onAnimationComplete + 退场 onExitComplete
     // 共同触发 finishViewAnim；若极端卡顿导致回调未触发，1200ms 后强制收尾。
     viewAnimTimerRef.current = window.setTimeout(() => finishViewAnim(token), 1200);
-  }, [finishViewAnim, cancelToolbarAnimRef]);
+  }, [finishViewAnim, startCollapse, cancelToolbarAnimRef]);
 
   /** 视图变化时把新视图从 display:none 放出来（退场那套在动画结束后再收起来）。 */
   useEffect(() => {
@@ -393,6 +439,7 @@ export function useViewAnimation({
     toolbarHidden,
     viewTransitionH,
     viewCollapsing,
+    viewCollapseMs,
     viewRef,
     viewAnimatingRef,
     switchView,

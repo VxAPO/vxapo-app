@@ -24,7 +24,10 @@ import { useGlassRing } from "./hooks/useGlassRing";
 import { useEdgeTintLayer } from "./hooks/useEdgeTintLayer";
 import { usePresetActions } from "./hooks/usePresetActions";
 import { useMarqueeSelection } from "./hooks/useMarqueeSelection";
-import { useViewAnimation, VIEW_COLLAPSE_MS } from "./hooks/useViewAnimation";
+import {
+  useViewAnimation,
+  VIEW_SLIDE_MS,
+} from "./hooks/useViewAnimation";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
 import AdvancedView from "./components/AdvancedView";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -240,6 +243,7 @@ export default function App() {
     toolbarHidden,
     viewTransitionH,
     viewCollapsing,
+    viewCollapseMs,
     viewRef,
     viewAnimatingRef,
     switchView,
@@ -639,7 +643,11 @@ export default function App() {
               className="view-stack"
               style={{
                 minHeight: viewTransitionH ?? undefined,
-                transition: viewCollapsing ? `min-height ${VIEW_COLLAPSE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)` : "none",
+                // 先快后慢：起步就带走大部分距离，尾巴只做收敛（原来 0.4,0,0.2,1 是慢起，
+                // 高度差小时前段几乎不动机，看起来像平移完了先停一下）
+                transition: viewCollapsing
+                  ? `min-height ${viewCollapseMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                  : "none",
               }}
             >
             {/* 两套视图常驻 DOM：非当前视图 display:none。切换只做动画与显隐，
@@ -662,7 +670,7 @@ export default function App() {
                         : { x: v === "preset" ? "-100%" : "100%", opacity: 0 }
                     }
                     onAnimationComplete={() => handleStageAnimationComplete(v)}
-                    transition={{ duration: 0.32, ease: "easeInOut" }}
+                    transition={{ duration: VIEW_SLIDE_MS / 1000, ease: "easeInOut" }}
                   >
                     {v === "preset" ? (
                   <PresetView
