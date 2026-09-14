@@ -108,7 +108,15 @@ export function useViewAnimation({
     viewTransitionPendingRef.current = false;
     // 只有锁定过高度时才执行收窄动画。
     if (viewHeightLockRef.current) {
-      setViewTransitionH(0);
+      // 终点必须是新视图的**自然高度**，不能是 0：
+      // min-height 只在「大于内容高度」时才影响渲染高度，终点给 0 的话，
+      // 高度动画走到新内容高度那一刻就停了——高度差越小，这段可见动画占比越小，
+      // 看起来就像瞬移。终点给新内容高度，收窄才会按 800ms 完整走完。
+      const stage = bodyRef.current?.querySelector<HTMLElement>(
+        ".view-stage.is-active",
+      );
+      const naturalH = stage ? Math.round(stage.getBoundingClientRect().height) : 0;
+      setViewTransitionH(naturalH);
       setViewCollapsing(true);
     } else {
       setViewTransitionH(null);
@@ -125,8 +133,10 @@ export function useViewAnimation({
     viewCollapseTimerRef.current = window.setTimeout(() => {
       if (token !== viewTransitionTokenRef.current) return;
       setViewCollapsing(false);
+      // 收窄结束就撤掉 min-height：否则之后内容变矮时会被这段残留高度撑住
+      setViewTransitionH(null);
     }, VIEW_COLLAPSE_MS);
-  }, [bumpSelGeomTickRef]);
+  }, [bodyRef, bumpSelGeomTickRef]);
 
   const tryFinishViewAnim = useCallback(() => {
     if (!viewTransitionPendingRef.current) return;
