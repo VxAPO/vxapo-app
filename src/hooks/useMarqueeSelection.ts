@@ -31,6 +31,14 @@ interface UseMarqueeSelectionOptions {
  */
 const TOOLBAR_FLIGHT_MS = 480;
 const TOOLBAR_FLIGHT_EASE_POW = 2.6;
+/**
+ * 目标自身的速率上限（px/s）。
+ *
+ * 拖动期目标来自"选中卡片包围盒"，而卡片边界是离散的：乱晃框选时卡片不断进出，
+ * 目标就会在行/列边界之间瞬间跳一下。直接去追这些跳变，工具栏轨迹就是波浪式的。
+ * 这里先给目标本身限速，把瞬移化开；稳态匀速移动不受影响（所以不额外增加滞后）。
+ */
+const TOOLBAR_TARGET_SLEW = 1500;
 /** 工具栏与选中范围的间距、与容器边的留白 */
 const TOOLBAR_GAP = 10;
 const TOOLBAR_EDGE = 8;
@@ -100,6 +108,10 @@ export function useMarqueeSelection({
   const toolbarVelRef = useRef({ x: 0, y: 0 });
   const toolbarLastTsRef = useRef(0);
   const toolbarBoundElRef = useRef<HTMLDivElement | null>(null);
+  /** 被限速后的目标（飞行实际追的点） */
+  const toolbarAimRef = useRef<{ x: number; y: number } | null>(null);
+  /** 目标限速用的时间戳（不能用 anim.t0：拖动期飞行每帧重启，t0 一直是"现在"） */
+  const toolbarSlewTsRef = useRef(0);
 
   /** 按选中范围包围盒算工具栏目标位置（React 路径与拖动实时路径共用同一套规则） */
   const toolbarTargetFor = useCallback(
@@ -168,11 +180,28 @@ export function useMarqueeSelection({
         toolbarLastTsRef.current = 0;
         return;
       }
+      // 目标限速：把卡片边界造成的瞬移化开（每帧最多走 SLEW·dt）
+      const raw = toolbarTargetRef.current ?? anim.to;
+      const aim = toolbarAimRef.current ?? { ...raw };
+      const nowMs = performance.now();
+      const prevSlewTs = toolbarSlewTsRef.current || nowMs;
+      const dtMs = Math.min(64, Math.max(0.5, nowMs - prevSlewTs));
+      toolbarSlewTsRef.current = nowMs;
+      const maxStep = (TOOLBAR_TARGET_SLEW * dtMs) / 1000;
+      const ddx = raw.x - aim.x;
+      const ddy = raw.y - aim.y;
+      const dlen = Math.hypot(ddx, ddy);
+      if (dlen > 1e-3) {
+        const k2 = Math.min(1, maxStep / dlen);
+        aim.x += ddx * k2;
+        aim.y += ddy * k2;
+      }
+      toolbarAimRef.current = aim;
       const t = Math.min(1, (performance.now() - anim.t0) / TOOLBAR_FLIGHT_MS);
       const k = 1 - Math.pow(1 - t, TOOLBAR_FLIGHT_EASE_POW);
       const inv = 1 - k;
-      const x = inv * inv * anim.start.x + 2 * inv * k * anim.ctrl.x + k * k * anim.to.x;
-      const y = inv * inv * anim.start.y + 2 * inv * k * anim.ctrl.y + k * k * anim.to.y;
+      const x = inv * inv * anim.start.x + 2 * inv * k * anim.ctrl.x + k * k * aim.x;
+      const y = inv * inv * anim.start.y + 2 * inv * k * anim.ctrl.y + k * k * aim.y;
       node.style.left = `${snapPx(x)}px`;
       node.style.top = `${snapPx(y)}px`;
       if (t < 1) {
@@ -180,8 +209,9 @@ export function useMarqueeSelection({
       } else {
         toolbarAnimRef.current = null;
         toolbarLastTsRef.current = 0;
-        node.style.left = `${anim.to.x}px`;
-        node.style.top = `${anim.to.y}px`;
+        toolbarAimRef.current = { ...raw };
+        node.style.left = `${raw.x}px`;
+        node.style.top = `${raw.y}px`;
       }
     };
     toolbarAnimRef.current = { raf: requestAnimationFrame(step), start, ctrl, to: target0, t0 };
