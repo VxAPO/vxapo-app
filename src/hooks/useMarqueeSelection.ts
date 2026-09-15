@@ -20,6 +20,20 @@ interface UseMarqueeSelectionOptions {
   toolbarHidden: boolean;
 }
 
+/** 工具栏跟随：临界阻尼弹簧（T 内基本停稳），带速度项、不过冲、尾巴有界 */
+const TOOLBAR_SETTLE_MS = 220;
+const TOOLBAR_SNAP_PX = 0.5;
+const TOOLBAR_SNAP_V = 40;
+/**
+ * 速度上限（px/s）：弹簧起步速度最大。
+ * 拖动结束那一刻目标会从"框选矩形"切到"选中卡片包围盒"，跳变可能很大，
+ * 不封顶就会出现单帧几十像素的硬跳（观感就是生硬）。
+ */
+const TOOLBAR_MAX_SPEED = 2600;
+/** 工具栏与选中范围的间距、与容器边的留白 */
+const TOOLBAR_GAP = 10;
+const TOOLBAR_EDGE = 8;
+
 /** 框选（marquee）、选中态、复制/删除与选中工具栏几何。 */
 export function useMarqueeSelection({
   bodyRef,
@@ -74,11 +88,125 @@ export function useMarqueeSelection({
   const [toolbarW, setToolbarW] = useState(280);
   const toolbarAnimRef = useRef<{
     raf: number;
-    start: { x: number; y: number };
-    ctrl: { x: number; y: number };
-    to: { x: number; y: number };
-    t0: number;
   } | null>(null);
+  /** 最新目标与当前显示位置 / 速度：事件期直接写 ref，不经过 React 提交节流 */
+  const toolbarTargetRef = useRef<{ x: number; y: number } | null>(null);
+  const toolbarPosRef = useRef<{ x: number; y: number } | null>(null);
+  const toolbarVelRef = useRef({ x: 0, y: 0 });
+  const toolbarLastTsRef = useRef(0);
+  const toolbarBoundElRef = useRef<HTMLDivElement | null>(null);
+
+  /** 按选中范围包围盒算工具栏目标位置（React 路径与拖动实时路径共用同一套规则） */
+  const toolbarTargetFor = useCallback(
+    (
+      minX: number,
+      maxX: number,
+      minY: number,
+      maxY: number,
+      bodyW: number,
+      bodyH: number,
+    ) => {
+      const cx = (minX + maxX) / 2;
+      const x = snapPx(
+        Math.max(
+          TOOLBAR_EDGE + toolbarW / 2,
+          Math.min(cx, bodyW - TOOLBAR_EDGE - toolbarW / 2),
+        ),
+      );
+      const belowY = maxY + TOOLBAR_GAP;
+      const aboveY = minY - toolbarH - TOOLBAR_GAP;
+      const rawY = belowY + toolbarH + 8 <= bodyH ? belowY : aboveY;
+      const y = snapPx(
+        Math.max(
+          TOOLBAR_EDGE,
+          Math.min(rawY, bodyH - toolbarH - TOOLBAR_EDGE),
+        ),
+      );
+      return { x, y };
+    },
+    [toolbarH, toolbarW],
+  );
+
+  /** 启动/继续跟随循环：每帧朝最新目标走一步；停稳即结束，不留常驻 rAF */
+  const startToolbarFollow = useCallback(() => {
+    if (toolbarAnimRef.current) return;
+    const step = () => {
+      const node = toolbarElRef.current;
+      const target = toolbarTargetRef.current;
+      if (!node || !target) {
+        toolbarAnimRef.current = null;
+        toolbarLastTsRef.current = 0;
+        return;
+      }
+      const now = performance.now();
+      {
+        const prevTs = toolbarLastTsRef.current || now;
+        const dt = Math.min(64, Math.max(0.5, now - prevTs));
+        toolbarLastTsRef.current = now;
+        const cur = toolbarPosRef.current ?? target;
+        const v = toolbarVelRef.current;
+        const omega = 6.6 / (TOOLBAR_SETTLE_MS / 1000);
+        let px = cur.x;
+        let py = cur.y;
+        const h = dt / 1000 / 2;
+        for (let i = 0; i < 2; i++) {
+          v.x += (-omega * omega * (px - target.x) - 2 * omega * v.x) * h;
+          v.y += (-omega * omega * (py - target.y) - 2 * omega * v.y) * h;
+          px += v.x * h;
+          py += v.y * h;
+        }
+        const speed = Math.hypot(v.x, v.y);
+        if (speed > TOOLBAR_MAX_SPEED) {
+          const s = TOOLBAR_MAX_SPEED / speed;
+          v.x *= s;
+          v.y *= s;
+        }
+        const nx = snapPx(px);
+        const ny = snapPx(py);
+        toolbarPosRef.current = { x: nx, y: ny };
+        node.style.left = `${nx}px`;
+        node.style.top = `${ny}px`;
+        const settled =
+          Math.abs(target.x - nx) < TOOLBAR_SNAP_PX &&
+          Math.abs(target.y - ny) < TOOLBAR_SNAP_PX &&
+          Math.abs(v.x) < TOOLBAR_SNAP_V &&
+          Math.abs(v.y) < TOOLBAR_SNAP_V;
+        if (settled) {
+          toolbarPosRef.current = { x: snapPx(target.x), y: snapPx(target.y) };
+          toolbarVelRef.current = { x: 0, y: 0 };
+          node.style.left = `${snapPx(target.x)}px`;
+          node.style.top = `${snapPx(target.y)}px`;
+          toolbarAnimRef.current = null;
+          toolbarLastTsRef.current = 0;
+          return;
+        }
+      }
+      if (toolbarAnimRef.current) {
+        toolbarAnimRef.current.raf = requestAnimationFrame(step);
+      }
+    };
+    toolbarAnimRef.current = { raf: requestAnimationFrame(step) };
+  }, []);
+
+  /** 事件期/React 期通用的目标更新入口 */
+  const setToolbarTargetNow = useCallback(
+    (t: { x: number; y: number }) => {
+      toolbarTargetRef.current = t;
+      const node = toolbarElRef.current;
+      if (!node) return;
+      if (toolbarBoundElRef.current !== node || !toolbarPosRef.current) {
+        // 首次出现（或元素重挂载）：直接就位，不做飞行
+        toolbarBoundElRef.current = node;
+        toolbarPosRef.current = { x: snapPx(t.x), y: snapPx(t.y) };
+        toolbarVelRef.current = { x: 0, y: 0 };
+        node.style.left = `${snapPx(t.x)}px`;
+        node.style.top = `${snapPx(t.y)}px`;
+        return;
+      }
+      startToolbarFollow();
+    },
+    [startToolbarFollow],
+  );
 
   // 框选过期清理：blocks 变化后移除已不存在的 id
   useEffect(() => {
@@ -176,7 +304,28 @@ export function useMarqueeSelection({
             const now = performance.now();
             if (now - lastLiveCommitRef.current > 90) {
               lastLiveCommitRef.current = now;
-              setSelectedIds(next);
+              /**
+               * 拖动过程中**不允许**把选中集合提交成空：渲染条件里有
+               * `selectedIds.length > 0`，一旦提交空集，工具栏会被 AnimatePresence
+               * 卸载、下一帧再挂回来——观感是工具栏在拖动中忽隐忽现，
+               * 而且重挂后会走"首次出现直接就位"，出现单帧几十像素的硬跳。
+               * 抬手时才用最终结果收尾（那时允许清空，点空白=取消选择）。
+               */
+              if (next.length) setSelectedIds(next);
+            }
+            // 工具栏跟随：拖动期直接逐帧喂目标（绕开 React 提交节流），
+            // 位置由同一条弹簧跟随连续推进，不再等 90ms 才动一次
+            if (hadToolbarRef.current && toolbarElRef.current) {
+              setToolbarTargetNow(
+                toolbarTargetFor(
+                  Math.min(m.x1, m.x2),
+                  Math.max(m.x1, m.x2),
+                  Math.min(m.y1, m.y2),
+                  Math.max(m.y1, m.y2),
+                  body.clientWidth,
+                  body.scrollHeight,
+                ),
+              );
             }
           }
         }
@@ -337,70 +486,27 @@ export function useMarqueeSelection({
     return { x, y };
   }, [selGeom, toolbarH, toolbarW]);
 
-  // 位移动画沿用卡片飞行的二次贝塞尔：控制点水平偏移、先快后慢
+  /**
+   * 目标位置来自 React 的那条通路：选中集合/尺寸变化时更新目标。
+   *
+   * 位移本身**不再**是"每次换目标重启一段 400ms 缓出飞行"——那会让工具栏在
+   * 框选拖动中反复加速/停顿（观感既卡又生硬）。现在只有一条连续的弹簧跟随，
+   * 目标可以随时被覆盖（拖动期甚至逐帧覆盖，见 onBodyPointerMove）。
+   */
   useLayoutEffect(() => {
-    const el = toolbarElRef.current;
-    if (!el || !toolbarTarget) {
-      // Target gone / element unmounted: stop flight and clear stale state,
-      // otherwise the next mount inherits an exit/fly state.
+    if (!toolbarTarget) {
       if (toolbarAnimRef.current) {
         cancelAnimationFrame(toolbarAnimRef.current.raf);
         toolbarAnimRef.current = null;
       }
+      toolbarTargetRef.current = null;
+      toolbarPosRef.current = null;
+      toolbarLastTsRef.current = 0;
       return;
     }
-    const cur = toolbarAnimRef.current;
-    if (cur) cancelAnimationFrame(cur.raf);
-    const start = {
-      x: parseFloat(el.style.left) || toolbarTarget.x,
-      y: parseFloat(el.style.top) || toolbarTarget.y,
-    };
-    // 首次出现直接就位，之后变化沿贝塞尔弧线移动
-    if (start.x === toolbarTarget.x && start.y === toolbarTarget.y && !el.dataset.moved) {
-      el.style.left = `${toolbarTarget.x}px`;
-      el.style.top = `${toolbarTarget.y}px`;
-      el.dataset.moved = "1";
-      return;
-    }
-    const dx = toolbarTarget.x - start.x;
-    const dy = toolbarTarget.y - start.y;
-    const len = Math.hypot(dx, dy) || 1;
-    // 垂直主导的移动走直线；水平主导才保留左右开度的弧线
-    const ctrl =
-      Math.abs(dy) > Math.abs(dx)
-        ? { x: (start.x + toolbarTarget.x) / 2, y: (start.y + toolbarTarget.y) / 2 }
-        : {
-            x: start.x + (dx < 0 ? -1 : 1) * Math.min(220, len * 0.4),
-            y: start.y,
-          };
-    const t0 = performance.now();
-    const step = () => {
-      const node = toolbarElRef.current;
-      const anim = toolbarAnimRef.current;
-      if (!node) {
-        // Toolbar unmounted mid-flight: cancel remaining frames and clear
-        // stale state so the next mount starts from a clean first frame.
-        toolbarAnimRef.current = null;
-        return;
-      }
-      if (!anim) return;
-      const t = Math.min(1, (performance.now() - anim.t0) / 400);
-      const k = 1 - Math.pow(1 - t, 4);
-      const inv = 1 - k;
-      const x = inv * inv * anim.start.x + 2 * inv * k * anim.ctrl.x + k * k * anim.to.x;
-      const y = inv * inv * anim.start.y + 2 * inv * k * anim.ctrl.y + k * k * anim.to.y;
-      node.style.left = `${snapPx(x)}px`;
-      node.style.top = `${snapPx(y)}px`;
-      if (t < 1) {
-        anim.raf = requestAnimationFrame(step);
-      } else {
-        toolbarAnimRef.current = null;
-        node.style.left = `${anim.to.x}px`;
-        node.style.top = `${anim.to.y}px`;
-      }
-    };
-    toolbarAnimRef.current = { raf: requestAnimationFrame(step), start, ctrl, to: toolbarTarget, t0 };
-  }, [toolbarTarget, toolbarHidden]);
+    setToolbarTargetNow(toolbarTarget);
+    // toolbarHidden 变化时也要让目标重新生效（隐藏期间元素可能被卸载重挂）
+  }, [toolbarTarget, toolbarHidden, setToolbarTargetNow]);
 
   useEffect(
     () => () => {
@@ -434,6 +540,7 @@ export function useMarqueeSelection({
         cancelAnimationFrame(toolbarAnimRef.current.raf);
         toolbarAnimRef.current = null;
       }
+      toolbarLastTsRef.current = 0;
     },
     bumpSelGeomTick: () => setSelGeomTick((v) => v + 1),
   };
