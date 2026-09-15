@@ -75,19 +75,22 @@ function translateGroup(label: string): string {
 }
 
 const BAND_NAME_EN: Record<string, string> = {};
+const BAND_NAME_ZH: Record<string, string> = {};
 for (const p of LIBRARY) {
   for (const b of p.bands ?? []) {
     if (b.name && b.name_en && !(b.name in BAND_NAME_EN)) {
       BAND_NAME_EN[b.name] = b.name_en;
     }
+    // 反向（英文→中文）：预设按当时的界面语言把段名固化进 config，
+    // 之后切回中文时也要能翻回来，否则英文界面加的预设会一直显示英文段名。
+    if (b.name && b.name_en && !(b.name_en in BAND_NAME_ZH)) {
+      BAND_NAME_ZH[b.name_en] = b.name;
+    }
   }
 }
 
-/** 语义段名本地化：config 存的是应用时语言，英文下按库里的 name/name_en 反查 */
+/** 语义段名本地化：config 存的是应用时语言，双向按库里的 name/name_en 反查 */
 export function displayBandName(label: string): string {
-  if (currentLang === "en") {
-    const en = BAND_NAME_EN[label];
-    if (en) return en;
-  }
-  return label;
+  if (!label) return label;
+  return currentLang === "en" ? (BAND_NAME_EN[label] ?? label) : (BAND_NAME_ZH[label] ?? label);
 }
