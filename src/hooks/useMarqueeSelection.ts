@@ -244,17 +244,31 @@ export function useMarqueeSelection({
     setMarquee({ x1: x, y1: y, x2: x, y2: y });
   };
 
-  const collectMarqueeIds = (
+  /**
+   * 框选命中：返回命中的卡片 id **以及它们的包围盒**（内容坐标系）。
+   *
+   * 包围盒必须由**卡片**算，不能用框选矩形本身：矩形跟着鼠标走，而工具栏落点
+   * 要对齐的是"选中卡片的宽高范围"。早先拖动期用矩形中心做目标、React 那条通路
+   * 用卡片包围盒，两套目标互相打架，工具栏就会在两者之间来回被拽。
+   */
+  const collectMarquee = (
     m: { x1: number; y1: number; x2: number; y2: number },
     body: HTMLElement,
-  ): string[] => {
+  ): {
+    ids: string[];
+    box: { minX: number; maxX: number; minY: number; maxY: number } | null;
+  } => {
     const rect = body.getBoundingClientRect();
     const x1 = Math.min(m.x1, m.x2) - body.scrollLeft;
     const x2 = Math.max(m.x1, m.x2) - body.scrollLeft;
     const y1 = Math.min(m.y1, m.y2) - body.scrollTop;
     const y2 = Math.max(m.y1, m.y2) - body.scrollTop;
-    if (x2 - x1 < 4 && y2 - y1 < 4) return []; // 点空白：空选择
+    if (x2 - x1 < 4 && y2 - y1 < 4) return { ids: [], box: null }; // 点空白：空选择
     const ids: string[] = [];
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
     // 只扫当前视图 stage；切视图动画期间旧 stage 可能仍挂在 DOM 里，
     // 全 body 扫描会把退场卡也框进来。
     const scope = body.querySelector<HTMLElement>(
@@ -267,10 +281,19 @@ export function useMarqueeSelection({
       const ry = r.top - rect.top;
       if (rx < x2 && rx + r.width > x1 && ry < y2 && ry + r.height > y1) {
         const id = el.dataset.dndId;
-        if (id) ids.push(id);
+        if (id) {
+          ids.push(id);
+          minX = Math.min(minX, rx + body.scrollLeft);
+          maxX = Math.max(maxX, rx + r.width + body.scrollLeft);
+          minY = Math.min(minY, ry + body.scrollTop);
+          maxY = Math.max(maxY, ry + r.height + body.scrollTop);
+        }
       }
     });
-    return ids;
+    return {
+      ids,
+      box: ids.length ? { minX, maxX, minY, maxY } : null,
+    };
   };
 
   const onBodyPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -290,7 +313,8 @@ export function useMarqueeSelection({
           // 实时框选：拖动过程中同步高亮被框住的卡片
           const body = bodyRef.current;
           if (body) {
-            const next = collectMarqueeIds(m, body);
+            const hit = collectMarquee(m, body);
+            const next = hit.ids;
             // 实时高亮直接改 DOM class，避免每帧触发 React 重渲；
             // React 状态低频提交，松手再最终同步一次。
             const liveSet = new Set(next);
@@ -313,15 +337,16 @@ export function useMarqueeSelection({
                */
               if (next.length) setSelectedIds(next);
             }
-            // 工具栏跟随：拖动期直接逐帧喂目标（绕开 React 提交节流），
-            // 位置由同一条弹簧跟随连续推进，不再等 90ms 才动一次
-            if (hadToolbarRef.current && toolbarElRef.current) {
+            // 工具栏跟随：拖动期直接逐帧喂目标（绕开 React 提交节流）。
+            // 目标一律取**选中卡片的包围盒**，与 React 那条通路完全同源；
+            // 没命中卡片时保持上一个目标（拖动期不清空选择，见下）。
+            if (hadToolbarRef.current && toolbarElRef.current && hit.box) {
               setToolbarTargetNow(
                 toolbarTargetFor(
-                  Math.min(m.x1, m.x2),
-                  Math.max(m.x1, m.x2),
-                  Math.min(m.y1, m.y2),
-                  Math.max(m.y1, m.y2),
+                  hit.box.minX,
+                  hit.box.maxX,
+                  hit.box.minY,
+                  hit.box.maxY,
                   body.clientWidth,
                   body.scrollHeight,
                 ),
@@ -347,7 +372,7 @@ export function useMarqueeSelection({
     setMarquee(null);
     if (!s || !body || !m) return;
     // 实时框选期间已同步；抬手用最终矩形收尾（点空白时 helper 返回空 = 清空选择）
-    setSelectedIds(collectMarqueeIds(m, body));
+    setSelectedIds(collectMarquee(m, body).ids);
   };
 
   const deleteSelectedCards = useCallback(() => {
