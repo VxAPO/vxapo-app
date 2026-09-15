@@ -28,6 +28,7 @@ import {
   useViewAnimation,
   VIEW_SLIDE_MS,
 } from "./hooks/useViewAnimation";
+import { COLLAPSE_EASE } from "./lib/viewMotion";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
 import AdvancedView from "./components/AdvancedView";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -244,6 +245,7 @@ export default function App() {
     viewTransitionH,
     viewCollapsing,
     viewCollapseMs,
+    viewMorph,
     viewRef,
     viewAnimatingRef,
     switchView,
@@ -646,7 +648,7 @@ export default function App() {
                 // 先快后慢：起步就带走大部分距离，尾巴只做收敛（原来 0.4,0,0.2,1 是慢起，
                 // 高度差小时前段几乎不动机，看起来像平移完了先停一下）
                 transition: viewCollapsing
-                  ? `min-height ${viewCollapseMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                  ? `min-height ${viewCollapseMs}ms ${COLLAPSE_EASE}`
                   : "none",
               }}
             >
@@ -793,6 +795,7 @@ export default function App() {
               rightPx={-2}
               thumbRight={-2}
               bottomInset={26}
+              morph={viewMorph}
             />
           </div>
             </main>

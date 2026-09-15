@@ -1,7 +1,8 @@
 import { memo, useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { collapseEase } from "../lib/viewMotion";
 
-/** 滚动停止多久后淡出（ms）。 */
+/** 滚动停止多久后开始淡出（ms）。 */
 const IDLE_FADE_MS = 1200;
 /** 一次变化信号后继续逐帧核对几何的时长（ms）：覆盖进出场高度动画。静止后不再有任何 rAF。 */
 const SETTLE_MS = 1100;
@@ -23,6 +24,11 @@ interface OverlayScrollbarProps {
   bottomInset?: number;
   /** 图层层级：非对话框默认 50（低于遮罩 60）；对话框内用 65（高于内容 61）。 */
   zIndex?: number;
+  /**
+   * 视图切换时的「长度变形」指令：token 变化即从**当前显示几何**插值到突跳后的真实几何。
+   * 只用于变高方向——那一边内容高度是瞬时的，长度会硬跳（变矮方向由收窄动画逐帧带动）。
+   */
+  morph?: { token: number; ms: number } | null;
 }
 
 /** 自绘 overlay 滚动条：隐藏原生滚动条，由 JS 同步位置；
@@ -36,6 +42,7 @@ function OverlayScrollbar({
   thumbRight = -2,
   bottomInset,
   zIndex = 50,
+  morph,
 }: OverlayScrollbarProps) {
   const [bar, setBar] = useState({
     visible: false,
@@ -49,9 +56,35 @@ function OverlayScrollbar({
   const dragRef = useRef<{ startY: number; startTop: number } | null>(null);
   const idleTimerRef = useRef(0);
   const prevDeviceKeyRef = useRef<unknown>(undefined);
+  /** 变形中的显示几何（渲染优先用它，变形结束回落到真实几何） */
+  const [morphView, setMorphView] = useState<{ thumbH: number; offset: number } | null>(
+    null,
+  );
+  /** 最近一次算出的**真实**几何（update 里写，插值读） */
+  const realRef = useRef({ thumbH: 0, offset: 0, ok: false });
+  /** 最近一次**显示**的几何——变形的起点 */
+  const dispRef = useRef({ thumbH: 0, offset: 0 });
+  const morphRef = useRef<{
+    start: number;
+    ms: number;
+    from: { thumbH: number; offset: number };
+    to: { thumbH: number; offset: number } | null;
+  } | null>(null);
+  const lastMorphTokenRef = useRef<number | null>(null);
+  /** 用 ref 读最新指令：监听 effect 的依赖不含 morph，闭包里会拿到旧值 */
+  const morphSpecRef = useRef(morph);
+  morphSpecRef.current = morph;
+
+  /** 用户开始主动滚动/拖拽时立刻放弃变形，让滑块严格跟手。 */
+  const cancelMorph = () => {
+    if (!morphRef.current) return;
+    morphRef.current = null;
+    setMorphView(null);
+  };
 
   /** 显示并安排停止滚动后自动淡出。 */
   const show = () => {
+    cancelMorph();
     window.clearTimeout(idleTimerRef.current);
     idleTimerRef.current = window.setTimeout(() => {
       setBar((b) => (b.active ? { ...b, active: false } : b));
@@ -71,6 +104,19 @@ function OverlayScrollbar({
     const update = () => {
       const { scrollTop, clientHeight, scrollHeight } = el;
       const max = scrollHeight - clientHeight;
+      // 视图切换派来的长度变形：token 变化就开一次。起点取「当前显示几何」，
+      // 终点由紧随其后的真实几何给出（见 stepMorph），所以必须在算新几何之前读。
+      const spec = morphSpecRef.current;
+      if (spec && spec.token !== lastMorphTokenRef.current) {
+        lastMorphTokenRef.current = spec.token;
+        morphRef.current = {
+          start: performance.now(),
+          ms: Math.max(1, spec.ms),
+          from: { ...dispRef.current },
+          to: null,
+        };
+        settle();
+      }
       // Portal 到 body 用 fixed：轨道按容器在视口中的实际位置钉死，
       // 不随任何滚动/transform 祖先移动。
       const rect = el.getBoundingClientRect();
@@ -83,6 +129,8 @@ function OverlayScrollbar({
         // 不可滚时把 active 一起清掉：否则淡出动画期间一旦内容又变可滚
         // （视图切换/高度收窄），visible 恢复后 `.on` 会被重新加回，造成重入。
         window.clearTimeout(idleTimerRef.current);
+        realRef.current = { thumbH: 0, offset: 0, ok: false };
+        cancelMorph();
         setBar((b) =>
           b.visible || b.active || Math.abs(b.top - top) > 0.5 || Math.abs(b.left - left) > 0.5 || b.trackH !== trackH
             ? { ...b, visible: false, active: false, top, left, trackH }
@@ -93,6 +141,7 @@ function OverlayScrollbar({
       const thumbH = Math.max(24, Math.min(trackH, (trackH / scrollHeight) * trackH));
       const travel = trackH - thumbH;
       const offset = (scrollTop / max) * travel;
+      realRef.current = { thumbH, offset, ok: true };
       setBar((b) =>
         b.visible &&
         Math.abs(b.offset - offset) < 0.01 &&
@@ -135,10 +184,50 @@ function OverlayScrollbar({
     });
     let raf = 0;
     let settleUntil = 0;
+    /**
+     * 推进长度变形。真实几何在 update 里算好，这里只做显示插值：
+     * 目标一旦还在移动（不是「布局提交瞬间的突跳」，例如收窄动画逐帧推进）就放弃变形，
+     * 免得插值去追一个持续变化的目标，反而比不做还难看。
+     */
+    const stepMorph = (now: number) => {
+      const m = morphRef.current;
+      if (!m) return false;
+      const real = realRef.current;
+      if (!real.ok) {
+        morphRef.current = null;
+        setMorphView(null);
+        return false;
+      }
+      if (!m.to) {
+        m.to = { thumbH: real.thumbH, offset: real.offset };
+      } else if (
+        Math.abs(m.to.thumbH - real.thumbH) > 1 ||
+        Math.abs(m.to.offset - real.offset) > 1
+      ) {
+        morphRef.current = null;
+        setMorphView(null);
+        return false;
+      }
+      const p = Math.min(1, (now - m.start) / m.ms);
+      if (p >= 1) {
+        // 收尾即归还真实几何：插值终点与真实值一致，不会跳
+        morphRef.current = null;
+        setMorphView(null);
+        return false;
+      }
+      const e = collapseEase(p);
+      setMorphView({
+        thumbH: m.from.thumbH + (m.to.thumbH - m.from.thumbH) * e,
+        offset: m.from.offset + (m.to.offset - m.from.offset) * e,
+      });
+      return true;
+    };
     const tick = () => {
       raf = 0;
       update();
-      if (performance.now() < settleUntil) raf = requestAnimationFrame(tick);
+      const now = performance.now();
+      const morphing = stepMorph(now);
+      if (morphing || now < settleUntil) raf = requestAnimationFrame(tick);
     };
     function settle() {
       settleUntil = performance.now() + SETTLE_MS;
@@ -194,6 +283,10 @@ function OverlayScrollbar({
     }
   };
 
+  // 变形期间显示插值几何，其余时间用真实几何；起点要记成「显示过的值」
+  const disp = morphView ?? { thumbH: bar.thumbH, offset: bar.offset };
+  dispRef.current = disp;
+
   return createPortal(
     <div
       className={`os-track${bar.visible && bar.active ? " on" : ""}`}
@@ -203,8 +296,8 @@ function OverlayScrollbar({
       <div
         className="os-thumb"
         style={{
-          height: bar.thumbH,
-          transform: `translateY(${bar.offset}px)`,
+          height: disp.thumbH,
+          transform: `translateY(${disp.offset}px)`,
           right: thumbRight,
         }}
         onPointerDown={onThumbPointerDown}

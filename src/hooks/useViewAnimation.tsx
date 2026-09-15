@@ -7,16 +7,15 @@ import BandParamCard from "../components/BandParamCard";
 import EffectCard from "../components/EffectCard";
 import EffectSemanticCard from "../components/EffectSemanticCard";
 import SemanticUnitCard from "../components/SemanticUnitCard";
+import {
+  COLLAPSE_SNAP_PX,
+  VIEW_COLLAPSE_MS,
+  VIEW_SLIDE_MS,
+  heightDeltaMs,
+} from "../lib/viewMotion";
 
-/** 视图切换后内容高度收窄动画时长（ms） */
-export const VIEW_COLLAPSE_MS = 800;
-/** 视图平移动画时长（ms）；App 的 stage transition 与收窄启动时刻共用同一个常量 */
-export const VIEW_SLIDE_MS = 320;
-/** 收窄时长的上下限与按高度差的换算：差值越小收得越快，避免小差值也拖满 800ms 空转 */
-const COLLAPSE_MS_MIN = 260;
-const COLLAPSE_MS_PER_PX = 2;
-/** 小于这个高度差直接对齐、不播动画（这点位移肉眼看不出来，动画只会变成空等） */
-const COLLAPSE_SNAP_PX = 4;
+// 时序契约常量集中放在 lib/viewMotion.ts（App 与本文件共用），这里只做兼容导出
+export { VIEW_COLLAPSE_MS, VIEW_SLIDE_MS };
 
 interface UseViewAnimationOptions {
   bodyRef: React.RefObject<HTMLDivElement | null>;
@@ -76,6 +75,11 @@ export function useViewAnimation({
   /** 本次收窄实际使用的时长（按高度差缩放），供 App 拼 transition 用 */
   const [viewCollapseMs, setViewCollapseMs] = useState(VIEW_COLLAPSE_MS);
   /**
+   * 滚动条长度变形指令：切到「更高的新内容」时下发（见下面的 useLayoutEffect）。
+   * token 变化即触发一次变形，ms 与收窄同一套高度差换算。
+   */
+  const [viewMorph, setViewMorph] = useState<{ token: number; ms: number } | null>(null);
+  /**
    * 非当前视图的显隐：切换完成后把它 display:none，两套视图常驻 DOM 但只有当前视图参与
    * 布局与绘制，于是反复切换不再重建 31 张卡的 DOM（挂载尖峰消失）。
    */
@@ -91,7 +95,7 @@ export function useViewAnimation({
   const viewCollapseTimerRef = useRef<number | undefined>(undefined);
   const viewScrollTopRef = useRef(0);
   const viewHeightLockRef = useRef(false);
-  /** 锁定的旧内容高度（px），收窄时用它与新高度算差值 */
+  /** 旧内容高度（px，无论是否锁高都记）：收窄算差值、变高算变形时长都用它 */
   const viewLockHeightRef = useRef(0);
   const viewRef = useRef(view);
   const viewAnimatingRef = useRef(viewAnimating);
@@ -143,12 +147,7 @@ export function useViewAnimation({
         setViewCollapsing(false);
         return;
       }
-      const ms = Math.round(
-        Math.min(
-          VIEW_COLLAPSE_MS,
-          Math.max(COLLAPSE_MS_MIN, delta * COLLAPSE_MS_PER_PX),
-        ),
-      );
+      const ms = heightDeltaMs(delta);
       setViewCollapseMs(ms);
       setViewTransitionH(naturalH);
       setViewCollapsing(true);
@@ -200,17 +199,15 @@ export function useViewAnimation({
       viewScrollTopRef.current = body.scrollTop;
       // 仅当旧内容确实可滚动时才锁高并收窄；否则不要硬加一段高度动画。
       viewHeightLockRef.current = body.scrollHeight > body.clientHeight + 1;
-      if (viewHeightLockRef.current) {
-        // 只取 view-stack 的内容高度，而不是整个滚动容器的 scrollHeight；
-        // 这样过渡期间的滚动条长度是 max(旧内容, 新内容)，不会先变短再变长。
-        const stack = body.querySelector<HTMLElement>(".view-stack");
-        const stackH = stack ? Math.round(stack.getBoundingClientRect().height) : 0;
-        viewLockHeightRef.current = stackH;
-        setViewTransitionH(stackH);
-      } else {
-        viewLockHeightRef.current = 0;
-        setViewTransitionH(null);
-      }
+      // 只取 view-stack 的内容高度，而不是整个滚动容器的 scrollHeight；
+      // 这样过渡期间的滚动条长度是 max(旧内容, 新内容)，不会先变短再变长。
+      // 不锁高时也要记下来：变高方向要靠新旧高度差算滚动条变形时长。
+      const stack = body.querySelector<HTMLElement>(".view-stack");
+      const stackH = stack
+        ? Math.round(stack.getBoundingClientRect().height)
+        : 0;
+      viewLockHeightRef.current = stackH;
+      setViewTransitionH(viewHeightLockRef.current && stackH ? stackH : null);
       setViewCollapsing(false);
     }
     setViewAnimating(true);
@@ -229,6 +226,27 @@ export function useViewAnimation({
   useEffect(() => {
     setHiddenStage((h) => (h === view ? null : h));
   }, [view]);
+
+  /**
+   * 切到「更高的新内容」时，补一次滚动条长度变形。
+   *
+   * 变高方向 min-height 压不住内容，收窄分支必然走「直接对齐」（见 startCollapse），
+   * 于是滚动条长度在布局提交那一帧硬跳；而变矮方向长度是跟着收窄动画逐帧走的。
+   * 这里在布局提交后、绘制前量出新视图自然高度，把同一套「高度差→时长」换算交给
+   * 滚动条自己做插值，两个方向的观感才对得上（时长/曲线与收窄完全同源）。
+   */
+  useLayoutEffect(() => {
+    if (!viewTransitionPendingRef.current) return;
+    if (!viewLockHeightRef.current) return; // 没量到旧内容高度就不派（首帧/异常）
+    const stage = bodyRef.current?.querySelector<HTMLElement>(
+      ".view-stage.is-active",
+    );
+    if (!stage) return;
+    const grew =
+      Math.round(stage.getBoundingClientRect().height) - viewLockHeightRef.current;
+    if (grew < COLLAPSE_SNAP_PX) return; // 没变高：走收窄或直接对齐
+    setViewMorph({ token: viewTransitionTokenRef.current, ms: heightDeltaMs(grew) });
+  }, [view, bodyRef]);
 
   /** 单个 stage 的动画结束：当前视图=进场完成；另一套=退场完成，收进 display:none。 */
   const handleStageAnimationComplete = useCallback(
@@ -440,6 +458,7 @@ export function useViewAnimation({
     viewTransitionH,
     viewCollapsing,
     viewCollapseMs,
+    viewMorph,
     viewRef,
     viewAnimatingRef,
     switchView,

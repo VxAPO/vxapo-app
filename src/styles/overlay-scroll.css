@@ -11,7 +11,8 @@
   position: fixed;
   width: 5px;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  /* 淡出时间：0.25s 偏急，收得更缓一点（滚动停止后多久开始淡出仍是 IDLE_FADE_MS） */
+  transition: opacity 0.4s ease;
   pointer-events: none;
 }
 
