@@ -545,6 +545,14 @@ export function useMarqueeSelection({
    * 目标可以随时被覆盖（拖动期甚至逐帧覆盖，见 onBodyPointerMove）。
    */
   useLayoutEffect(() => {
+    /**
+     * 框选进行中：目标只由"逐帧实时命中包围盒"那一路写。
+     *
+     * React 这一路的 selGeom 是按提交后的 selectedIds 算的，而拖动期提交被节流
+     * 到 90ms，因此它写下的往往是**上一段落点**；两路交替写会把工具栏来回拽，
+     * 观感就是"把经过的每个落点都执行一遍"而不是追踪当前落点。
+     */
+    if (marqueeStartRef.current) return;
     if (!toolbarTarget) {
       if (toolbarAnimRef.current) {
         cancelAnimationFrame(toolbarAnimRef.current.raf);
