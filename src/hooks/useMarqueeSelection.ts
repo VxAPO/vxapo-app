@@ -98,7 +98,6 @@ export function useMarqueeSelection({
   const toolbarAnimRef = useRef<{
     raf: number;
     start: { x: number; y: number };
-    ctrl: { x: number; y: number };
     to: { x: number; y: number };
     t0: number;
   } | null>(null);
@@ -160,17 +159,13 @@ export function useMarqueeSelection({
       x: parseFloat(node0.style.left) || target0.x,
       y: parseFloat(node0.style.top) || target0.y,
     };
-    const dx = target0.x - start.x;
-    const dy = target0.y - start.y;
-    const len = Math.hypot(dx, dy) || 1;
-    // 垂直主导走直线；水平主导保留左右开度弧线（与原实现一致）
-    const ctrl =
-      Math.abs(dy) > Math.abs(dx)
-        ? { x: (start.x + target0.x) / 2, y: (start.y + target0.y) / 2 }
-        : {
-            x: start.x + (dx < 0 ? -1 : 1) * Math.min(220, len * 0.4),
-            y: start.y,
-          };
+    /**
+     * 一律**直线**插值（等价于控制点放在起终点中点）。
+     *
+     * 原实现只给水平位移加控制点偏移：水平移动走弧线、路径更长，垂直移动走直线，
+     * 于是"平移的节奏和垂直不一致"；斜向移动还按"哪个轴位移大"二选一，
+     * 又多出第三种节奏。统一成直线后，任何方向都吃同一条缓动、同样的路径长度规律。
+     */
     const t0 = performance.now();
     const step = () => {
       const node = toolbarElRef.current;
@@ -199,9 +194,8 @@ export function useMarqueeSelection({
       toolbarAimRef.current = aim;
       const t = Math.min(1, (performance.now() - anim.t0) / TOOLBAR_FLIGHT_MS);
       const k = 1 - Math.pow(1 - t, TOOLBAR_FLIGHT_EASE_POW);
-      const inv = 1 - k;
-      const x = inv * inv * anim.start.x + 2 * inv * k * anim.ctrl.x + k * k * aim.x;
-      const y = inv * inv * anim.start.y + 2 * inv * k * anim.ctrl.y + k * k * aim.y;
+      const x = anim.start.x + (aim.x - anim.start.x) * k;
+      const y = anim.start.y + (aim.y - anim.start.y) * k;
       node.style.left = `${snapPx(x)}px`;
       node.style.top = `${snapPx(y)}px`;
       if (t < 1) {
@@ -214,7 +208,7 @@ export function useMarqueeSelection({
         node.style.top = `${raw.y}px`;
       }
     };
-    toolbarAnimRef.current = { raf: requestAnimationFrame(step), start, ctrl, to: target0, t0 };
+    toolbarAnimRef.current = { raf: requestAnimationFrame(step), start, to: target0, t0 };
   }, []);
 
   /** 事件期/React 期通用的目标更新入口 */
