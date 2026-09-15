@@ -100,9 +100,6 @@ export function useMarqueeSelection({
   const toolbarVelRef = useRef({ x: 0, y: 0 });
   const toolbarLastTsRef = useRef(0);
   const toolbarBoundElRef = useRef<HTMLDivElement | null>(null);
-  /** 目标自身的速度（前馈用）：临界阻尼追匀速目标会有 2v/ω 的稳态滞后 */
-  const toolbarTargetPrevRef = useRef<{ x: number; y: number } | null>(null);
-  const toolbarTargetVelRef = useRef({ x: 0, y: 0 });
 
   /** 按选中范围包围盒算工具栏目标位置（React 路径与拖动实时路径共用同一套规则） */
   const toolbarTargetFor = useCallback(
@@ -155,22 +152,12 @@ export function useMarqueeSelection({
         const v = toolbarVelRef.current;
         const omega = 6.6 / (TOOLBAR_SETTLE_MS / 1000);
         /**
-         * 目标速度前馈：临界阻尼跟随匀速移动的目标时，稳态滞后 = 2v/ω。
-         * 框选拖动时目标一直匀速下移，这个滞后会把"工具栏到卡片的间距"吃掉
-         * （往下框选时特别明显）。瞄准 target + 2v/ω 可把稳态误差压到 0。
+         * 不加"目标速度前馈"：前馈（瞄准 target + 2v/ω）虽能把跟随滞后压到 0，
+         * 但等于让工具栏 1:1 跟手，观感"快得鬼畜"；那点滞后本身正是阻尼。
+         * 这里保持纯弹簧：目标是选中卡片包围盒，停稳后间距严格等于 GAP。
          */
-        const prevTarget = toolbarTargetPrevRef.current;
-        const tv = toolbarTargetVelRef.current;
-        if (prevTarget) {
-          const rawX = (target.x - prevTarget.x) / dt * 1000;
-          const rawY = (target.y - prevTarget.y) / dt * 1000;
-          tv.x += (rawX - tv.x) * 0.25;
-          tv.y += (rawY - tv.y) * 0.25;
-        }
-        toolbarTargetPrevRef.current = { x: target.x, y: target.y };
-        const lead = 2 / omega;
-        const aimX = target.x + tv.x * lead;
-        const aimY = target.y + tv.y * lead;
+        const aimX = target.x;
+        const aimY = target.y;
         let px = cur.x;
         let py = cur.y;
         const h = dt / 1000 / 2;
@@ -193,7 +180,6 @@ export function useMarqueeSelection({
         if (settled) {
           toolbarPosRef.current = { x: snapPx(target.x), y: snapPx(target.y) };
           toolbarVelRef.current = { x: 0, y: 0 };
-          toolbarTargetVelRef.current = { x: 0, y: 0 };
           node.style.left = `${snapPx(target.x)}px`;
           node.style.top = `${snapPx(target.y)}px`;
           toolbarAnimRef.current = null;
@@ -392,7 +378,27 @@ export function useMarqueeSelection({
     setMarquee(null);
     if (!s || !body || !m) return;
     // 实时框选期间已同步；抬手用最终矩形收尾（点空白时 helper 返回空 = 清空选择）
-    setSelectedIds(collectMarquee(m, body).ids);
+    const hit = collectMarquee(m, body);
+    setSelectedIds(hit.ids);
+    /**
+     * 抬手时**必须**用最终命中集合再写一次目标。
+     *
+     * 否则最后一次写入可能仍是拖动途中某一帧的旧包围盒（例如少算一张卡），
+     * 而拖动期的实时目标不会再被刷新——观感就是"松手后工具栏离卡片更近/更远"，
+     * 且稳定复现（往下框一行再往上框时最明显）。
+     */
+    if (hadToolbarRef.current && hit.box) {
+      setToolbarTargetNow(
+        toolbarTargetFor(
+          hit.box.minX,
+          hit.box.maxX,
+          hit.box.minY,
+          hit.box.maxY,
+          body.clientWidth,
+          body.scrollHeight,
+        ),
+      );
+    }
   };
 
   const deleteSelectedCards = useCallback(() => {
