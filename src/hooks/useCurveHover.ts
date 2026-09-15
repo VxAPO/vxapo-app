@@ -13,15 +13,17 @@ import { dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
 
 /**
- * 跟随时间常数（ms）：指数趋近的 1/e 时间，越大越"黏"（越小越跟手）。
+ * 跟随响应：**临界阻尼弹簧**，FOLLOW_SETTLE_MS 约等于"基本停稳"的时间。
  *
- * 必须**按时间**推进（k = 1 - e^(-dt/τ)），不能写成"每帧补足剩余距离的比例"：
- * 后者与帧率强相关——本机 rAF 约 400Hz，同样比例算出来的等效时间常数只有
- * 60Hz 设计值的几分之一，于是"设了慢跟随却依然像贴着手"。
+ * 为什么不用指数趋近（k = 1 - e^(-dt/τ)）：
+ * - 指数尾巴极长（τ=280ms 时最后 1px 要爬 1s 以上），观感是"先快后极慢、非线形"；
+ * - 弹簧带速度项，中段推进更快、停稳时间有界，且不会过冲。
+ * 也不能用"每帧补足剩余距离的比例"：那与帧率强相关（本机 rAF ≈400Hz）。
  */
-const FOLLOW_TAU_MS = 280;
-/** 基准点切换时的平移动画时长：满速跨过轴线，结束后无缝回到慢跟随 */
-const FLIP_TRANSLATE_MS = 280;
+const FOLLOW_SETTLE_MS = 240;
+/** 到位判定：位移与速度都足够小就直接贴上，省掉无意义的最后一帧帧微调 */
+const FOLLOW_SNAP_PX = 0.5;
+const FOLLOW_SNAP_V = 40; // px/s
 /** 安全区半径：以曲线落点为圆心的圆，光标在圆内不切换基准侧 */
 const SAFE_RADIUS = 10;
 
@@ -46,10 +48,6 @@ interface TipPos {
   left: number;
   above: boolean;
   hSide: "left" | "center" | "right";
-}
-
-function easeOutQuart(x: number): number {
-  return 1 - Math.pow(1 - x, 4);
 }
 
 interface UseCurveHoverOptions {
@@ -77,10 +75,10 @@ export function useCurveHover({
   const tipPosRef = useRef<{ x: number; y: number } | null>(null);
   const tipRafRef = useRef<number | undefined>(undefined);
   const tipAnchorRef = useRef("");
-  const flipRef = useRef<{ start: number; from: { x: number; y: number } } | null>(null);
   const geomRef = useRef<TipGeom | null>(null);
-  /** 上一帧时间戳：用于按真实 dt 推进跟随 */
+  /** 上一帧时间戳与当前速度：弹簧按真实 dt 积分 */
   const tipLastTsRef = useRef(0);
+  const tipVelRef = useRef({ x: 0, y: 0 });
 
   const measureGeom = (): TipGeom | null => {
     const wrap = svgRef.current?.parentElement?.getBoundingClientRect();
@@ -233,18 +231,12 @@ export function useCurveHover({
     tipTargetRef.current = target;
     const anchor = `${tipPos.above ? "above" : "below"}-${tipPos.hSide}`;
     if (anchor !== tipAnchorRef.current) {
-      const prev = tipAnchorRef.current;
       tipAnchorRef.current = anchor;
-      if (prev) {
-        flipRef.current = {
-          start: performance.now(),
-          from: tipPosRef.current ?? target,
-        };
-      }
     }
     if (!tipPosRef.current && el) {
       geomRef.current = measureGeom();
       tipPosRef.current = target;
+      tipVelRef.current = { x: 0, y: 0 };
       el.style.transform = `translate(${target.x}px, ${target.y}px)`;
     }
     if (tipRafRef.current != null) return;
@@ -256,37 +248,38 @@ export function useCurveHover({
         return;
       }
       const now = performance.now();
-      const flip = flipRef.current;
-      if (flip) {
-        const p = Math.min(1, (now - flip.start) / FLIP_TRANSLATE_MS);
-        const k = easeOutQuart(p);
-        const posX = snapPx(flip.from.x + (t.x - flip.from.x) * k);
-        const posY = snapPx(flip.from.y + (t.y - flip.from.y) * k);
-        tipPosRef.current = { x: posX, y: posY };
-        node.style.transform = `translate(${posX}px, ${posY}px)`;
-        if (p >= 1) {
-          flipRef.current = null;
-          tipPosRef.current = { x: snapPx(t.x), y: snapPx(t.y) };
-          node.style.transform = `translate(${snapPx(t.x)}px, ${snapPx(t.y)}px)`;
-          tipRafRef.current = undefined;
-          return;
-        }
-        tipRafRef.current = requestAnimationFrame(step);
-        return;
-      }
+      /**
+       * 目标跳变（含极值处的避让夹紧、上下/左右基准切换）一律走同一条弹簧，
+       * 不再有"满速平移"分支——那条分支会让极值附近的慢跟随直接被绕过。
+       */
       const cur = tipPosRef.current ?? t;
       const prevTs = tipLastTsRef.current || now;
       const dt = Math.min(64, Math.max(0.5, now - prevTs));
       tipLastTsRef.current = now;
-      const k = 1 - Math.exp(-dt / FOLLOW_TAU_MS);
-      const nx = snapPx(cur.x + (t.x - cur.x) * k);
-      const ny = snapPx(cur.y + (t.y - cur.y) * k);
+      // 临界阻尼：ω = 6.6 / T（T 内衰减到 1%），半隐式欧拉，分 2 子步保证稳定
+      const omega = 6.6 / (FOLLOW_SETTLE_MS / 1000);
+      const v = tipVelRef.current;
+      let px = cur.x;
+      let py = cur.y;
+      const h = dt / 1000 / 2;
+      for (let i = 0; i < 2; i++) {
+        v.x += (-omega * omega * (px - t.x) - 2 * omega * v.x) * h;
+        v.y += (-omega * omega * (py - t.y) - 2 * omega * v.y) * h;
+        px += v.x * h;
+        py += v.y * h;
+      }
+      const nx = snapPx(px);
+      const ny = snapPx(py);
       tipPosRef.current = { x: nx, y: ny };
       node.style.transform = `translate(${nx}px, ${ny}px)`;
-      // 指数趋近的尾巴很长（τ=280ms 时最后 1px 要爬 1s 以上），
-      // 到位阈值放到 1.2px：肉眼不可辨，但省掉这段"爬行"。
-      if (Math.abs(t.x - nx) < 1.2 && Math.abs(t.y - ny) < 1.2) {
+      if (
+        Math.abs(t.x - nx) < FOLLOW_SNAP_PX &&
+        Math.abs(t.y - ny) < FOLLOW_SNAP_PX &&
+        Math.abs(v.x) < FOLLOW_SNAP_V &&
+        Math.abs(v.y) < FOLLOW_SNAP_V
+      ) {
         tipPosRef.current = { x: snapPx(t.x), y: snapPx(t.y) };
+        tipVelRef.current = { x: 0, y: 0 };
         node.style.transform = `translate(${snapPx(t.x)}px, ${snapPx(t.y)}px)`;
         tipLastTsRef.current = 0;
         tipRafRef.current = undefined;
