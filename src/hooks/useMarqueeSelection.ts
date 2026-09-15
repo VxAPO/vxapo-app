@@ -20,8 +20,17 @@ interface UseMarqueeSelectionOptions {
   toolbarHidden: boolean;
 }
 
-/** 工具栏位移动画时长（ms）：沿用原来的 easeOutQuart 二次贝塞尔飞行 */
-const TOOLBAR_FLIGHT_MS = 400;
+/**
+ * 工具栏位移动画时长（ms）与缓动指数。
+ *
+ * 原来用 easeOutQuart（指数 4）：起始斜率 4，一上来就猛起步再慢慢收，
+ * 观感"冲、不优雅"。降到 2.6（比 easeOutCubic 略缓）并把时长放宽到 480ms，
+ * 起步变柔、收尾更软；指数就是这里唯一的"优雅度"旋钮（越小越缓）。
+ * 注意：拖动期目标是逐帧重规划的，指数同时决定跟随滞后 ≈ 时长/指数
+ * （4/400ms ≈ 100ms；2.6/480ms ≈ 185ms，更"黏"一些）。
+ */
+const TOOLBAR_FLIGHT_MS = 480;
+const TOOLBAR_FLIGHT_EASE_POW = 2.6;
 /** 工具栏与选中范围的间距、与容器边的留白 */
 const TOOLBAR_GAP = 10;
 const TOOLBAR_EDGE = 8;
@@ -160,7 +169,7 @@ export function useMarqueeSelection({
         return;
       }
       const t = Math.min(1, (performance.now() - anim.t0) / TOOLBAR_FLIGHT_MS);
-      const k = 1 - Math.pow(1 - t, 4);
+      const k = 1 - Math.pow(1 - t, TOOLBAR_FLIGHT_EASE_POW);
       const inv = 1 - k;
       const x = inv * inv * anim.start.x + 2 * inv * k * anim.ctrl.x + k * k * anim.to.x;
       const y = inv * inv * anim.start.y + 2 * inv * k * anim.ctrl.y + k * k * anim.to.y;
