@@ -12,8 +12,14 @@ import { snapPx } from "../lib/snap";
 import { dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
 
-/** 跟随速度：每帧补足剩余距离的比例，越小越“黏” */
-const FOLLOW_FACTOR = 0.08;
+/**
+ * 跟随时间常数（ms）：指数趋近的 1/e 时间，越大越"黏"（越小越跟手）。
+ *
+ * 必须**按时间**推进（k = 1 - e^(-dt/τ)），不能写成"每帧补足剩余距离的比例"：
+ * 后者与帧率强相关——本机 rAF 约 400Hz，同样比例算出来的等效时间常数只有
+ * 60Hz 设计值的几分之一，于是"设了慢跟随却依然像贴着手"。
+ */
+const FOLLOW_TAU_MS = 280;
 /** 基准点切换时的平移动画时长：满速跨过轴线，结束后无缝回到慢跟随 */
 const FLIP_TRANSLATE_MS = 280;
 /** 安全区半径：以曲线落点为圆心的圆，光标在圆内不切换基准侧 */
@@ -73,6 +79,8 @@ export function useCurveHover({
   const tipAnchorRef = useRef("");
   const flipRef = useRef<{ start: number; from: { x: number; y: number } } | null>(null);
   const geomRef = useRef<TipGeom | null>(null);
+  /** 上一帧时间戳：用于按真实 dt 推进跟随 */
+  const tipLastTsRef = useRef(0);
 
   const measureGeom = (): TipGeom | null => {
     const wrap = svgRef.current?.parentElement?.getBoundingClientRect();
@@ -214,6 +222,7 @@ export function useCurveHover({
     if (!hoverPt || !tipPos) {
       geomRef.current = null;
       tipTargetRef.current = null;
+      tipLastTsRef.current = 0;
       if (tipRafRef.current != null) {
         cancelAnimationFrame(tipRafRef.current);
         tipRafRef.current = undefined;
@@ -266,13 +275,20 @@ export function useCurveHover({
         return;
       }
       const cur = tipPosRef.current ?? t;
-      const nx = snapPx(cur.x + (t.x - cur.x) * FOLLOW_FACTOR);
-      const ny = snapPx(cur.y + (t.y - cur.y) * FOLLOW_FACTOR);
+      const prevTs = tipLastTsRef.current || now;
+      const dt = Math.min(64, Math.max(0.5, now - prevTs));
+      tipLastTsRef.current = now;
+      const k = 1 - Math.exp(-dt / FOLLOW_TAU_MS);
+      const nx = snapPx(cur.x + (t.x - cur.x) * k);
+      const ny = snapPx(cur.y + (t.y - cur.y) * k);
       tipPosRef.current = { x: nx, y: ny };
       node.style.transform = `translate(${nx}px, ${ny}px)`;
-      if (Math.abs(t.x - nx) < 0.4 && Math.abs(t.y - ny) < 0.4) {
+      // 指数趋近的尾巴很长（τ=280ms 时最后 1px 要爬 1s 以上），
+      // 到位阈值放到 1.2px：肉眼不可辨，但省掉这段"爬行"。
+      if (Math.abs(t.x - nx) < 1.2 && Math.abs(t.y - ny) < 1.2) {
         tipPosRef.current = { x: snapPx(t.x), y: snapPx(t.y) };
         node.style.transform = `translate(${snapPx(t.x)}px, ${snapPx(t.y)}px)`;
+        tipLastTsRef.current = 0;
         tipRafRef.current = undefined;
         return;
       }
