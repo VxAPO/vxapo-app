@@ -20,16 +20,21 @@ interface UseMarqueeSelectionOptions {
   toolbarHidden: boolean;
 }
 
-/** 工具栏跟随：临界阻尼弹簧（T 内基本停稳），带速度项、不过冲、尾巴有界 */
-const TOOLBAR_SETTLE_MS = 220;
+/**
+ * 工具栏跟随：临界阻尼弹簧（T 内基本停稳），带速度项、不过冲、尾巴有界。
+ *
+ * T 就是这里唯一的速度旋钮：220ms 偏快（大位移时峰值速度约 2200px/s，观感"鬼畜"），
+ * 420ms 更接近"稳稳跟上"；再慢可试 520。
+ */
+const TOOLBAR_SETTLE_MS = 420;
 const TOOLBAR_SNAP_PX = 0.5;
 const TOOLBAR_SNAP_V = 40;
 /**
- * 速度上限（px/s）：弹簧起步速度最大。
- * 拖动结束那一刻目标会从"框选矩形"切到"选中卡片包围盒"，跳变可能很大，
- * 不封顶就会出现单帧几十像素的硬跳（观感就是生硬）。
+ * 注意：**不要**再给弹簧加速度上限。
+ * 之前为了压住单帧 181px 硬跳加过 2600px/s 上限，但那个硬跳的真因是工具栏被
+ * AnimatePresence 重挂（已单独修）；留上限只会让速度曲线出现"先匀速、后衰减"
+ * 的拐点，观感更怪。
  */
-const TOOLBAR_MAX_SPEED = 2600;
 /** 工具栏与选中范围的间距、与容器边的留白 */
 const TOOLBAR_GAP = 10;
 const TOOLBAR_EDGE = 8;
@@ -154,12 +159,6 @@ export function useMarqueeSelection({
           v.y += (-omega * omega * (py - target.y) - 2 * omega * v.y) * h;
           px += v.x * h;
           py += v.y * h;
-        }
-        const speed = Math.hypot(v.x, v.y);
-        if (speed > TOOLBAR_MAX_SPEED) {
-          const s = TOOLBAR_MAX_SPEED / speed;
-          v.x *= s;
-          v.y *= s;
         }
         const nx = snapPx(px);
         const ny = snapPx(py);
