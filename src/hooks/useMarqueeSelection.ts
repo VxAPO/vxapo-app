@@ -100,6 +100,9 @@ export function useMarqueeSelection({
   const toolbarVelRef = useRef({ x: 0, y: 0 });
   const toolbarLastTsRef = useRef(0);
   const toolbarBoundElRef = useRef<HTMLDivElement | null>(null);
+  /** 目标自身的速度（前馈用）：临界阻尼追匀速目标会有 2v/ω 的稳态滞后 */
+  const toolbarTargetPrevRef = useRef<{ x: number; y: number } | null>(null);
+  const toolbarTargetVelRef = useRef({ x: 0, y: 0 });
 
   /** 按选中范围包围盒算工具栏目标位置（React 路径与拖动实时路径共用同一套规则） */
   const toolbarTargetFor = useCallback(
@@ -151,12 +154,29 @@ export function useMarqueeSelection({
         const cur = toolbarPosRef.current ?? target;
         const v = toolbarVelRef.current;
         const omega = 6.6 / (TOOLBAR_SETTLE_MS / 1000);
+        /**
+         * 目标速度前馈：临界阻尼跟随匀速移动的目标时，稳态滞后 = 2v/ω。
+         * 框选拖动时目标一直匀速下移，这个滞后会把"工具栏到卡片的间距"吃掉
+         * （往下框选时特别明显）。瞄准 target + 2v/ω 可把稳态误差压到 0。
+         */
+        const prevTarget = toolbarTargetPrevRef.current;
+        const tv = toolbarTargetVelRef.current;
+        if (prevTarget) {
+          const rawX = (target.x - prevTarget.x) / dt * 1000;
+          const rawY = (target.y - prevTarget.y) / dt * 1000;
+          tv.x += (rawX - tv.x) * 0.25;
+          tv.y += (rawY - tv.y) * 0.25;
+        }
+        toolbarTargetPrevRef.current = { x: target.x, y: target.y };
+        const lead = 2 / omega;
+        const aimX = target.x + tv.x * lead;
+        const aimY = target.y + tv.y * lead;
         let px = cur.x;
         let py = cur.y;
         const h = dt / 1000 / 2;
         for (let i = 0; i < 2; i++) {
-          v.x += (-omega * omega * (px - target.x) - 2 * omega * v.x) * h;
-          v.y += (-omega * omega * (py - target.y) - 2 * omega * v.y) * h;
+          v.x += (-omega * omega * (px - aimX) - 2 * omega * v.x) * h;
+          v.y += (-omega * omega * (py - aimY) - 2 * omega * v.y) * h;
           px += v.x * h;
           py += v.y * h;
         }
@@ -173,6 +193,7 @@ export function useMarqueeSelection({
         if (settled) {
           toolbarPosRef.current = { x: snapPx(target.x), y: snapPx(target.y) };
           toolbarVelRef.current = { x: 0, y: 0 };
+          toolbarTargetVelRef.current = { x: 0, y: 0 };
           node.style.left = `${snapPx(target.x)}px`;
           node.style.top = `${snapPx(target.y)}px`;
           toolbarAnimRef.current = null;
