@@ -101,6 +101,12 @@ function OverlayScrollbar({
     const el = target ?? targetRef.current;
     if (!el) return;
 
+    // 这两个是 rAF 跟随窗口的状态。必须**提前声明**：update() 在下面会同步先跑一次，
+    // 而「变形」那一步会立刻调 settle()，此时若 let 还没执行到，就会撞 TDZ
+    // （Cannot access 'x' before initialization → React 抛错卸载整棵树、界面变空白）。
+    let raf = 0;
+    let settleUntil = 0;
+
     const update = () => {
       const { scrollTop, clientHeight, scrollHeight } = el;
       const max = scrollHeight - clientHeight;
@@ -109,13 +115,17 @@ function OverlayScrollbar({
       const spec = morphSpecRef.current;
       if (spec && spec.token !== lastMorphTokenRef.current) {
         lastMorphTokenRef.current = spec.token;
-        morphRef.current = {
-          start: performance.now(),
-          ms: Math.max(1, spec.ms),
-          from: { ...dispRef.current },
-          to: null,
-        };
-        settle();
+        // 组件刚挂载时显示几何还是 0（例如换语言导致重挂载）：没有可插值的起点，
+        // 直接对齐真实几何，别从 0 长度演一遍变形。
+        if (dispRef.current.thumbH > 0) {
+          morphRef.current = {
+            start: performance.now(),
+            ms: Math.max(1, spec.ms),
+            from: { ...dispRef.current },
+            to: null,
+          };
+          settle();
+        }
       }
       // Portal 到 body 用 fixed：轨道按容器在视口中的实际位置钉死，
       // 不随任何滚动/transform 祖先移动。
@@ -182,14 +192,14 @@ function OverlayScrollbar({
       attributes: true,
       attributeFilter: ["style", "class"],
     });
-    let raf = 0;
-    let settleUntil = 0;
     /**
      * 推进长度变形。真实几何在 update 里算好，这里只做显示插值：
      * 目标一旦还在移动（不是「布局提交瞬间的突跳」，例如收窄动画逐帧推进）就放弃变形，
      * 免得插值去追一个持续变化的目标，反而比不做还难看。
      */
-    const stepMorph = (now: number) => {
+    // 注意：stepMorph / tick / settle 一律用函数声明（会提升），
+    // 这样即使 settle() 在声明语句之前被调用也拿得到。
+    function stepMorph(now: number): boolean {
       const m = morphRef.current;
       if (!m) return false;
       const real = realRef.current;
@@ -221,14 +231,14 @@ function OverlayScrollbar({
         offset: m.from.offset + (m.to.offset - m.from.offset) * e,
       });
       return true;
-    };
-    const tick = () => {
+    }
+    function tick() {
       raf = 0;
       update();
       const now = performance.now();
       const morphing = stepMorph(now);
       if (morphing || now < settleUntil) raf = requestAnimationFrame(tick);
-    };
+    }
     function settle() {
       settleUntil = performance.now() + SETTLE_MS;
       if (!raf) raf = requestAnimationFrame(tick);

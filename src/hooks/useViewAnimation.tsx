@@ -93,6 +93,8 @@ export function useViewAnimation({
   const viewCollapseStartTimerRef = useRef<number | undefined>(undefined);
   /** 收窄结束、清掉 min-height 的定时器。 */
   const viewCollapseTimerRef = useRef<number | undefined>(undefined);
+  /** 变形指令的失效定时器：指令只在这次切换窗口内有效 */
+  const viewMorphTimerRef = useRef<number | undefined>(undefined);
   const viewScrollTopRef = useRef(0);
   const viewHeightLockRef = useRef(false);
   /** 旧内容高度（px，无论是否锁高都记）：收窄算差值、变高算变形时长都用它 */
@@ -109,6 +111,7 @@ export function useViewAnimation({
     window.clearTimeout(viewAnimTimerRef.current);
     window.clearTimeout(viewCollapseStartTimerRef.current);
     window.clearTimeout(viewCollapseTimerRef.current);
+    window.clearTimeout(viewMorphTimerRef.current);
   }, []);
 
   // 动画结束、新视图稳定后，在 paint 前恢复原滚动位置。
@@ -245,7 +248,16 @@ export function useViewAnimation({
     const grew =
       Math.round(stage.getBoundingClientRect().height) - viewLockHeightRef.current;
     if (grew < COLLAPSE_SNAP_PX) return; // 没变高：走收窄或直接对齐
-    setViewMorph({ token: viewTransitionTokenRef.current, ms: heightDeltaMs(grew) });
+    const ms = heightDeltaMs(grew);
+    const token = viewTransitionTokenRef.current;
+    setViewMorph({ token, ms });
+    // 指令只在这次切换的窗口内有效：滚动条组件在换语言等重渲染里会被重新挂载，
+    // 若指令还留着，重挂载后会把一枚过期 token 当成新指令再演一次变形。
+    window.clearTimeout(viewMorphTimerRef.current);
+    viewMorphTimerRef.current = window.setTimeout(
+      () => setViewMorph((cur) => (cur?.token === token ? null : cur)),
+      ms + 250,
+    );
   }, [view, bodyRef]);
 
   /** 单个 stage 的动画结束：当前视图=进场完成；另一套=退场完成，收进 display:none。 */
