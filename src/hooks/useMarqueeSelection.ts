@@ -20,21 +20,8 @@ interface UseMarqueeSelectionOptions {
   toolbarHidden: boolean;
 }
 
-/**
- * 工具栏跟随：临界阻尼弹簧（T 内基本停稳），带速度项、不过冲、尾巴有界。
- *
- * T 就是这里唯一的速度旋钮：220ms 偏快（大位移时峰值速度约 2200px/s，观感"鬼畜"），
- * 420ms 更接近"稳稳跟上"；再慢可试 520。
- */
-const TOOLBAR_SETTLE_MS = 420;
-const TOOLBAR_SNAP_PX = 0.5;
-const TOOLBAR_SNAP_V = 40;
-/**
- * 注意：**不要**再给弹簧加速度上限。
- * 之前为了压住单帧 181px 硬跳加过 2600px/s 上限，但那个硬跳的真因是工具栏被
- * AnimatePresence 重挂（已单独修）；留上限只会让速度曲线出现"先匀速、后衰减"
- * 的拐点，观感更怪。
- */
+/** 工具栏位移动画时长（ms）：沿用原来的 easeOutQuart 二次贝塞尔飞行 */
+const TOOLBAR_FLIGHT_MS = 400;
 /** 工具栏与选中范围的间距、与容器边的留白 */
 const TOOLBAR_GAP = 10;
 const TOOLBAR_EDGE = 8;
@@ -93,6 +80,10 @@ export function useMarqueeSelection({
   const [toolbarW, setToolbarW] = useState(280);
   const toolbarAnimRef = useRef<{
     raf: number;
+    start: { x: number; y: number };
+    ctrl: { x: number; y: number };
+    to: { x: number; y: number };
+    t0: number;
   } | null>(null);
   /** 最新目标与当前显示位置 / 速度：事件期直接写 ref，不经过 React 提交节流 */
   const toolbarTargetRef = useRef<{ x: number; y: number } | null>(null);
@@ -132,66 +123,59 @@ export function useMarqueeSelection({
     [toolbarH, toolbarW],
   );
 
-  /** 启动/继续跟随循环：每帧朝最新目标走一步；停稳即结束，不留常驻 rAF */
-  const startToolbarFollow = useCallback(() => {
-    if (toolbarAnimRef.current) return;
+  /**
+   * 启动一段飞行：从"当前实际位置"沿二次贝塞尔飞到最新目标，easeOutQuart、400ms。
+   *
+   * 拖动期目标是逐帧写入的（提帧数那部分），所以这里每次都会取消上一段、
+   * 以当前位置重新起算——小位移时控制点几乎贴着起点，路径就是直线；
+   * 大跳（例如抬手后目标切换）才看得见弧线。
+   */
+  const startToolbarFlight = useCallback(() => {
+    const node0 = toolbarElRef.current;
+    const target0 = toolbarTargetRef.current;
+    if (!node0 || !target0) return;
+    if (toolbarAnimRef.current) cancelAnimationFrame(toolbarAnimRef.current.raf);
+    const start = {
+      x: parseFloat(node0.style.left) || target0.x,
+      y: parseFloat(node0.style.top) || target0.y,
+    };
+    const dx = target0.x - start.x;
+    const dy = target0.y - start.y;
+    const len = Math.hypot(dx, dy) || 1;
+    // 垂直主导走直线；水平主导保留左右开度弧线（与原实现一致）
+    const ctrl =
+      Math.abs(dy) > Math.abs(dx)
+        ? { x: (start.x + target0.x) / 2, y: (start.y + target0.y) / 2 }
+        : {
+            x: start.x + (dx < 0 ? -1 : 1) * Math.min(220, len * 0.4),
+            y: start.y,
+          };
+    const t0 = performance.now();
     const step = () => {
       const node = toolbarElRef.current;
-      const target = toolbarTargetRef.current;
-      if (!node || !target) {
+      const anim = toolbarAnimRef.current;
+      if (!node || !anim) {
         toolbarAnimRef.current = null;
         toolbarLastTsRef.current = 0;
         return;
       }
-      const now = performance.now();
-      {
-        const prevTs = toolbarLastTsRef.current || now;
-        const dt = Math.min(64, Math.max(0.5, now - prevTs));
-        toolbarLastTsRef.current = now;
-        const cur = toolbarPosRef.current ?? target;
-        const v = toolbarVelRef.current;
-        const omega = 6.6 / (TOOLBAR_SETTLE_MS / 1000);
-        /**
-         * 不加"目标速度前馈"：前馈（瞄准 target + 2v/ω）虽能把跟随滞后压到 0，
-         * 但等于让工具栏 1:1 跟手，观感"快得鬼畜"；那点滞后本身正是阻尼。
-         * 这里保持纯弹簧：目标是选中卡片包围盒，停稳后间距严格等于 GAP。
-         */
-        const aimX = target.x;
-        const aimY = target.y;
-        let px = cur.x;
-        let py = cur.y;
-        const h = dt / 1000 / 2;
-        for (let i = 0; i < 2; i++) {
-          v.x += (-omega * omega * (px - aimX) - 2 * omega * v.x) * h;
-          v.y += (-omega * omega * (py - aimY) - 2 * omega * v.y) * h;
-          px += v.x * h;
-          py += v.y * h;
-        }
-        const nx = snapPx(px);
-        const ny = snapPx(py);
-        toolbarPosRef.current = { x: nx, y: ny };
-        node.style.left = `${nx}px`;
-        node.style.top = `${ny}px`;
-        const settled =
-          Math.abs(target.x - nx) < TOOLBAR_SNAP_PX &&
-          Math.abs(target.y - ny) < TOOLBAR_SNAP_PX &&
-          Math.abs(v.x) < TOOLBAR_SNAP_V &&
-          Math.abs(v.y) < TOOLBAR_SNAP_V;
-        if (settled) {
-          toolbarPosRef.current = { x: snapPx(target.x), y: snapPx(target.y) };
-          toolbarVelRef.current = { x: 0, y: 0 };
-          node.style.left = `${snapPx(target.x)}px`;
-          node.style.top = `${snapPx(target.y)}px`;
-          toolbarAnimRef.current = null;
-          toolbarLastTsRef.current = 0;
-          return;
-        }
-      }
-      if (toolbarAnimRef.current) {
-        toolbarAnimRef.current.raf = requestAnimationFrame(step);
+      const t = Math.min(1, (performance.now() - anim.t0) / TOOLBAR_FLIGHT_MS);
+      const k = 1 - Math.pow(1 - t, 4);
+      const inv = 1 - k;
+      const x = inv * inv * anim.start.x + 2 * inv * k * anim.ctrl.x + k * k * anim.to.x;
+      const y = inv * inv * anim.start.y + 2 * inv * k * anim.ctrl.y + k * k * anim.to.y;
+      node.style.left = `${snapPx(x)}px`;
+      node.style.top = `${snapPx(y)}px`;
+      if (t < 1) {
+        anim.raf = requestAnimationFrame(step);
+      } else {
+        toolbarAnimRef.current = null;
+        toolbarLastTsRef.current = 0;
+        node.style.left = `${anim.to.x}px`;
+        node.style.top = `${anim.to.y}px`;
       }
     };
-    toolbarAnimRef.current = { raf: requestAnimationFrame(step) };
+    toolbarAnimRef.current = { raf: requestAnimationFrame(step), start, ctrl, to: target0, t0 };
   }, []);
 
   /** 事件期/React 期通用的目标更新入口 */
@@ -209,9 +193,9 @@ export function useMarqueeSelection({
         node.style.top = `${snapPx(t.y)}px`;
         return;
       }
-      startToolbarFollow();
+      startToolbarFlight();
     },
-    [startToolbarFollow],
+    [startToolbarFlight],
   );
 
   // 框选过期清理：blocks 变化后移除已不存在的 id
