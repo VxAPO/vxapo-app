@@ -1551,8 +1551,8 @@ function renderToPanelBuffer(
     scrollingNow &&
     buf.at > 0 &&
     now - buf.at < 140 &&
-    Math.abs(x - buf.x) < 2 &&
-    Math.abs(y - buf.y) < 2
+    Math.abs(x - buf.x) < 0.5 &&
+    Math.abs(y - buf.y) < 0.5
   ) {
     buf.reused += 1;
     return buf;
@@ -1561,8 +1561,8 @@ function renderToPanelBuffer(
     buf.at > 0 &&
     buf.reused < PANEL_REUSE_MAX &&
     now - buf.at < PANEL_REUSE_MS &&
-    Math.abs(x - buf.x) < 2 &&
-    Math.abs(y - buf.y) < 2
+    Math.abs(x - buf.x) < 0.5 &&
+    Math.abs(y - buf.y) < 0.5
   ) {
     buf.reused += 1;
     return buf;
