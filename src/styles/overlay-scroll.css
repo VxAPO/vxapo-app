@@ -10,14 +10,12 @@
 .os-track {
   position: fixed;
   width: 5px;
-  opacity: 0;
-  /* 淡出时间：0.25s 偏急，收得更缓一点（滚动停止后多久开始淡出仍是 IDLE_FADE_MS） */
-  transition: opacity 0.4s ease;
   pointer-events: none;
-}
-
-.os-track.on {
-  opacity: 1;
+  /* 不用 opacity 显隐：opacity 过渡会让滚动条每帧创建/销毁自己的合成面，
+     而这个面的出现/消失会迫使设备卡的 backdrop 背板重采 —— Chromium 在那一拍给出的
+     就是那条右缘白边（实测：滚动条唤起/淡出的时刻必然出现，与重绘频率无关）。
+     改成"颜色透明度的淡入淡出"：纯 paint 变化，合成面结构保持稳定。
+     淡出时长仍是 0.4s（滚动停止后多久开始淡出仍是 IDLE_FADE_MS）。 */
 }
 
 .os-thumb {
@@ -26,10 +24,15 @@
   right: 0;
   width: 5px;
   border-radius: 9999px;
-  background: var(--scrollbar);
+  background-color: transparent;
+  transition: background-color 0.4s ease;
   pointer-events: none;
   cursor: pointer;
   will-change: transform;
+}
+
+.os-track.on .os-thumb {
+  background-color: var(--scrollbar);
 }
 
 .os-track.on .os-thumb {
@@ -37,5 +40,5 @@
 }
 
 .os-thumb:hover {
-  background: var(--scrollbar-hover);
+  background-color: var(--scrollbar-hover);
 }

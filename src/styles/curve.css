@@ -107,6 +107,32 @@
   position: relative;
 }
 
+/* 设备卡（含其外层 .fx-dev：两个伪元素环带同层）的"持续重绘"：
+   Chromium 对滚动 / 视图切换 / 滚动条淡出这类合成器损坏，只对设备卡的 backdrop 背板做
+   增量重采，blur 的 filter region outset 覆盖到的右缘一圈会残留滚动前的 texel，形成
+   4~7px、外强内弱的窄白边（实测 +5→+1 灰阶），并一直挂着直到该层被重新光栅化。
+   这里用一个纯离散的 CSS 动画（全透明渐变 ↔ none：两个状态逐像素一致、不在任何
+   transition 列表里）让该层每帧重光栅一次，残留寿命 ≤1 帧。
+   用 CSS 动画而不是 JS 每帧写 inline style：后者会让每帧都产生一次样式失效，
+   使同帧内读几何的跟随逻辑（悬浮工具栏 / 滚动条）被迫同步重算，拖慢它们的节奏。 */
+@keyframes vx-devcard-repaint {
+  from {
+    background-image: none;
+  }
+  to {
+    background-image: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0));
+  }
+}
+
+/* 常开，60Hz（0.0334s / steps(2)）：残留寿命 ≤1 帧。
+   试过 30Hz（0.0667s）与"按活动门控"（滚动/指针事件 + 2s 尾窗）：前者闪得更明显，
+   后者总会漏触发面（滚动条的 hover/淡出、指针活动同样能造出这条残留）。
+   代价是这张卡（及其外层）在每个可见帧重光栅一次——这是为了让背板始终新鲜。 */
+.dev-props-card,
+.fx.fx-dev {
+  animation: vx-devcard-repaint 0.0334s steps(2, end) infinite;
+}
+
 .fx-curve,
 .fx-dev {
   display: flex;
@@ -133,6 +159,21 @@
   position: absolute;
   z-index: 30;
   border-radius: 14px;
+  /* 位置唯一由 JS 的 transform 驱动（跟随循环），这里 left/top 固定为 0；
+     "-50%" 居中与入场 6px 抬升用 translate/动画承担，避免与 framer-motion 的 transform 互抢。 */
+  left: 0;
+  top: 0;
+  translate: -50% 0;
+  animation: vx-toolbar-in 0.18s ease-out;
+}
+
+@keyframes vx-toolbar-in {
+  from {
+    translate: -50% 6px;
+  }
+  to {
+    translate: -50% 0;
+  }
 }
 
 /* 玻璃描边环境染色：环带横跨描边内外各 1px（完美贴合圆角），

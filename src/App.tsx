@@ -38,11 +38,6 @@ import { useThrottledCompute } from "./hooks/useThrottledCompute";
  * 清它。这里只给设备卡恢复一次低频率的真实 paint 变更（全透明渐变 ↔ none），
  * 让该卡所在 chunk 周期性重新光栅化、背板重采；其余元素仍是 0 静置重绘。
  */
-/**
- * 设备卡"持续重绘"节流：每 N 帧做一次真实 paint 变更（N=2 → 残留寿命 ≤1 帧）。
- * 见下方 useEffect 的完整说明。
- */
-const BD_REPAINT_EVERY_N_FRAMES = 1;
 import AdvancedView from "./components/AdvancedView";
 import ConfirmDialog from "./components/ConfirmDialog";
 import CurvePanel from "./components/CurvePanel";
@@ -216,39 +211,6 @@ export default function App() {
   const setBodyRef = useCallback((el: HTMLDivElement | null) => {
     bodyRef.current = el;
     setBodyNode(el);
-  }, []);
-
-  // 设备卡专用"持续重绘"（= 把 a674f6f 的"静置期 0 重绘"只在这一个元素上退回来）。
-  //
-  // 为什么必须持续、而不是按需：Chromium 对滚动/视图切换/滚动条淡出这类合成器损坏，
-  // 只对设备卡的 backdrop 背板做增量重采，blur outset 覆盖到的右缘一圈会残留旧 texel
-  // （4~7px、外强内弱的白边，实测幅值 +5→+1 灰阶）。任何一次"事件后补一拍"都只能把
-  // 它压成"闪一下"——实测：300ms 心跳下，滚动条淡出与视图切换各闪一次。
-  // 所以这里改成常驻逐帧重绘、每 BD_REPAINT_EVERY_N_FRAMES 帧做一次真实 paint 变更
-  // （全透明渐变 ↔ none：双态逐像素一致，不在任何 transition 列表里），残留寿命 ≤1 帧。
-  // 其余元素仍然保持静置 0 重绘，不进循环。
-  useEffect(() => {
-    let on = false;
-    let raf = 0;
-    let frame = 0;
-    const loop = () => {
-      frame = (frame + 1) % BD_REPAINT_EVERY_N_FRAMES;
-      if (frame === 0 && document.visibilityState === "visible") {
-        // 卡片自己 + 它所在的 .fx-dev 层（伪元素环带在同一层）一起抖动：
-        // 视图切换时底行会随高度收窄上下移动，只重画卡片不够，外层也要重建。
-        on = !on;
-        const bg = on
-          ? "linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0))"
-          : "none";
-        const card = document.querySelector<HTMLElement>(".dev-props-card");
-        if (card) card.style.backgroundImage = bg;
-        const fxDev = document.querySelector<HTMLElement>(".fx.fx-dev");
-        if (fxDev) fxDev.style.backgroundImage = bg;
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
   }, []);
 
   const [hintShift, setHintShift] = useState(0);

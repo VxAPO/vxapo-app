@@ -38,9 +38,11 @@ export default function SelectionToolbar({
     <motion.div
       className="fx fx-toolbar"
       ref={toolbarRef}
-      initial={{ opacity: 0, x: "-50%", y: 6 }}
-      animate={{ opacity: 1, x: "-50%", y: 0 }}
-      exit={{ opacity: 0, x: "-50%", y: 6 }}
+      // 只做透明度：位置（transform）由 useMarqueeSelection 的跟随循环独占，
+      // 居中与入场 6px 抬升交给 CSS 的 translate/动画（两个所有者写同一属性会互相打架）
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
     >
       <div className="sel-toolbar">
