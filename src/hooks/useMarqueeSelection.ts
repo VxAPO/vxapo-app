@@ -21,39 +21,21 @@ interface UseMarqueeSelectionOptions {
 }
 
 /**
- * 目标自身的速率上限（px/s）。
- *
- * 拖动期目标来自"选中卡片包围盒"，而卡片边界是离散的：乱晃框选时卡片不断进出，
- * 目标就会在行/列边界之间瞬间跳一下。直接去追这些跳变，工具栏轨迹就是波浪式的。
- * 这里先给目标本身限速，把瞬移化开；稳态匀速移动不受影响（所以不额外增加滞后）。
+ * 工具栏目标的"停留防抖"（ms）：拖动期目标一变就重置定时器，
+ * 只有"框住的卡连续 100ms 没变"才采纳一次。用于滤掉卡片入框次序造成的中间态。
  */
-const TOOLBAR_TARGET_SLEW = 2000;
+const TOOLBAR_TARGET_SETTLE_MS = 50;
 /**
- * 目标侧的抖动抑制（框选状态在同一手势里是分几次、跨帧更新的：先命中一行、下一拍才命中
- * 相邻列，包围盒会先是个"半矩形"）。
- * - DEADBAND：目标变化小于它就完全不推 aim（吃掉亚像素/单帧抖动）；
- * - TAU：轻低通（s），把"半矩形"造成的高频小跳变成缓慢跟随；大跳变仍受 SLEW 速率上限约束。
+ * 飞行时长随**距离**缩放（与视图收窄"260ms + 2ms/px、上限 800ms"同思路）：
+ * 固定 480ms 的问题是——远距离在 480ms 内冲完（加速太快、刹车太猛），
+ * 近距离也用掉 480ms（离近了停得太慢）。
+ * 缓动仍是原来那套 easeOut、指数 2.6（先快后慢、收尾柔）。
  */
-const TOOLBAR_TARGET_DEADBAND = 3;
-const TOOLBAR_TARGET_TAU = 0.03;
-/**
- * 跟随速度曲线（加速度受限的梯形速度）：
- * 原来用"每帧重启的 easeOut + 按剩余距离比例的步进"，等效指数逼近 —— 距离越短越慢，
- * 于是垂直（目标步长天生比水平小）明显偏慢、方向急变时又被压成"急停"。
- * 这里改成按时间推进：远处用 V_MAX，近处按 sqrt(2·a·d) 收尾（时间最优、末端有明确减速
- * 而不是指数拖尾），方向反转只是"减速再反向加速"，不再按距离付罚。
- * 目标侧仍保留 TARGET_SLEW 去抖（把卡片边界的瞬移化开），但它不再充当速率闸门。
- */
-const TOOLBAR_V_MAX = 2000;
-const TOOLBAR_ACCEL = 11000;
-/** 收尾刹车倍率：减速可以比加速更狠（否则刹不住会冲过目标再倒回来） */
-const TOOLBAR_BRAKE_K = 2;
-/**
- * 位置误差 → 修正速度的增益（1/s）与修正速度上限。
- * 只靠"修正"去追目标时，跟手速度必然等于"误差×增益"，要跟得住就得把速度顶得很高
- * （表现为"用速度弥补延迟"）。加上目标速度前馈后，稳态跟手速度 = 手的速度，
- * 修正量只需吃掉很小的残差 → 同样的跟手性下速度更低、延迟更小。
- */
+const TOOLBAR_FLIGHT_MIN_MS = 300;
+const TOOLBAR_FLIGHT_BASE_MS = 300;
+const TOOLBAR_FLIGHT_PER_PX = 0.5;
+const TOOLBAR_FLIGHT_MAX_MS = 560;
+const TOOLBAR_FLIGHT_EASE_POW = 2.6;
 /** 工具栏与选中范围的间距、与容器边的留白 */
 const TOOLBAR_GAP = 10;
 const TOOLBAR_EDGE = 8;
@@ -126,10 +108,9 @@ export function useMarqueeSelection({
   const toolbarVelRef = useRef({ x: 0, y: 0 });
   const toolbarLastTsRef = useRef(0);
   const toolbarBoundElRef = useRef<HTMLDivElement | null>(null);
-  /** 被限速后的目标（飞行实际追的点） */
-  const toolbarAimRef = useRef<{ x: number; y: number } | null>(null);
-  /** 目标限速用的时间戳（不能用 anim.t0：拖动期飞行每帧重启，t0 一直是"现在"） */
-  const toolbarSlewTsRef = useRef(0);
+  /** 拖动期的"停留防抖"目标（见 TOOLBAR_TARGET_SETTLE_MS） */
+  const liveTargetRef = useRef<{ x: number; y: number } | null>(null);
+  const liveTargetTimerRef = useRef(0);
 
   /** 按选中范围包围盒算工具栏目标位置（React 路径与拖动实时路径共用同一套规则） */
   const toolbarTargetFor = useCallback(
@@ -185,6 +166,15 @@ export function useMarqueeSelection({
      * 于是"平移的节奏和垂直不一致"；斜向移动还按"哪个轴位移大"二选一，
      * 又多出第三种节奏。统一成直线后，任何方向都吃同一条缓动、同样的路径长度规律。
      */
+    // 时长随距离缩放（近处快收，远处也别赶）
+    const flightMs = Math.min(
+      TOOLBAR_FLIGHT_MAX_MS,
+      Math.max(
+        TOOLBAR_FLIGHT_MIN_MS,
+        TOOLBAR_FLIGHT_BASE_MS +
+          Math.hypot(target0.x - start.x, target0.y - start.y) * TOOLBAR_FLIGHT_PER_PX,
+      ),
+    );
     const t0 = performance.now();
     const step = () => {
       const node = toolbarElRef.current;
@@ -194,67 +184,24 @@ export function useMarqueeSelection({
         toolbarLastTsRef.current = 0;
         return;
       }
-      // 目标限速：把卡片边界造成的瞬移化开（每帧最多走 SLEW·dt）
+      // 原有缓动（easeOut，指数 2.6，480ms）：从本段起点插值到最新目标。
+      // 目标由 100ms 停留防抖离散化，段内不会再变；变了下一次 targets 更新会重新起一段。
       const raw = toolbarTargetRef.current ?? anim.to;
-      const aim = toolbarAimRef.current ?? { ...raw };
-      const nowMs = performance.now();
-      const prevSlewTs = toolbarSlewTsRef.current || nowMs;
-      const dtMs = Math.min(64, Math.max(0.5, nowMs - prevSlewTs));
-      toolbarSlewTsRef.current = nowMs;
-      const maxStep = (TOOLBAR_TARGET_SLEW * dtMs) / 1000;
-      const ddx = raw.x - aim.x;
-      const ddy = raw.y - aim.y;
-      const dlen = Math.hypot(ddx, ddy);
-      // 死区 + 轻低通：吸收"半矩形"造成的单帧小跳；大跳变仍受 SLEW 上限约束
-      if (dlen > TOOLBAR_TARGET_DEADBAND) {
-        const aF = 1 - Math.exp(-(dtMs / 1000) / TOOLBAR_TARGET_TAU);
-        let tx = aim.x + ddx * aF;
-        let ty = aim.y + ddy * aF;
-        const sdx = tx - aim.x;
-        const sdy = ty - aim.y;
-        const sl = Math.hypot(sdx, sdy);
-        if (sl > maxStep && sl > 1e-6) {
-          tx = aim.x + (sdx / sl) * maxStep;
-          ty = aim.y + (sdy / sl) * maxStep;
-        }
-        aim.x = tx;
-        aim.y = ty;
-      }
-      toolbarAimRef.current = aim;
-      // 加速度受限的速度积分：远处 vMax、近处 sqrt(2·a·d) 收尾
-      const dt = dtMs / 1000;
-      const dx = aim.x - anim.pos.x;
-      const dy = aim.y - anim.pos.y;
-      const d = Math.hypot(dx, dy);
-      const dirX = d > 1e-6 ? dx / d : 0;
-      const dirY = d > 1e-6 ? dy / d : 0;
-      // 梯形速度曲线：远处 vMax、近处按 sqrt(2·a·d) 收尾；起步受加速度上限约束（软起）。
-      // 减速允许比加速更狠（BRAKE_K），配合下面的"单步不越过目标"消除过弹。
-      const vAllow = Math.min(TOOLBAR_V_MAX, Math.sqrt(2 * TOOLBAR_ACCEL * d));
-      const maxDv = TOOLBAR_ACCEL * dt;
-      const clampDv = (want: number, cur: number) => {
-        const lim =
-          Math.abs(want) < Math.abs(cur) ? maxDv * TOOLBAR_BRAKE_K : maxDv;
-        return cur + Math.max(-lim, Math.min(lim, want - cur));
-      };
-      anim.v.x = clampDv(dirX * vAllow, anim.v.x);
-      anim.v.y = clampDv(dirY * vAllow, anim.v.y);
-      // 单步位移封顶为剩余距离：不越过目标、不过弹
-      const stepLen = Math.min(Math.hypot(anim.v.x, anim.v.y) * dt, d);
-      const spd = Math.hypot(anim.v.x, anim.v.y);
-      if (spd > 1e-6) {
-        anim.pos.x += (anim.v.x / spd) * stepLen;
-        anim.pos.y += (anim.v.y / spd) * stepLen;
-      }
-      node.style.transform = `translate3d(${snapPx(anim.pos.x)}px, ${snapPx(anim.pos.y)}px, 0)`;
-      const aimMoving = Math.hypot(raw.x - aim.x, raw.y - aim.y) > 0.5;
-      const posMoving = Math.hypot(raw.x - anim.pos.x, raw.y - anim.pos.y) > 0.35;
-      if (posMoving || aimMoving) {
+      const p = Math.min(1, (performance.now() - t0) / flightMs);
+      const k = 1 - Math.pow(1 - p, TOOLBAR_FLIGHT_EASE_POW);
+      const nx = anim.start.x + (raw.x - anim.start.x) * k;
+      const ny = anim.start.y + (raw.y - anim.start.y) * k;
+      anim.pos.x = nx;
+      anim.pos.y = ny;
+      anim.v.x = 0;
+      anim.v.y = 0;
+      node.style.transform = `translate3d(${snapPx(nx)}px, ${snapPx(ny)}px, 0)`;
+      const posMoving = Math.hypot(raw.x - nx, raw.y - ny) > 0.35;
+      if (p < 1 || posMoving) {
         anim.raf = requestAnimationFrame(step);
       } else {
         toolbarAnimRef.current = null;
         toolbarLastTsRef.current = 0;
-        toolbarAimRef.current = { ...raw };
         toolbarVelRef.current = { x: 0, y: 0 };
         anim.v.x = 0;
         anim.v.y = 0;
@@ -275,10 +222,37 @@ export function useMarqueeSelection({
     };
   }, []);
 
-  /** 事件期/React 期通用的目标更新入口 */
+  /**
+   * 事件期/React 期通用的目标更新入口。
+   *
+   * 一次指针事件里卡片是**逐个**进入选区的（命中顺序取决于几何与遍历顺序），
+   * 而"每次选区变化就推一次目标"会让工具栏先看到"半张矩形"的目标、再看到完整目标——
+   * 于是每次触发工具栏的动画都不一样（用户报的"次序抖动"）。
+   * 所以这里只记录**最新**目标，真正写进跟随循环的那一步合并到下一帧执行：
+   * 每一帧工具栏只看到该帧**最终**的选区包围盒，跟"卡片入框顺序"解耦。
+   */
+  const pendingTargetRef = useRef<{ x: number; y: number } | null>(null);
+  const targetRafRef = useRef(0);
   const setToolbarTargetNow = useCallback(
     (t: { x: number; y: number }) => {
-      toolbarTargetRef.current = t;
+      pendingTargetRef.current = t;
+      if (targetRafRef.current) return;
+      targetRafRef.current = requestAnimationFrame(() => {
+        targetRafRef.current = 0;
+        const next = pendingTargetRef.current;
+        if (!next) return;
+        // 帧内合并：同一帧里的多次推只保留最后一个（选区提交/松手收尾都走这里）
+        toolbarTargetRef.current = next;
+        applyToolbarTarget(next);
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  /** 把（已合并到本帧的）目标交给跟随：首次落位 / 重挂载起步 / 启动跟随循环 */
+  const applyToolbarTarget = useCallback(
+    (t: { x: number; y: number }) => {
       const node = toolbarElRef.current;
       if (!node) return;
       if (toolbarBoundElRef.current !== node) {
@@ -304,8 +278,9 @@ export function useMarqueeSelection({
         node.style.transform = `translate3d(${snapPx(t.x)}px, ${snapPx(t.y)}px, 0)`;
         return;
       }
-      // 拖动期目标逐帧更新：只保证飞行循环在跑，**不重启**它（重启会让速度被打回初值）
-      if (!toolbarAnimRef.current) startToolbarFlight();
+      // 目标变了 → 从当前位置重新起一段缓入缓出（目标已被 100ms 防抖离散化，
+      // 段率 ≥100ms，所以不会再出现"每帧重启"那种顿挫）
+      startToolbarFlight();
     },
     [startToolbarFlight],
   );
@@ -439,20 +414,25 @@ export function useMarqueeSelection({
                */
               if (next.length) setSelectedIds(next);
             }
-            // 工具栏跟随：拖动期直接逐帧喂目标（绕开 React 提交节流）。
-            // 目标一律取**选中卡片的包围盒**，与 React 那条通路完全同源；
-            // 没命中卡片时保持上一个目标（拖动期不清空选择，见下）。
+            /**
+             * 工具栏目标 = **对被框选卡片集合做 100ms 停留防抖**：
+             * 目标一变就重置定时器，只有"框住的卡 100ms 没变"才采纳一次。
+             * 这样拖动期不会去追"半张矩形"的中间态（那是入框次序造成的，
+             * 每次都不一样），停住/稳定下来之后才飞一次 —— 动画可复现。
+             */
             if (hadToolbarRef.current && toolbarElRef.current && hit.box) {
-              setToolbarTargetNow(
-                toolbarTargetFor(
-                  hit.box.minX,
-                  hit.box.maxX,
-                  hit.box.minY,
-                  hit.box.maxY,
-                  body.clientWidth,
-                  body.scrollHeight,
-                ),
+              liveTargetRef.current = toolbarTargetFor(
+                hit.box.minX,
+                hit.box.maxX,
+                hit.box.minY,
+                hit.box.maxY,
+                body.clientWidth,
+                body.scrollHeight,
               );
+              window.clearTimeout(liveTargetTimerRef.current);
+              liveTargetTimerRef.current = window.setTimeout(() => {
+                if (liveTargetRef.current) setToolbarTargetNow(liveTargetRef.current);
+              }, TOOLBAR_TARGET_SETTLE_MS);
             }
           }
         }
@@ -471,6 +451,9 @@ export function useMarqueeSelection({
     pendingMarqueeRef.current = null;
     marqueeStartRef.current = null;
     lastLiveCommitRef.current = 0;
+    // 收尾：清掉拖动期的停留防抖（下面会用最终命中集合直接写目标）
+    window.clearTimeout(liveTargetTimerRef.current);
+    liveTargetTimerRef.current = 0;
     setMarquee(null);
     if (!s || !body || !m) return;
     // 实时框选期间已同步；抬手用最终矩形收尾（点空白时 helper 返回空 = 清空选择）
