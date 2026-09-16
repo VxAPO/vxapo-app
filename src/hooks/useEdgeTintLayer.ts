@@ -1518,8 +1518,15 @@ function renderToPanelBuffer(
     buf = { c, k, sc, sk, at: 0, reused: 0, x, y, w, h, dpr };
     panelBuffers.set(el, buf);
   }
-  buf.x = x;
-  buf.y = y;
+  /**
+   * buf.x/y 是**渲染时**的视口位置：缓冲里的像素就是按它画的（drawPanel 用
+   * setTransform(dpr,0,0,dpr,-x*dpr,-y*dpr)），blit 也按它贴回画布。
+   *
+   * 早期版本在这里无条件写成本次 rect 的位置，而下面"复用窗口"会直接 return
+   * 上一帧的像素：于是旧像素被贴到新位置，面板（含环带/染色）整体错位若干像素——
+   * 滚动时面板在动，错位量就是这段位移；滚动收敛后 rAF 停了，错位就留在画布上，
+   * 直到下一次重绘才被覆盖（现象：某几个滚动位置出现一小块发白的错位带）。
+   */
   if (
     buf.c.width !== Math.ceil(w * dpr) ||
     buf.c.height !== Math.ceil(h * dpr)
@@ -1543,7 +1550,9 @@ function renderToPanelBuffer(
     isToolbar(el) &&
     scrollingNow &&
     buf.at > 0 &&
-    now - buf.at < 140
+    now - buf.at < 140 &&
+    Math.abs(x - buf.x) < 2 &&
+    Math.abs(y - buf.y) < 2
   ) {
     buf.reused += 1;
     return buf;
@@ -1551,11 +1560,16 @@ function renderToPanelBuffer(
   if (
     buf.at > 0 &&
     buf.reused < PANEL_REUSE_MAX &&
-    now - buf.at < PANEL_REUSE_MS
+    now - buf.at < PANEL_REUSE_MS &&
+    Math.abs(x - buf.x) < 2 &&
+    Math.abs(y - buf.y) < 2
   ) {
     buf.reused += 1;
     return buf;
   }
+  // 真正要重画了：把渲染位置对齐到本次 rect（blit 与像素始终同源）
+  buf.x = x;
+  buf.y = y;
   // 距上次真实渲染过了多少个基准步：用于把褪色插值按时间推进（复用不改褪色时长）
   const frameScale = buf.at > 0 ? (now - buf.at) / FADE_FRAME_MS : 1;
   buf.reused = 0;
