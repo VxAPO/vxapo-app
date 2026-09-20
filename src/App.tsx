@@ -13,6 +13,7 @@ import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useSelectionStore } from "./stores/selectionStore";
 import ViewStage from "./components/ViewStage";
+import AppOverlays from "./components/AppOverlays";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
 import { useI18n } from "./lib/i18n";
@@ -36,21 +37,13 @@ import { useThrottledCompute } from "./hooks/useThrottledCompute";
  * 清它。这里只给设备卡恢复一次低频率的真实 paint 变更（全透明渐变 ↔ none），
  * 让该卡所在 chunk 周期性重新光栅化、背板重采；其余元素仍是 0 静置重绘。
  */
-import ConfirmDialog from "./components/ConfirmDialog";
 import CurvePanel from "./components/CurvePanel";
 import DevicePropsCard from "./components/DevicePropsCard";
 import DeviceTabs from "./components/DeviceTabs";
-import DragLayer from "./components/DragLayer";
-import ImportDialog from "./components/ImportDialog";
-import InstallDialog from "./components/InstallDialog";
-import SavePresetDialog from "./components/SavePresetDialog";
 import SelectionToolbar from "./components/SelectionToolbar";
-import SettingsDialog from "./components/SettingsDialog";
 import Sidebar from "./components/Sidebar";
 import StaleInstallBanner from "./components/StaleInstallBanner";
-import Toast from "./components/Toast";
 import TopBar from "./components/TopBar";
-import UninstallDialog from "./components/UninstallDialog";
 
 /** 底部悬浮条预留高度：保证最后一行卡片能完全滚到悬浮条上方 */
 const BOTTOM_BAR_PAD = 400;
@@ -69,14 +62,9 @@ export default function App() {
     selectedGuid,
     setSelectedGuid,
     selected,
-    devices,
     loading,
-    refresh,
     installedDevices,
-    uninstallTarget,
     setUninstallTarget,
-    uninstalling,
-    confirmUninstall,
     staleInstalls,
     staleBusy,
     migrateStaleSafe,
@@ -430,12 +418,7 @@ export default function App() {
     normalizeChainGain(fs, channelNames, channelOn);
   }, [normalizeChainGain, fs, channelNames, channelOn]);
 
-  const closeUninstall = useCallback((open: boolean) => {
-    if (!open) setUninstallTarget(null);
-  }, []);
-  const handleConfirmUninstall = useCallback(() => {
-    void confirmUninstall();
-  }, [confirmUninstall]);
+  // 卸载对话框的开关/确认已随 AppOverlays 抽出（内部直接订阅 deviceStore）。
 
   const channelCounts = useMemo(
     () => channelNames.map((c) => channelBandCounts[c] ?? 0),
@@ -621,72 +604,35 @@ export default function App() {
         )}
       </div>
 
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
+      <AppOverlays
+        settingsOpen={settingsOpen}
+        onSettingsOpenChange={setSettingsOpen}
         theme={theme}
         onThemeChange={setTheme}
-        staleUnmatched={staleInstalls.filter((s) => s.target_state === "unmatched")}
-        staleBusy={staleBusy}
-        onCleanupStale={cleanupStaleSafe}
-      />
-      <SavePresetDialog
-        open={savePresetOpen}
-        onOpenChange={setSavePresetOpen}
-        blocks={savePresetBlocks}
-        defaultName={savePresetDefaultName}
-        onSave={handleSavePreset}
-      />
-      <ConfirmDialog
-        open={deletePresetTarget !== null}
-        onOpenChange={closeDeletePreset}
-        title={t("notify.presetDeleted")}
-        message={
-          deletePresetTarget ? t("confirm.deletePreset", { name: deletePresetTarget.name }) : ""
-        }
-        onConfirm={confirmDeletePreset}
-      />
-      <ImportDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        devices={installedDevices}
-        selectedGuid={importDeviceGuid}
-        onSelectDevice={setImportDeviceGuid}
+        savePresetOpen={savePresetOpen}
+        onSavePresetOpenChange={setSavePresetOpen}
+        savePresetBlocks={savePresetBlocks}
+        savePresetDefaultName={savePresetDefaultName}
+        onSavePreset={handleSavePreset}
+        deletePresetTarget={deletePresetTarget}
+        onCloseDeletePreset={closeDeletePreset}
+        onConfirmDeletePreset={confirmDeletePreset}
+        importOpen={importOpen}
+        onImportOpenChange={setImportOpen}
+        importDeviceGuid={importDeviceGuid}
+        onSelectImportDevice={setImportDeviceGuid}
         onImport={handleImport}
-      />
-      <InstallDialog
-        open={installOpen}
-        onOpenChange={setInstallOpen}
-        devices={devices}
-        onRefresh={refresh}
+        installOpen={installOpen}
+        onInstallOpenChange={setInstallOpen}
         onInstalled={handleInstalled}
-        onBusyChange={setInstallBusy}
-      />
-      <UninstallDialog
-        device={uninstallTarget}
-        open={uninstallTarget !== null}
-        busy={uninstalling}
-        onOpenChange={closeUninstall}
-        onConfirm={handleConfirmUninstall}
-      />
-      <DragLayer
-        activeKey={blocksDragApi.activeKey}
-        dragSize={blocksDragApi.dragSize}
-        fly={blocksDragApi.fly}
-        overlayRef={blocksDragApi.overlayRef}
-        activeContent={blocksDragApi.activeKey ? blocksDragApi.renderOverlay(blocksDragApi.activeKey, blocksDragApi.overlayNum) : null}
+        onInstallBusyChange={setInstallBusy}
+        blocksDrag={blocksDragApi}
+        effectsDrag={effectsDragApi}
         classForKey={overlayClassForKey}
         styleForKey={overlayStyleForKey}
+        effectClassForKey={effectOverlayClassForKey}
+        notice={notice}
       />
-      <DragLayer
-        activeKey={effectsDragApi.activeKey}
-        dragSize={effectsDragApi.dragSize}
-        fly={effectsDragApi.fly}
-        overlayRef={effectsDragApi.overlayRef}
-        activeContent={effectsDragApi.activeKey ? effectsDragApi.renderOverlay(effectsDragApi.activeKey, effectsDragApi.overlayNum) : null}
-        classForKey={effectOverlayClassForKey}
-      />
-      <AnimatePresence>{notice && <Toast message={notice} />}</AnimatePresence>
     </div>
   );
 }
