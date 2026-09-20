@@ -12,6 +12,7 @@ import { buildEvalFreqs, curveRange } from "./lib/curve";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useSelectionStore } from "./stores/selectionStore";
+import ViewStage from "./components/ViewStage";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
 import { useI18n } from "./lib/i18n";
@@ -25,9 +26,7 @@ import { usePresetActions } from "./hooks/usePresetActions";
 import { useMarqueeSelection } from "./hooks/useMarqueeSelection";
 import {
   useViewAnimation,
-  VIEW_SLIDE_MS,
 } from "./hooks/useViewAnimation";
-import { COLLAPSE_EASE } from "./lib/viewMotion";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
 
 /**
@@ -37,7 +36,6 @@ import { useThrottledCompute } from "./hooks/useThrottledCompute";
  * 清它。这里只给设备卡恢复一次低频率的真实 paint 变更（全透明渐变 ↔ none），
  * 让该卡所在 chunk 周期性重新光栅化、背板重采；其余元素仍是 0 静置重绘。
  */
-import AdvancedView from "./components/AdvancedView";
 import ConfirmDialog from "./components/ConfirmDialog";
 import CurvePanel from "./components/CurvePanel";
 import DevicePropsCard from "./components/DevicePropsCard";
@@ -45,7 +43,6 @@ import DeviceTabs from "./components/DeviceTabs";
 import DragLayer from "./components/DragLayer";
 import ImportDialog from "./components/ImportDialog";
 import InstallDialog from "./components/InstallDialog";
-import PresetView from "./components/PresetView";
 import SavePresetDialog from "./components/SavePresetDialog";
 import SelectionToolbar from "./components/SelectionToolbar";
 import SettingsDialog from "./components/SettingsDialog";
@@ -535,61 +532,23 @@ export default function App() {
               onPointerCancel={onBodyPointerUp}
             >
               {loadErr && <div className="hint-row show err">{loadErr}</div>}
-            <div
-              className="view-stack"
-              style={{
-                minHeight: viewTransitionH ?? undefined,
-                // 先快后慢：起步就带走大部分距离，尾巴只做收敛——慢起曲线在高度差
-                // 小时前段几乎不动，看起来像平移完了先停一下
-                transition: viewCollapsing
-                  ? `min-height ${viewCollapseMs}ms ${COLLAPSE_EASE}`
-                  : "none",
-              }}
-            >
-            {/* 两套视图常驻 DOM：非当前视图 display:none。切换只做动画与显隐，
-                不再重建 31 张卡的 DOM（反复切换的挂载/首帧布局尖峰因此消失）。
-                退场那套先用 is-exiting（绝对定位让出文档流）演完，再收成 is-hidden。 */}
-            {!loadErr &&
-              (["preset", "advanced"] as const).map((v) => {
-                const active = view === v;
-                const hidden = hiddenStage === v;
-                if (!active && !stageWarm) return null;
-                return (
-                  <motion.div
-                    key={v}
-                    data-view={v}
-                    className={`view-stage${active ? " is-active" : hidden ? " is-hidden" : " is-exiting"}`}
-                    initial={false}
-                    animate={
-                      active
-                        ? { x: 0, opacity: 1 }
-                        : { x: v === "preset" ? "-100%" : "100%", opacity: 0 }
-                    }
-                    onAnimationComplete={() => handleStageAnimationComplete(v)}
-                    transition={{ duration: VIEW_SLIDE_MS / 1000, ease: "easeInOut" }}
-                  >
-                    {v === "preset" ? (
-                  <PresetView
-                    hintShift={hintShift}
-                    selectedIds={selectedIds}
-                    accentOf={accentOf}
-                    blocksDrag={blocksDragApi}
-                    effectsDrag={effectsDragApi}
-                  />
-                    ) : (
-                  <AdvancedView
-                    hintShift={hintShift}
-                    accentOf={accentOf}
-                    onChannelChange={handleChannelChange}
-                    selectedIds={selectedIds}
-                    blocksDrag={blocksDragApi}
-                    effectsDrag={effectsDragApi}
-                  />
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
+            {!loadErr && (
+              <ViewStage
+                view={view}
+                stageWarm={stageWarm}
+                hiddenStage={hiddenStage}
+                viewTransitionH={viewTransitionH}
+                viewCollapsing={viewCollapsing}
+                viewCollapseMs={viewCollapseMs}
+                hintShift={hintShift}
+                selectedIds={selectedIds}
+                accentOf={accentOf}
+                blocksDrag={blocksDragApi}
+                effectsDrag={effectsDragApi}
+                onChannelChange={handleChannelChange}
+                onStageAnimationComplete={handleStageAnimationComplete}
+              />
+            )}
 
             <AnimatePresence mode="wait" initial={false}>
               {selGeom && selectedIds.length > 0 && !toolbarHidden && selGeomReady && !marqueeToolbarSuppressed && (
