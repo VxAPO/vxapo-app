@@ -1,6 +1,8 @@
 // VxAPO App —— config.toml 生成与解析（UI 设计规范 01 契约）
 // 只负责自身生成的结构；外部 TOML 的非 peq 未知效果器保留为 tail。
 import type { Band, Block, EffectItem } from "./model";
+import { parse as parseToml } from "smol-toml";
+import { EFFECT_PARAM_SPECS } from "./effects.generated";
 import { KNOWN_EFFECT_TYPES, defaultEffectParams } from "./effects";
 
 function num(n: number): string {
@@ -27,6 +29,8 @@ export function buildToml(
   effects: EffectItem[] = [],
   channel?: ChannelCtx,
 ): string {
+  // `version` / `[meta]` 与 peq 块的 `crossover_hz` 不属效果器参数，故仍写死：
+  // driver 的 effect_param_specs() 只覆盖 [[effects]] 的可调参数（决策 2 的范围）。
   const out: string[] = ["version = 1", `enabled = ${enabled}`, "", "[meta]", 'app = "vxapo"', "schema = 1", ""];
   const writeBlocks = channel?.mode
     ? blocks
@@ -66,119 +70,6 @@ function pushBlock(blocks: Block[], b: Block) {
   }
 }
 
-export function parseConfig(text: string): {
-  blocks: Block[];
-  effects: EffectItem[];
-  channelMode: boolean;
-} {
-  const blocks: Block[] = [];
-  const effects: EffectItem[] = [];
-  // 通道选择器模式：任意块/效果器带“单声道 channels”即视为开启。
-  // App 开启通道模式时每块只写一个声道（channels=["L"]/["R"]）；
-  // 多元素（如 ["L","R"]）是立体声共用一个块，不属通道模式。
-  let channelMode = false;
-  let current: Block | null = null;
-  let currentEffect: EffectItem | null = null;
-  let inBand = false;
-  let pendingBandType: Band["kind"] | undefined;
-  const lineRe = /^\s*([A-Za-z0-9_.-]+)\s*=\s*(.+?)\s*$/;
-
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (line.startsWith("[[effects.bands]]")) {
-      if (!current) continue;
-      inBand = true;
-      pendingBandType = undefined;
-      continue;
-    }
-    if (line.startsWith("[[effects]]")) {
-      if (current) pushBlock(blocks, current);
-      if (currentEffect) effects.push(currentEffect);
-      current = { enabled: true, bands: [] };
-      currentEffect = null;
-      inBand = false;
-      pendingBandType = undefined;
-      continue;
-    }
-    const m = lineRe.exec(line);
-    if (!m) continue;
-    const key = m[1];
-    const value = m[2];
-    const unquote = (v: string) => (v.startsWith('"') ? JSON.parse(v) : v);
-    if (key === "type") {
-      const t = unquote(value);
-      if (inBand && current) {
-        const kinds: Band["kind"][] = ["peaking", "low_shelf", "high_shelf", "low_pass", "high_pass"];
-        pendingBandType = kinds.includes(t as Band["kind"]) ? (t as Band["kind"]) : undefined;
-      } else if (t !== "peq") {
-        current = null;
-        if (KNOWN_EFFECT_TYPES.includes(t)) currentEffect = { type: t, enabled: true };
-      }
-      continue;
-    }
-    if (currentEffect) {
-      if (key === "enabled") {
-        currentEffect.enabled = value === "true";
-      } else if (key === "channels") {
-        try {
-          const arr: unknown = JSON.parse(value);
-          if (Array.isArray(arr)) {
-            if (arr.length === 1) channelMode = true;
-            currentEffect.channels = arr.map((c) => String(c));
-          }
-        } catch {
-          /* 忽略无法解析的 channels */
-        }
-      } else if (key !== "type") {
-        const n = Number(value);
-        (currentEffect.params ??= {})[key] = Number.isFinite(n) ? n : unquote(value);
-      }
-      continue;
-    }
-    if (!current) continue;
-    switch (key) {
-      case "group":
-        current.group = unquote(value);
-        break;
-      case "name":
-        current.name = unquote(value);
-        break;
-      case "enabled":
-        current.enabled = value === "true";
-        break;
-      case "crossover_hz":
-        break;
-      case "channels": {
-        try {
-          const arr: unknown = JSON.parse(value);
-          if (Array.isArray(arr) && arr.length) {
-            if (arr.length === 1) channelMode = true;
-            current.channel = String(arr[0]);
-          }
-        } catch {
-          /* 忽略无法解析的 channels */
-        }
-        break;
-      }
-      case "fc":
-        current.bands.push({ fc: Number(value), gain_db: 0, q: 1, ...(pendingBandType ? { kind: pendingBandType } : {}) });
-        pendingBandType = undefined;
-        break;
-      case "gain_db":
-        if (current.bands.length) current.bands[current.bands.length - 1].gain_db = Number(value);
-        break;
-      case "q":
-        if (current.bands.length) current.bands[current.bands.length - 1].q = Number(value);
-        break;
-      default:
-        break;
-    }
-  }
-  if (current) pushBlock(blocks, current);
-  if (currentEffect) effects.push(currentEffect);
-  return { blocks, effects, channelMode };
-}
-
 export interface ConfigParse {
   blocks: Block[];
   effects: EffectItem[];
@@ -189,36 +80,136 @@ export interface ConfigParse {
   /** 首个未知非 peq 效果器块起、到文件末尾的原始文本（保存时原样拼回，避免破坏第三方效果器） */
   tail: string;
 }
+/** TOML 表（smol-toml 解析结果的形态）。 */
+type TomlTable = Record<string, unknown>;
 
-export function parseConfigWithTail(text: string): ConfigParse {
-  const { blocks, effects, channelMode } = parseConfig(text);
+/** 通道选择器：数组 → 字符串数组（非数组返回 undefined）。 */
+function readChannels(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  return v.map((c) => String(c));
+}
+
+/** 单个 `[[effects.bands]]` 表 → Band（缺省 fc=0 / gain_db=0 / q=1）。 */
+function toBand(t: TomlTable): Band {
+  const kinds: Band["kind"][] = ["peaking", "low_shelf", "high_shelf", "low_pass", "high_pass"];
+  const kind =
+    typeof t.type === "string" && kinds.includes(t.type as Band["kind"])
+      ? (t.type as Band["kind"])
+      : undefined;
+  return {
+    fc: typeof t.fc === "number" ? t.fc : 0,
+    gain_db: typeof t.gain_db === "number" ? t.gain_db : 0,
+    q: typeof t.q === "number" ? t.q : 1,
+    ...(kind ? { kind } : {}),
+  };
+}
+
+/** 第 n 个 `[[effects]]` 块起、到文件末尾的原文（保存时原样拼回，避免破坏第三方效果器）。 */
+function tailFromNthEffectsBlock(text: string, n: number): string {
   const lines = text.split(/\r?\n/);
-  let enabled = true;
-  for (const line of lines) {
-    if (line.trim().startsWith("[[effects]]")) break;
-    const m = /^\s*enabled\s*=\s*(true|false)\s*$/.exec(line);
-    if (m) {
-      enabled = m[1] === "true";
-      break;
-    }
-  }
+  let seen = 0;
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim() !== "[[effects]]") continue;
-    let type = "";
-    for (let j = i + 1; j < lines.length; j++) {
-      const l = lines[j].trim();
-      if (l.startsWith("[[effects")) break;
-      const m = /^type\s*=\s*"([^"]+)"/.exec(l);
-      if (m) {
-        type = m[1];
-        break;
-      }
-    }
-    if (type && type !== "peq" && !KNOWN_EFFECT_TYPES.includes(type)) {
-      return { blocks, effects, channelMode, enabled, tail: "\n" + lines.slice(i).join("\n") };
-    }
+    if (seen === n) return "\n" + lines.slice(i).join("\n");
+    seen++;
   }
-  return { blocks, effects, channelMode, enabled, tail: "" };
+  return "";
+}
+
+/** 参数是否落在 driver 参数表声明的范围内（仅告警，不改写用户值）。 */
+function warnOutOfRange(type: string, key: string, v: number): void {
+  const spec = EFFECT_PARAM_SPECS.find((e) => e.effect === type)?.params.find((p) => p.key === key);
+  if (!spec) return;
+  if (v < spec.min || v > spec.max) {
+    console.warn(`[toml] ${type}.${key} = ${v} 超出 driver 范围 [${spec.min}, ${spec.max}]`);
+  }
+}
+
+/**
+ * 解析 config.toml（smol-toml）→ UI 模型。
+ *
+ * 与手写行解析器的差异：畸形 TOML 不再被静默吞掉半张表——解析失败时放弃解析并把
+ * 原文放进 `tail`（保存时原样写回，不破坏用户文件），错误打到控制台。
+ */
+function parseDocument(text: string): ConfigParse {
+  let doc: TomlTable;
+  try {
+    doc = parseToml(text) as TomlTable;
+  } catch (e) {
+    console.error("[toml] 解析失败：已放弃解析并按原样保留（保存时写回原文）", e);
+    return { blocks: [], effects: [], channelMode: false, enabled: true, tail: text ? "\n" + text : "" };
+  }
+  const tables = Array.isArray(doc.effects) ? (doc.effects as TomlTable[]) : [];
+  const blocks: Block[] = [];
+  const effects: EffectItem[] = [];
+  // 通道选择器模式：任意块/效果器带“单声道 channels”即视为开启；
+  // 多元素（如 ["L","R"]）是立体声共用一个块，不属通道模式。
+  let channelMode = false;
+  let tail = "";
+
+  for (let i = 0; i < tables.length; i++) {
+    const t = tables[i];
+    const type = typeof t.type === "string" ? t.type : "";
+    const channels = readChannels(t.channels);
+    if (channels?.length === 1) channelMode = true;
+
+    if (type === "peq") {
+      const bands = Array.isArray(t.bands) ? (t.bands as TomlTable[]).map(toBand) : [];
+      const block: Block = {
+        enabled: t.enabled !== false,
+        bands,
+        ...(typeof t.group === "string" ? { group: t.group } : {}),
+        ...(typeof t.name === "string" ? { name: t.name } : {}),
+        ...(channels?.length ? { channel: channels[0] } : {}),
+      };
+      // 多 band 的 peq 块按 band 拆成多个块（与手写解析器一致）。
+      pushBlock(blocks, block);
+      continue;
+    }
+    if (KNOWN_EFFECT_TYPES.includes(type)) {
+      const params: Record<string, number | string> = {};
+      for (const [k, v] of Object.entries(t)) {
+        if (k === "type" || k === "enabled" || k === "channels" || k === "bands") continue;
+        if (typeof v === "number") {
+          warnOutOfRange(type, k, v);
+          params[k] = v;
+        } else if (typeof v === "string") {
+          params[k] = v;
+        }
+      }
+      effects.push({
+        type,
+        enabled: t.enabled !== false,
+        ...(channels?.length ? { channels } : {}),
+        ...(Object.keys(params).length ? { params } : {}),
+      });
+      continue;
+    }
+    // 未知非 peq 效果器：自该块起原文保留（不解析、保存时原样写回）。
+    tail = tailFromNthEffectsBlock(text, i);
+    break;
+  }
+
+  return {
+    blocks,
+    effects,
+    channelMode,
+    enabled: typeof doc.enabled === "boolean" ? doc.enabled : true,
+    tail,
+  };
+}
+
+export function parseConfig(text: string): {
+  blocks: Block[];
+  effects: EffectItem[];
+  channelMode: boolean;
+} {
+  const { blocks, effects, channelMode } = parseDocument(text);
+  return { blocks, effects, channelMode };
+}
+
+export function parseConfigWithTail(text: string): ConfigParse {
+  return parseDocument(text);
 }
 
 export function countBands(blocks: Block[]): number {
