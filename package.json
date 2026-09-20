@@ -41,6 +41,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^30.1.0",
     "rcedit": "^5.0.2",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.8.3",
