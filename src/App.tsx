@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
-import type { Block, Device } from "./lib/model";
+import type { Device } from "./lib/model";
 import { channelNamesFor } from "./lib/channels";
 import { exportConfig, friendlyError, writeConfig } from "./lib/api";
 import { parseConfigWithTail } from "./lib/toml";
@@ -11,6 +11,7 @@ import { snapPx } from "./lib/snap";
 import { buildEvalFreqs, curveRange } from "./lib/curve";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
+import { useSelectionStore } from "./stores/selectionStore";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
 import { useI18n } from "./lib/i18n";
@@ -200,11 +201,7 @@ export default function App() {
     };
   }, []);
 
-  // 事件期跨 hook 引用（打破 preset↔marquee↔view 依赖环）
-  const accentOfRef = useRef<(b: Block) => string>(() => "#519741");
-  const selectedIdsRef = useRef<string[]>([]);
-  const cancelToolbarAnimRef = useRef<() => void>(() => {});
-  const bumpSelGeomTickRef = useRef<() => void>(() => {});
+  // 选中集与工具栏联动改由 selectionStore 承载（决策 4 阶段 B，替代原先四个跨 hook ref）。
 
   const {
     view,
@@ -234,7 +231,6 @@ export default function App() {
     bodyRef,
     blocks,
     effects,
-    selectedIdsRef,
     setBlocks,
     setEffects,
     channelNames,
@@ -247,9 +243,6 @@ export default function App() {
     removeEffect,
     patchEffectSemantic,
     patchEffectParam,
-    accentOfRef,
-    cancelToolbarAnimRef,
-    bumpSelGeomTickRef,
   });
 
   // 通道选择器开关跟随磁盘配置：重启/切换设备后从 per-channel 数据还原，
@@ -294,8 +287,6 @@ export default function App() {
     setActiveChannel,
     toolbarHidden,
   });
-  cancelToolbarAnimRef.current = cancelToolbarAnim;
-  bumpSelGeomTickRef.current = bumpSelGeomTick;
 
   const {
     customPresets,
@@ -319,8 +310,14 @@ export default function App() {
     notify,
     clearSelection: () => setSelectedIds([]),
   });
-  accentOfRef.current = accentOf;
-  selectedIdsRef.current = selectedIds;
+  // 决策 4 阶段 B：这些联动在渲染提交后写入 selectionStore（不再渲染期写 ref）。
+  useEffect(() => {
+    const s = useSelectionStore.getState();
+    s.setCancelToolbarAnim(cancelToolbarAnim);
+    s.setBumpSelGeomTick(bumpSelGeomTick);
+    s.setAccentOf(accentOf);
+    s.setSelectedIds(selectedIds);
+  }, [cancelToolbarAnim, bumpSelGeomTick, accentOf, selectedIds]);
 
   // 设备切换时保存旧设备通道状态并恢复新设备通道状态（逐设备记忆，
   // 原逻辑在通道记忆 effect 内一并清空选中）。

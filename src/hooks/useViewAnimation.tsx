@@ -17,12 +17,12 @@ import {
 // 时序契约常量集中放在 lib/viewMotion.ts（App 与本文件共用），这里只做兼容导出
 export { VIEW_COLLAPSE_MS, VIEW_SLIDE_MS };
 
+import { useSelectionStore } from "../stores/selectionStore";
+
 interface UseViewAnimationOptions {
   bodyRef: React.RefObject<HTMLDivElement | null>;
   blocks: Block[];
   effects: EffectItem[];
-  /** 事件期读取（框选集合）——由 App 在 hook 后填充，绕 opening 顺序/依赖环。 */
-  selectedIdsRef: React.MutableRefObject<string[]>;
   setBlocks: React.Dispatch<React.SetStateAction<Block[]>>;
   setEffects: React.Dispatch<React.SetStateAction<EffectItem[]>>;
   channelNames: string[];
@@ -35,12 +35,6 @@ interface UseViewAnimationOptions {
   removeEffect: (id: string) => void;
   patchEffectSemantic: (id: string, strength: number) => void;
   patchEffectParam: (id: string, key: string, value: number | string) => void;
-  /** 事件期读取（拖拽 overlay 配色），由 App 在预设 hook 后填充。 */
-  accentOfRef: React.MutableRefObject<(b: Block) => string>;
-  /** 事件期调用（beginViewAnim 取消工具栏动画），由 marquee hook 填充。 */
-  cancelToolbarAnimRef: React.MutableRefObject<() => void>;
-  /** 事件期调用（finishViewAnim 重测几何），由 marquee hook 填充。 */
-  bumpSelGeomTickRef: React.MutableRefObject<() => void>;
 }
 
 /** 预设/高级视图切换动画 + 拖拽 API + 悬浮 overlay 内容。 */
@@ -48,7 +42,6 @@ export function useViewAnimation({
   bodyRef,
   blocks,
   effects,
-  selectedIdsRef,
   setBlocks,
   setEffects,
   channelNames,
@@ -61,10 +54,11 @@ export function useViewAnimation({
   removeEffect,
   patchEffectSemantic,
   patchEffectParam,
-  accentOfRef,
-  cancelToolbarAnimRef,
-  bumpSelGeomTickRef,
 }: UseViewAnimationOptions) {
+  // 决策 4 阶段 B：选中集与工具栏联动改读 selectionStore（不再经 ref 打洞）。
+  // 这里用订阅（渲染期一致），事件期读取仍走 getState()。
+  const selectedIds = useSelectionStore((s) => s.selectedIds);
+  const accentOf = useSelectionStore((s) => s.accentOf);
   const [view, setView] = useState<ViewMode>("preset");
   const [side, setSide] = useState<SideSection>("preset");
   const [segDir, setSegDir] = useState<"left" | "right">("right");
@@ -171,12 +165,12 @@ export function useViewAnimation({
     setViewAnimating(false);
     // 平移动画结束后立即重测几何并让浮窗出场；高度收窄仍在后台继续。
     // 收窄期间若发生滚动，scroll 监听会继续重测，浮窗不会跟丢。
-    bumpSelGeomTickRef.current();
+    useSelectionStore.getState().bumpSelGeomTick();
     window.setTimeout(() => {
       if (token !== viewTransitionTokenRef.current) return;
       setToolbarHidden(false);
     }, 0);
-  }, [bumpSelGeomTickRef]);
+  }, []);
 
   const tryFinishViewAnim = useCallback(() => {
     if (!viewTransitionPendingRef.current) return;
@@ -194,7 +188,7 @@ export function useViewAnimation({
     window.clearTimeout(viewAnimTimerRef.current);
     window.clearTimeout(viewCollapseStartTimerRef.current);
     window.clearTimeout(viewCollapseTimerRef.current);
-    cancelToolbarAnimRef.current();
+    useSelectionStore.getState().cancelToolbarAnim();
     const body = bodyRef.current;
     if (body) {
       // 无论旧内容是否可滚动，都记录当前滚动位置；
@@ -223,7 +217,7 @@ export function useViewAnimation({
     // 兜底：正常情况下由进场 onAnimationComplete + 退场 onExitComplete
     // 共同触发 finishViewAnim；若极端卡顿导致回调未触发，1200ms 后强制收尾。
     viewAnimTimerRef.current = window.setTimeout(() => finishViewAnim(token), 1200);
-  }, [finishViewAnim, startCollapse, cancelToolbarAnimRef]);
+  }, [finishViewAnim, startCollapse]);
 
   /** 视图变化时把新视图从 display:none 放出来（退场那套在动画结束后再收起来）。 */
   useEffect(() => {
@@ -419,10 +413,10 @@ export function useViewAnimation({
       const b = blocks.find((x) => x.id === key);
       if (!b) return "group-card";
       return view === "preset"
-        ? `group-card standalone${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${selectedIdsRef.current.includes(key) ? " is-selected" : ""}`
-        : `band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${selectedIdsRef.current.includes(key) ? " is-selected" : ""}`;
+        ? `group-card standalone${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${selectedIds.includes(key) ? " is-selected" : ""}`
+        : `band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${selectedIds.includes(key) ? " is-selected" : ""}`;
     },
-    [blocks, view, selectedIdsRef],
+    [blocks, view, selectedIds],
   );
 
   // 拖拽悬浮/飞行副本携带组配色，组名+叉的 chip 使用真实组色
@@ -430,12 +424,12 @@ export function useViewAnimation({
     (key: string): React.CSSProperties | undefined => {
       const b = blocks.find((x) => x.id === key);
       if (!b) return undefined;
-      const style = accentStyle(accentOfRef.current(b));
+      const style = accentStyle(accentOf(b));
       // preset 沿用原逻辑（全部带组色）；参数视图只有组卡片带组色
       // 只有组卡片带组色；无组卡不设 --card-accent，描边回退到品牌色
       return b.group ? style : undefined;
     },
-    [view, blocks, accentOfRef],
+    [view, blocks, accentOf],
   );
 
   const effectOverlayClassForKey = useCallback(
