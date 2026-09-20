@@ -22,6 +22,7 @@ import {
   type BandPatch,
 } from "../lib/blocks";
 import { getLang, t } from "../lib/i18n/core";
+import { planNormalize } from "../lib/normalize";
 
 function effectId(e: EffectItem): string {
   return e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`;
@@ -99,6 +100,14 @@ interface ConfigStore {
   patchBand(blockIdx: number, bandIdx: number, patch: BandPatch): void;
   deviceTuningOn(guid: string): boolean;
   toggleDeviceTuning(guid: string): void;
+  /**
+   * 开关通道选择器：全局基准电平 ↔ 每声道一个（原 App 内联逻辑）。
+   *
+   * `on` 传**切换前**的通道模式状态（沿用原实现：`!on` 时把全局 preamp 拆成每声道一个）。
+   */
+  setChannelPreampMode(on: boolean, channelNames: string[]): void;
+  /** 归一化整链增益（planNormalize → 写 preamp 效果器 + 提示）。 */
+  normalizeChainGain(fs: number, channelNames: string[], channelOn: boolean): void;
   /** 适配层用它算 totalBands / channelBandCounts（与原 useMemo 同源）。 */
   writableBlocks(): Block[];
 }
@@ -504,6 +513,81 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   deviceTuningOn(guid) {
     return get().tuningMap[guid] ?? true;
+  },
+
+  setChannelPreampMode(on, channelNames) {
+    const first = channelNames[0] ?? "L";
+    get().markDirty();
+    set((prev) => {
+      if (!on) {
+        // 开启通道选择器：全局基准电平拆成每声道一个
+        const globalPreamp = prev.effects.find((e) => e.type === "preamp" && !e.channels?.length);
+        if (!globalPreamp) return { effects: prev.effects };
+        const gain =
+          typeof globalPreamp.params?.gain_db === "number" ? globalPreamp.params.gain_db : 0;
+        const perChannel = channelNames.map((ch) => ({
+          id: `preamp:${ch}`,
+          type: "preamp" as const,
+          enabled: globalPreamp.enabled,
+          params: { gain_db: gain },
+          channels: [ch],
+        }));
+        return { effects: [...prev.effects.filter((e) => e.type !== "preamp"), ...perChannel] };
+      }
+      // 关闭通道选择器：按第一声道合并，取消声道标识
+      const firstPreamp = prev.effects.find(
+        (e) => e.type === "preamp" && e.channels?.includes(first),
+      );
+      if (!firstPreamp) return { effects: prev.effects };
+      const gain = typeof firstPreamp.params?.gain_db === "number" ? firstPreamp.params.gain_db : 0;
+      return {
+        effects: [
+          ...prev.effects.filter((e) => e.type !== "preamp"),
+          {
+            id: "preamp:all",
+            type: "preamp" as const,
+            enabled: firstPreamp.enabled,
+            params: { gain_db: gain },
+          },
+        ],
+      };
+    });
+  },
+
+  normalizeChainGain(fs, channelNames, channelOn) {
+    const s = get();
+    const { updates } = planNormalize(s.blocks, s.effects, channelNames, channelOn, fs);
+    if (!updates.length) {
+      s.notifySink?.(t("normalize.title.disabled"));
+      return;
+    }
+    s.markDirty();
+    set((prev) => {
+      let next = prev.effects;
+      for (const u of updates) {
+        const item: EffectItem = {
+          id: u.id,
+          type: "preamp",
+          enabled: true,
+          params: { gain_db: u.gain_db },
+          ...(u.channels ? { channels: u.channels } : {}),
+        };
+        const idx = next.findIndex((e) => e.id === u.id);
+        next = idx < 0 ? [...next, item] : next.map((e, i) => (i === idx ? item : e));
+      }
+      return { effects: next };
+    });
+    if (channelOn) {
+      const summary = updates
+        .map((u) => `${u.channels?.[0]} ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB`)
+        .join("，");
+      s.notifySink?.(t("notify.normalizedByChannel", { summary }));
+    } else {
+      const u = updates[0];
+      s.notifySink?.(
+        t("notify.normalized", { db: `${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)}` }),
+      );
+    }
   },
 
   toggleDeviceTuning(guid) {

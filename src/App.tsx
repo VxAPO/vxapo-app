@@ -3,14 +3,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
-import type { Block, Device, EffectItem, PeqBandKind } from "./lib/model";
+import type { Block, Device, PeqBandKind } from "./lib/model";
 import { LIBRARY } from "./data/library";
 import { channelNamesFor } from "./lib/channels";
 import { exportConfig, friendlyError, writeConfig } from "./lib/api";
 import { parseConfigWithTail } from "./lib/toml";
 import { snapPx } from "./lib/snap";
 import { buildEvalFreqs, curveRange } from "./lib/curve";
-import { planNormalize } from "./lib/normalize";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useTheme } from "./hooks/useTheme";
@@ -116,6 +115,8 @@ export default function App() {
     forceReload,
     deviceTuningOn,
     toggleDeviceTuning,
+    setChannelPreampMode,
+    normalizeChainGain,
   } = useConfig(installedDevices.length === 0 ? null : selectedGuid, onError, notify, {
     mode: channelOn,
     first: channelNames[0] ?? "L",
@@ -371,59 +372,30 @@ export default function App() {
   const [importDeviceGuid, setImportDeviceGuid] = useState<string | null>(null);
 
   const toggleChannel = useCallback(() => {
-    markDirty();
     // 只有通道切换会伴随视图切到 advanced 时才需要 view-stage 动画；
     // 已处于 advanced 时直接清空选择即可，不触发视图退场/进场。
-    if (view !== "advanced") beginViewAnim(); else setCopyOpen(false);
+    if (view !== "advanced") beginViewAnim();
     setCopyOpen(false);
     setSelectedIds([]);
-    const first = channelNames[0] ?? "L";
-    if (!channelOn) {
-      // 开启通道选择器：全局基准电平拆成每声道一个
-      setEffects((prev) => {
-        const globalPreamp = prev.find((e) => e.type === "preamp" && !e.channels?.length);
-        if (!globalPreamp) return prev;
-        const gain =
-          typeof globalPreamp.params?.gain_db === "number"
-            ? globalPreamp.params.gain_db
-            : 0;
-        const perChannel = channelNames.map((ch) => ({
-          id: `preamp:${ch}`,
-          type: "preamp" as const,
-          enabled: globalPreamp.enabled,
-          params: { gain_db: gain },
-          channels: [ch],
-        }));
-        return [...prev.filter((e) => e.type !== "preamp"), ...perChannel];
-      });
-    } else {
-      // 关闭通道选择器：按第一声道合并，取消声道标识
-      setEffects((prev) => {
-        const firstPreamp = prev.find(
-          (e) => e.type === "preamp" && e.channels?.includes(first),
-        );
-        if (!firstPreamp) return prev;
-        const gain =
-          typeof firstPreamp.params?.gain_db === "number"
-            ? firstPreamp.params.gain_db
-            : 0;
-        return [
-          ...prev.filter((e) => e.type !== "preamp"),
-          {
-            id: "preamp:all",
-            type: "preamp" as const,
-            enabled: firstPreamp.enabled,
-            params: { gain_db: gain },
-          },
-        ];
-      });
-    }
+    // 基准电平的拆分/合并（配置域逻辑）在 configStore 内完成；传入切换前的 channelOn。
+    setChannelPreampMode(channelOn, channelNames);
     setChannelOn((v) => !v);
     setView("advanced");
     setSegDir("right");
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
-  }, [channelOn, channelNames, view, markDirty, blocksDragApi.cancelDrag, effectsDragApi.cancelDrag]);
+  }, [
+    channelOn,
+    channelNames,
+    view,
+    setChannelPreampMode,
+    beginViewAnim,
+    setChannelOn,
+    setView,
+    setSegDir,
+    blocksDragApi.cancelDrag,
+    effectsDragApi.cancelDrag,
+  ]);
 
   const openSettings = useCallback(() => {
     // 打开设置前清除框选，避免浮窗悬空在点击层。
@@ -468,41 +440,8 @@ export default function App() {
   }, [selectedGuid, notify]);
 
   const normalizeGain = useCallback(() => {
-    const { updates } = planNormalize(blocks, effects, channelNames, channelOn, fs);
-    if (!updates.length) {
-      notify(t("normalize.title.disabled"));
-      return;
-    }
-    markDirty();
-    setEffects((prev) => {
-      let next = prev;
-      for (const u of updates) {
-        const item: EffectItem = {
-          id: u.id,
-          type: "preamp",
-          enabled: true,
-          params: { gain_db: u.gain_db },
-          ...(u.channels ? { channels: u.channels } : {}),
-        };
-        const idx = next.findIndex((e) => e.id === u.id);
-        next = idx < 0 ? [...next, item] : next.map((e, i) => (i === idx ? item : e));
-      }
-      return next;
-    });
-    if (channelOn) {
-      const summary = updates
-        .map((u) => `${u.channels?.[0]} ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB`)
-        .join("，");
-      notify(t("notify.normalizedByChannel", { summary }));
-    } else {
-      const u = updates[0];
-      notify(
-        t("notify.normalized", {
-          db: `${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)}`,
-        }),
-      );
-    }
-  }, [blocks, channelOn, channelNames, effects, fs, markDirty, notify]);
+    normalizeChainGain(fs, channelNames, channelOn);
+  }, [normalizeChainGain, fs, channelNames, channelOn]);
 
   const closeUninstall = useCallback((open: boolean) => {
     if (!open) setUninstallTarget(null);

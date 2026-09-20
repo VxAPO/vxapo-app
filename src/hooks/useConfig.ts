@@ -164,6 +164,16 @@ export function useConfig(
     (guid: string) => useConfigStore.getState().deviceTuningOn(guid),
     [],
   );
+  const setChannelPreampMode = useCallback(
+    (on: boolean, channelNames: string[]) =>
+      useConfigStore.getState().setChannelPreampMode(on, channelNames),
+    [],
+  );
+  const normalizeChainGain = useCallback(
+    (fs: number, channelNames: string[], channelOn: boolean) =>
+      useConfigStore.getState().normalizeChainGain(fs, channelNames, channelOn),
+    [],
+  );
   const toggleDeviceTuning = useCallback(
     (guid: string) => useConfigStore.getState().toggleDeviceTuning(guid),
     [],
@@ -195,5 +205,7 @@ export function useConfig(
     channelBandCounts,
     deviceTuningOn,
     toggleDeviceTuning,
+    setChannelPreampMode,
+    normalizeChainGain,
   };
 }
