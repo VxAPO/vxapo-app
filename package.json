@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:win": "tauri build && node_modules\\rcedit\\bin\\rcedit-x64.exe src-tauri\\target\\release\\vxapo-app.exe --set-icon src-tauri\\icons\\icon.ico",
+    "sync:driver-schema": "node scripts/sync-driver-schema.mjs",
     "icon:fix": "node_modules\\rcedit\\bin\\rcedit-x64.exe src-tauri\\target\\debug\\vxapo-app.exe --set-icon src-tauri\\icons\\icon.ico"
   },
   "dependencies": {

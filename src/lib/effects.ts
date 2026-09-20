@@ -1,4 +1,5 @@
 import type { EffectItem } from "./model";
+import { EFFECT_PARAM_SPECS } from "./effects.generated";
 
 export interface EffectDef {
   type: string;
@@ -49,53 +50,75 @@ export interface EffectParamDef {
   options?: { value: string; label: string }[];
 }
 
-const EFFECT_PARAMS: Record<string, EffectParamDef[]> = {
-  preamp: [{ key: "gain_db", label: "增益", min: -120, max: 48, step: 0.1, unit: "dB" }],
-  wide: [
-    { key: "gain", label: "高频补偿", min: 0, max: 1, step: 0.01 },
-    { key: "air", label: "中置空气", min: 0, max: 1, step: 0.01 },
-    { key: "air_side", label: "侧向空气", min: 0, max: 1, step: 0.01 },
-    { key: "mix", label: "干湿混合", min: 0, max: 1, step: 0.01 },
-    { key: "crossover_hz", label: "分频点", min: 200, max: 1000, step: 10, unit: "Hz" },
-  ],
-  aural: [
-    { key: "tune_hz", label: "中心频率", min: 500, max: 10000, step: 10, unit: "Hz" },
-    { key: "drive", label: "驱动", min: 0, max: 4.25, step: 0.01 },
-    { key: "odd", label: "奇次谐波", min: 0, max: 1.5, step: 0.01 },
-    { key: "even", label: "偶次谐波", min: 0, max: 0.75, step: 0.01 },
-    { key: "wet", label: "湿声", min: 0, max: 1, step: 0.01 },
-    { key: "dry", label: "干声", min: 0, max: 1, step: 0.01 },
-  ],
-  reverb: [
-    { key: "room_size", label: "房间大小", min: 0.5, max: 1.5, step: 0.01 },
-    { key: "decay", label: "衰减", min: 0, max: 1, step: 0.01 },
-    { key: "damping", label: "阻尼", min: 0, max: 1, step: 0.01 },
-    { key: "pre_delay_ms", label: "预延迟", min: 0, max: 100, step: 1, unit: "ms" },
-    { key: "low_cut_hz", label: "低频保护", min: 20, max: 250, step: 5, unit: "Hz" },
-    { key: "wet", label: "湿声", min: 0, max: 1, step: 0.01 },
-    { key: "dry", label: "干声", min: 0, max: 1, step: 0.01 },
-  ],
-  compressor: [
-    { key: "threshold_db", label: "阈值", min: -60, max: 0, step: 1, unit: "dBFS" },
-    { key: "ratio", label: "比例", min: 1, max: 20, step: 0.5 },
-    { key: "knee_db", label: "软膝", min: 0, max: 12, step: 1, unit: "dB" },
-    { key: "attack_ms", label: "攻击", min: 0.1, max: 100, step: 0.5, unit: "ms" },
-    { key: "release_ms", label: "释放时间", min: 10, max: 1000, step: 10, unit: "ms" },
-    { key: "makeup_gain_db", label: "补偿增益", min: 0, max: 24, step: 0.5, unit: "dB" },
-    { key: "wet", label: "湿声", min: 0, max: 1, step: 0.01 },
-    { key: "dry", label: "干声", min: 0, max: 1, step: 0.01 },
-  ],
-  loudness: [
-    { key: "phon", label: "目标响度", min: 0, max: 120, step: 1, unit: "phon" },
-    { key: "reference_phon", label: "参考响度", min: 0, max: 120, step: 1, unit: "phon" },
-  ],
+/**
+ * 参数文案（UI 专属）。范围/步进/单位来自 driver 参数表（effects.generated.ts，决策 2），
+ * 此处只维护 label；键为 `{effect}.{param}`，缺省回落到参数键本身。
+ */
+const PARAM_LABELS: Record<string, string> = {
+  "preamp.gain_db": "增益",
+  "wide.gain": "高频补偿",
+  "wide.air": "中置空气",
+  "wide.air_side": "侧向空气",
+  "wide.mix": "干湿混合",
+  "wide.crossover_hz": "分频点",
+  "aural.tune_hz": "中心频率",
+  "aural.drive": "驱动",
+  "aural.odd": "奇次谐波",
+  "aural.even": "偶次谐波",
+  "aural.wet": "湿声",
+  "aural.dry": "干声",
+  "reverb.room_size": "房间大小",
+  "reverb.decay": "衰减",
+  "reverb.damping": "阻尼",
+  "reverb.pre_delay_ms": "预延迟",
+  "reverb.low_cut_hz": "低频保护",
+  "reverb.wet": "湿声",
+  "reverb.dry": "干声",
+  "compressor.threshold_db": "阈值",
+  "compressor.ratio": "比例",
+  "compressor.knee_db": "软膝",
+  "compressor.attack_ms": "攻击",
+  "compressor.release_ms": "释放时间",
+  "compressor.makeup_gain_db": "补偿增益",
+  "compressor.wet": "湿声",
+  "compressor.dry": "干声",
+  "loudness.phon": "目标响度",
+  "loudness.reference_phon": "参考响度",
 };
 
-const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
+/** UI 侧枚举选项（当前无枚举参数，保留结构以便扩展）。 */
+const PARAM_OPTIONS: Record<string, { value: string; label: string }[]> = {};
+
+/** 参数定义：范围/步进/单位取 driver 表，label 取 UI 文案表。 */
+export function effectParams(type: string): EffectParamDef[] {
+  const spec = EFFECT_PARAM_SPECS.find((e) => e.effect === type);
+  if (!spec) return [];
+  return spec.params.map((p) => {
+    const id = `${type}.${p.key}`;
+    return {
+      key: p.key,
+      label: PARAM_LABELS[id] ?? p.key,
+      min: p.min,
+      max: p.max,
+      step: p.step,
+      unit: p.unit,
+      options: PARAM_OPTIONS[id],
+    };
+  });
+}
+
+/**
+ * UI 起点（新增效果器时写入的初值）——**app 自有取舍，不跟随 driver 默认值**：
+ * - 输入框放不下长浮点、正常使用也不需要那种精度，故有意取更短的小数
+ *   （如 air 0.3543、drive 1.7699；driver 的精确默认值见 effects.generated.ts）；
+ * - 个别参数有意偏置以获得更好的初始听感（如 wide.gain 0.05，driver 默认 0）。
+ * 未列出的参数回落到 driver 默认值（按步进位数就近取整）。
+ */
+const UI_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
   preamp: { gain_db: 0 },
   wide: { gain: 0.05, air: 0.3543, air_side: 0, mix: 0.6, crossover_hz: 200 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
-  // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
+  // reverb 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
   reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, low_cut_hz: 100, wet: 0.27, dry: 0.73 },
   compressor: {
@@ -111,12 +134,19 @@ const DEFAULT_EFFECT_PARAMS: Record<string, Record<string, number | string>> = {
   loudness: { phon: 80, reference_phon: 80 },
 };
 
-export function effectParams(type: string): EffectParamDef[] {
-  return EFFECT_PARAMS[type] ?? [];
+/** driver 默认值按 UI 步进的位数就近取整（输入框能显示的值）。 */
+function roundToStep(v: number, step: number): number {
+  const decimals = (String(step).split(".")[1] ?? "").length;
+  return Number(v.toFixed(decimals));
 }
 
+/** 新增效果器的参数初值：driver 默认值打底，UI 起点覆盖。 */
 export function defaultEffectParams(type: string): Record<string, number | string> {
-  return { ...(DEFAULT_EFFECT_PARAMS[type] ?? {}) };
+  const base: Record<string, number | string> = {};
+  for (const p of EFFECT_PARAM_SPECS.find((e) => e.effect === type)?.params ?? []) {
+    base[p.key] = roundToStep(p.default, p.step);
+  }
+  return { ...base, ...(UI_DEFAULT_PARAMS[type] ?? {}) };
 }
 
 function asNum(v: number | string | undefined, fallback: number): number {
