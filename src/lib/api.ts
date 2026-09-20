@@ -155,8 +155,34 @@ export function isInstalled(d: Device): boolean {
   );
 }
 
+/** Rust 侧结构化错误码（lib.rs 的 `E_*`）→ i18n 键；未知码回落到 error.operation。 */
+const ERROR_KEYS: Record<string, string> = {
+  E_TIMEOUT: "error.timeout",
+  E_ELEVATION: "error.elevation",
+  E_SCRIPT: "error.script",
+  E_CLI_SPAWN: "error.cliSpawn",
+  E_CLI_PARSE: "error.cliParse",
+  E_CLI_WAIT: "error.cliWait",
+  E_OP_FAILED: "error.operation",
+  E_INSTALL_FAILED: "error.install",
+  E_INSTALL_THREAD: "error.installThread",
+  E_INSTALL_NO_RESULT: "error.installNoResult",
+  E_INVALID_LANG: "error.lang",
+};
+
+/**
+ * 把后端错误转成给用户看的文案。
+ *
+ * Rust 侧只传错误码（`E_Xxx`，可带 `: 详情`）；码走 i18n，详情（OS 错误码、CLI 输出片段）
+ * 原样附在后面供排障。CLI 自己写出的错误文本不含码，按原文透传。
+ */
 export function friendlyError(e: unknown): string {
   const msg = String(e);
+  const m = /^(E_[A-Z_]+)(?::\s*([\s\S]+))?$/.exec(msg.trim());
+  if (m) {
+    const base = t(ERROR_KEYS[m[1]] ?? "error.operation");
+    return m[2] ? `${base}：${m[2]}` : base;
+  }
   if (/os error 5/i.test(msg)) return t("error.permission");
   return msg;
 }

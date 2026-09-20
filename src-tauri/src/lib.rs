@@ -16,6 +16,19 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// vxapo-cli 路径：env VXAPO_CLI 优先，缺省开发机固定路径。
 static CLI_PATH: OnceLock<String> = OnceLock::new();
 
+/// 设备配置根目录（安装器 / 驱动 / cli / 应用共用）。
+const PROGRAM_DATA_ROOT: &str = r"C:\ProgramData\VxAPO";
+
+/// 设备配置目录 `...\VxAPO\<guid>`。
+fn device_dir(guid: &str) -> PathBuf {
+    Path::new(PROGRAM_DATA_ROOT).join(guid)
+}
+
+/// 设备配置 `...\VxAPO\<guid>\config.toml`。
+fn device_config_path(guid: &str) -> PathBuf {
+    device_dir(guid).join("config.toml")
+}
+
 fn system_uses_dark_mode() -> bool {
     #[cfg(windows)]
     {
@@ -73,24 +86,20 @@ fn cli_path() -> &'static str {
             }
         }
 
-        // 开发机回退：优先选择带有 vxapo_driver.dll 的 target\release 目录。
-        let candidates = [
-            r"D:\APO_Project\VxAPO\vxapo-cli\target\release\vxapo-cli.exe",
-            r"D:\APO_Project\VxAPO\vxapo-cli\target\x86_64-pc-windows-msvc\release\vxapo-cli.exe",
-        ];
-        for cli in candidates {
-            if Path::new(cli).exists() {
-                return cli.to_string();
+        // 找不到随包 CLI 时回落到 exe 同目录名：启动会明确失败并提示检查安装或 `VXAPO_CLI`。
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                return dir.join("vxapo-cli.exe").display().to_string();
             }
         }
-        candidates[0].to_string()
+        "vxapo-cli.exe".to_string()
     })
 }
 
 /// 原子写 config.toml（临时文件 + rename，UTF-8 无 BOM）。
 #[tauri::command]
 fn write_config(guid: String, content: String) -> Result<(), String> {
-    let dir = format!(r"C:\ProgramData\VxAPO\{guid}");
+    let dir = device_dir(&guid);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let tmp = Path::new(&dir).join("config.toml.tmp");
     let final_path = Path::new(&dir).join("config.toml");
@@ -101,7 +110,7 @@ fn write_config(guid: String, content: String) -> Result<(), String> {
 /// 读回 per-device config.toml。
 #[tauri::command]
 fn read_config(guid: String) -> Result<String, String> {
-    let path = format!(r"C:\ProgramData\VxAPO\{guid}\config.toml");
+    let path = device_config_path(&guid);
     match std::fs::read_to_string(&path) {
         Ok(s) => Ok(s),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
@@ -132,7 +141,7 @@ fn read_config_checked(
     guid: String,
     known_revision: Option<String>,
 ) -> Result<ConfigRead, String> {
-    let path = format!(r"C:\ProgramData\VxAPO\{guid}\config.toml");
+    let path = device_config_path(&guid);
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
@@ -159,7 +168,7 @@ fn read_import_file(path: String) -> Result<String, String> {
 
 /// 语言文件固定位置（与 config 同目录约定；安装器与应用设置共用）。
 fn lang_file_path() -> PathBuf {
-    Path::new(r"C:\ProgramData\VxAPO\lang.txt").to_path_buf()
+    Path::new(PROGRAM_DATA_ROOT).join("lang.txt")
 }
 
 /// 读取界面语言（"zh" / "en"；无文件或内容非法返回空串）。
@@ -186,7 +195,7 @@ fn read_lang(app: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 fn write_lang(lang: String) -> Result<(), String> {
     if lang != "zh" && lang != "en" {
-        return Err("invalid lang".to_string());
+        return Err(E_INVALID_LANG.to_string());
     }
     let path = lang_file_path();
     if let Some(dir) = path.parent() {
@@ -228,7 +237,7 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
 /// 导出当前设备 config.toml 到用户选择的路径。
 #[tauri::command]
 fn export_config(guid: String, path: String) -> Result<(), String> {
-    let src = format!(r"C:\ProgramData\VxAPO\{guid}\config.toml");
+    let src = device_config_path(&guid);
     let content = std::fs::read_to_string(&src).map_err(|e| e.to_string())?;
     std::fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
@@ -303,136 +312,242 @@ fn list_devices() -> Result<Vec<Device>, String> {
     cmd.args(["list", "--json"]);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    let out = cmd.output().map_err(|e| format!("CLI 启动失败：{e}"))?;
+    let out = cmd.output().map_err(|e| coded(E_CLI_SPAWN, e))?;
     if out.status.success() {
         let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        serde_json::from_str(&raw).map_err(|e| format!("CLI 输出解析失败：{e}"))
+        serde_json::from_str(&raw).map_err(|e| coded(E_CLI_PARSE, e))
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
 }
 
-/// 以提权方式运行 CLI 子命令并捕获 stdout/stderr。
-/// 外层只做 RunAs（不带重定向，避免参数集冲突），
-/// 以隐藏提权方式运行 CLI 子命令：
-/// - 进度逐行写入 progress 文件（应用实时读取展示）；
-/// - 完成标记（退出码）驱动应用判定；
-/// - 用 ShellExecute runas + 隐藏窗口拉起，不弹控制台。
-fn run_cli_elevated(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
-    let tmp_progress = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
-    let tmp_err = std::env::temp_dir().join(format!("vxapo_{tag}.err.txt"));
-    let tmp_ps1 = std::env::temp_dir().join(format!("vxapo_{tag}.ps1"));
-    let tmp_vbs = std::env::temp_dir().join(format!("vxapo_{tag}.vbs"));
-    let outer_err = std::env::temp_dir().join(format!("vxapo_{tag}.outer.txt"));
-    let log_file = std::env::temp_dir().join(format!("vxapo_{tag}.log"));
-    let tmp_done = std::env::temp_dir().join(format!("vxapo_{tag}.done"));
-    for p in [&tmp_progress, &tmp_err, &tmp_ps1, &tmp_vbs, &outer_err, &log_file, &tmp_done] {
-        let _ = std::fs::remove_file(p);
+// ── 提权执行：共用部分 ──────────────────────────────────────────────────
+//
+// 两条引擎（run_cli_elevated / run_cli_elevated_stream）只差「等退出取 stdout」与
+// 「流式转发事件」；脚本生成、提权拉起、完成标记轮询都在这里共用。
+
+/// 结构化错误码：跨 IPC 只传码（可带 `: 详情`），文案由前端按 i18n 渲染。
+const E_TIMEOUT: &str = "E_TIMEOUT";
+const E_ELEVATION: &str = "E_ELEVATION";
+const E_SCRIPT: &str = "E_SCRIPT";
+const E_OP_FAILED: &str = "E_OP_FAILED";
+const E_INSTALL_FAILED: &str = "E_INSTALL_FAILED";
+const E_CLI_SPAWN: &str = "E_CLI_SPAWN";
+const E_CLI_PARSE: &str = "E_CLI_PARSE";
+const E_CLI_WAIT: &str = "E_CLI_WAIT";
+const E_INVALID_LANG: &str = "E_INVALID_LANG";
+const E_INSTALL_THREAD: &str = "E_INSTALL_THREAD";
+const E_INSTALL_NO_RESULT: &str = "E_INSTALL_NO_RESULT";
+
+/// `E_Xxx: 详情`（详情供排障，前端拼在文案后）。
+fn coded(code: &str, detail: impl std::fmt::Display) -> String {
+    format!("{code}: {detail}")
+}
+
+/// 一次提权调用的临时文件（同一 tag，放系统临时目录）。
+struct ElevationFiles {
+    ps1: PathBuf,
+    vbs: PathBuf,
+    err: PathBuf,
+    done: PathBuf,
+    outer: PathBuf,
+    log: PathBuf,
+}
+
+impl ElevationFiles {
+    fn new(tag: &str) -> Self {
+        let tmp = std::env::temp_dir();
+        let p = |ext: &str| tmp.join(format!("vxapo_{tag}.{ext}"));
+        Self {
+            ps1: p("ps1"),
+            vbs: p("vbs"),
+            err: p("err.txt"),
+            done: p("done"),
+            outer: p("outer.txt"),
+            log: p("log"),
+        }
     }
-    let log = |m: &str| {
-        let _ = std::fs::write(&log_file, format!("{}\n", m));
-    };
-    let cleanup = || {
-        for p in [&tmp_ps1, &tmp_vbs, &outer_err, &tmp_done] {
+
+    /// 清掉上一轮残留（启动前）。
+    fn reset(&self) {
+        for p in [&self.ps1, &self.vbs, &self.err, &self.done, &self.outer, &self.log] {
             let _ = std::fs::remove_file(p);
         }
-    };
-    log("start");
+    }
 
-    let quoted: Vec<String> = args
-        .iter()
-        .map(|a| format!("'{}'", a.replace('\'', "''")))
-        .collect();
+    /// 收尾：脚本与标记文件一律删除；结果文件由调用方按需处理。
+    fn cleanup(&self) {
+        for p in [&self.ps1, &self.vbs, &self.outer, &self.done] {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    fn log(&self, m: &str) {
+        let _ = std::fs::write(&self.log, format!("{m}\n"));
+    }
+
+    /// CLI 的标准错误（已 trim）。
+    fn stderr(&self) -> String {
+        std::fs::read_to_string(&self.err).unwrap_or_default().trim().to_string()
+    }
+
+    /// 完成标记里的退出码（未完成时返回 None）。
+    fn exit_code(&self) -> Option<i32> {
+        let raw = std::fs::read_to_string(&self.done).unwrap_or_default();
+        let t = raw.trim().trim_start_matches('\u{feff}').trim();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.parse().unwrap_or(1))
+        }
+    }
+
+    /// 失败原因：CLI 的 stderr 优先，空则回落到错误码。
+    fn fail_or(&self, code: &str) -> String {
+        let msg = self.stderr();
+        if msg.is_empty() {
+            code.to_string()
+        } else {
+            msg
+        }
+    }
+}
+
+/// 轮询结果。
+enum PollResult {
+    /// CLI 已退出（带退出码）。
+    Done(i32),
+    /// 脚本/CLI 写出了错误文本（已 trim，非空）。
+    Failed(String),
+    /// 超时兜底。
+    Timeout,
+}
+
+/// 写提权脚本：ps1 运行 CLI 并把退出码写进 `.done`；vbs 用 ShellExecute runas
+/// 隐藏窗口拉起 ps1（不弹控制台；启动失败把返回码写进 `.outer`）。
+///
+/// `stdout_to`：`Some(p)` 把 CLI stdout 重定向到 p（非流式，完成后整体读回）；
+/// `None` 丢弃 stdout（流式，事件经 `--progress-file` 增量转发）。
+fn build_elevation_scripts(
+    cli: &str,
+    args: &[&str],
+    f: &ElevationFiles,
+    stdout_to: Option<&Path>,
+) -> Result<(), String> {
+    let quoted: Vec<String> = args.iter().map(|a| format!("'{}'", a.replace('\'', "''"))).collect();
+    let stdout = match stdout_to {
+        Some(p) => format!("'{}'", p.display().to_string().replace('\'', "''")),
+        None => "$null".to_string(),
+    };
     let inner = format!(
-        "& '{}' {} 1> '{}' 2> '{}'; $code = $LASTEXITCODE; [System.IO.File]::WriteAllText('{}', \"$code\"); exit $code",
+        "& '{}' {} 1> {} 2> '{}'; $code = $LASTEXITCODE; [System.IO.File]::WriteAllText('{}', \"$code\"); exit $code",
         cli.replace('\'', "''"),
         quoted.join(" "),
-        tmp_progress.display().to_string().replace('\'', "''"),
-        tmp_err.display().to_string().replace('\'', "''"),
-        tmp_done.display().to_string().replace('\'', "''"),
+        stdout,
+        f.err.display().to_string().replace('\'', "''"),
+        f.done.display().to_string().replace('\'', "''"),
     );
-    std::fs::write(&tmp_ps1, inner).map_err(|e| format!("写入提权脚本失败：{e}"))?;
-    log("ps1-written");
+    std::fs::write(&f.ps1, inner).map_err(|e| coded(E_SCRIPT, e))?;
 
-    // VBS：ShellExecute runas + 隐藏窗口（0），彻底不弹控制台；
-    // 启动失败时把返回码写进 outer_err 供快速失败。
-    let ps1_path = tmp_ps1.display().to_string();
-    let oerr_path = outer_err.display().to_string();
     let vbs = format!(
         r#"On Error Resume Next
 Set s = CreateObject("Shell.Application")
 r = s.ShellExecute("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File {ps1}", "", "runas", 0)
 If r <= 32 Then
   Set fso = CreateObject("Scripting.FileSystemObject")
-  fso.CreateTextFile("{oerr}", True).Write CStr(r)
+  fso.CreateTextFile("{outer}", True).Write CStr(r)
 End If"#,
-        ps1 = ps1_path,
-        oerr = oerr_path,
+        ps1 = f.ps1.display(),
+        outer = f.outer.display(),
     );
-    std::fs::write(&tmp_vbs, vbs).map_err(|e| format!("写入提权脚本失败：{e}"))?;
-    log("vbs-written");
+    std::fs::write(&f.vbs, vbs).map_err(|e| coded(E_SCRIPT, e))
+}
 
-    let spawn_result = Command::new("wscript.exe")
-        .arg(&tmp_vbs)
+/// 以隐藏窗口拉起提权脚本（wscript → ShellExecute runas）。
+fn spawn_elevation(f: &ElevationFiles) -> Result<(), String> {
+    Command::new("wscript.exe")
+        .arg(&f.vbs)
         .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
-    if let Err(e) = spawn_result {
-        log(&format!("spawn-error: {e}"));
-        cleanup();
-        return Err(format!("提权启动失败：{e}"));
-    }
-    log("spawned");
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| {
+            f.log(&format!("spawn-error: {e}"));
+            coded(E_ELEVATION, e)
+        })
+}
 
-    // 只认完成标记：退出码 0 成功；错误文件有内容报错；90s 超时兜底。
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
-    log("polling");
+/// 轮询完成标记：`.done` 出现即返回退出码；`.err`/`.outer` 有内容即失败；超时兜底。
+/// `on_tick` 每轮调用一次（流式引擎用它转发进度事件）。
+fn poll_completion(
+    f: &ElevationFiles,
+    timeout: std::time::Duration,
+    poll_ms: u64,
+    mut on_tick: impl FnMut(),
+) -> PollResult {
+    let deadline = std::time::Instant::now() + timeout;
     loop {
-        let done = std::fs::read_to_string(&tmp_done).unwrap_or_default();
-        let done_raw = done.trim().trim_start_matches('\u{feff}').trim();
-        if !done_raw.is_empty() {
-            let code: i32 = done_raw.parse().unwrap_or(1);
-            let progress = std::fs::read_to_string(&tmp_progress).unwrap_or_default();
-            if code == 0 {
-                log("done-ok");
-                cleanup();
-                let _ = std::fs::remove_file(&log_file);
-                let _ = std::fs::remove_file(&tmp_progress);
-                let _ = std::fs::remove_file(&tmp_err);
-                return Ok(progress.trim().to_string());
-            }
-            let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
-            let msg = err.trim();
-            log(&format!("done-fail:{code} raw:[{done_raw}]"));
-            cleanup();
-            return Err(if msg.is_empty() {
-                "操作失败".to_string()
-            } else {
-                msg.to_string()
-            });
+        on_tick();
+        if let Some(code) = f.exit_code() {
+            return PollResult::Done(code);
         }
-        let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
-        if !err.trim().is_empty() {
-            let msg = err.trim();
-            log(&format!("err: {msg}"));
-            cleanup();
-            return Err(if msg.is_empty() {
-                "操作失败".to_string()
-            } else {
-                msg.to_string()
-            });
+        let msg = f.stderr();
+        if !msg.is_empty() {
+            f.log(&format!("err: {msg}"));
+            return PollResult::Failed(msg);
         }
-        let oerr = std::fs::read_to_string(&outer_err).unwrap_or_default();
-        if !oerr.trim().is_empty() {
-            log(&format!("outer-err: {}", oerr.trim()));
-            cleanup();
-            return Err(oerr.trim().to_string());
+        let outer = std::fs::read_to_string(&f.outer).unwrap_or_default();
+        if !outer.trim().is_empty() {
+            f.log(&format!("outer-err: {}", outer.trim()));
+            return PollResult::Failed(outer.trim().to_string());
         }
         if std::time::Instant::now() >= deadline {
-            log("timeout");
-            cleanup();
-            return Err("操作超时".to_string());
+            f.log("timeout");
+            return PollResult::Timeout;
         }
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        std::thread::sleep(std::time::Duration::from_millis(poll_ms));
+    }
+}
+/// 提权运行 CLI 子命令并取回 stdout（非流式）。
+///
+/// 进度逐行写入 progress 文件（应用可读），完成标记（退出码）驱动判定；
+/// 用 ShellExecute runas + 隐藏窗口拉起，不弹控制台。
+fn run_cli_elevated(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
+    let f = ElevationFiles::new(tag);
+    let progress = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
+    f.reset();
+    let _ = std::fs::remove_file(&progress);
+    f.log("start");
+
+    build_elevation_scripts(cli, args, &f, Some(&progress))?;
+    spawn_elevation(&f)?;
+    f.log("spawned");
+
+    // 只认完成标记：退出码 0 成功；错误文件有内容报错；90s 超时兜底。
+    let outcome = poll_completion(&f, std::time::Duration::from_secs(90), 300, || {});
+    match outcome {
+        PollResult::Done(0) => {
+            f.log("done-ok");
+            let out = std::fs::read_to_string(&progress).unwrap_or_default();
+            let _ = std::fs::remove_file(&f.log);
+            let _ = std::fs::remove_file(&progress);
+            let _ = std::fs::remove_file(&f.err);
+            f.cleanup();
+            Ok(out.trim().to_string())
+        }
+        PollResult::Done(code) => {
+            f.log(&format!("done-fail:{code}"));
+            let msg = f.fail_or(E_OP_FAILED);
+            f.cleanup();
+            Err(msg)
+        }
+        PollResult::Failed(msg) => {
+            f.cleanup();
+            Err(msg)
+        }
+        PollResult::Timeout => {
+            f.cleanup();
+            Err(E_TIMEOUT.to_string())
+        }
     }
 }
 
@@ -443,7 +558,7 @@ fn run_cli(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map_err(|e| format!("CLI 启动失败：{e}"))?;
+        .map_err(|e| coded(E_CLI_SPAWN, e))?;
     let out = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
     if output.status.success() {
@@ -479,7 +594,7 @@ fn run_cli_with_events(
         .stderr(Stdio::piped());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    let mut child = cmd.spawn().map_err(|e| format!("CLI 启动失败：{e}"))?;
+    let mut child = cmd.spawn().map_err(|e| coded(E_CLI_SPAWN, e))?;
 
     // stderr 用线程收集，避免管道填满阻塞。
     let stderr = child.stderr.take();
@@ -503,7 +618,7 @@ fn run_cli_with_events(
             }
         }
     }
-    let status = child.wait().map_err(|e| format!("CLI 等待失败：{e}"))?;
+    let status = child.wait().map_err(|e| coded(E_CLI_WAIT, e))?;
     let err = stderr_thread.join().unwrap_or_default();
     let out_trim = out.trim().to_string();
     let err_trim = err.trim().to_string();
@@ -527,6 +642,8 @@ fn run_cli_with_events(
 
 /// 提权流式执行：stdout 指 NUL（避免与 CLI 追加写 progress 文件冲突），
 /// 事件经 `--progress-file` 增量读取转发；`.done`/`.err` 判定沿用原逻辑。
+/// 提权流式执行：stdout 指 NUL（避免与 CLI 追加写 progress 文件冲突），
+/// 事件经 `--progress-file` 增量读取转发；完成标记判定与非流式一致。
 fn run_cli_elevated_stream(
     cli: &str,
     args: &[&str],
@@ -534,111 +651,43 @@ fn run_cli_elevated_stream(
     progress: &Path,
     on_event: &mut dyn FnMut(serde_json::Value),
 ) -> Result<String, String> {
-    let tmp_err = std::env::temp_dir().join(format!("vxapo_{tag}.err.txt"));
-    let tmp_ps1 = std::env::temp_dir().join(format!("vxapo_{tag}.ps1"));
-    let tmp_vbs = std::env::temp_dir().join(format!("vxapo_{tag}.vbs"));
-    let outer_err = std::env::temp_dir().join(format!("vxapo_{tag}.outer.txt"));
-    let log_file = std::env::temp_dir().join(format!("vxapo_{tag}.log"));
-    let tmp_done = std::env::temp_dir().join(format!("vxapo_{tag}.done"));
-    for p in [&tmp_err, &tmp_ps1, &tmp_vbs, &outer_err, &log_file, &tmp_done] {
-        let _ = std::fs::remove_file(p);
-    }
+    let f = ElevationFiles::new(tag);
+    f.reset();
     let _ = std::fs::remove_file(progress);
-    let log = |m: &str| {
-        let _ = std::fs::write(&log_file, format!("{}\n", m));
-    };
-    let cleanup = || {
-        for p in [&tmp_ps1, &tmp_vbs, &outer_err, &tmp_done] {
-            let _ = std::fs::remove_file(p);
-        }
-    };
-    log("stream-start");
+    f.log("stream-start");
 
-    let quoted: Vec<String> = args
-        .iter()
-        .map(|a| format!("'{}'", a.replace('\'', "''")))
-        .collect();
-    let inner = format!(
-        "& '{}' {} 1> $null 2> '{}'; $code = $LASTEXITCODE; [System.IO.File]::WriteAllText('{}', \"$code\"); exit $code",
-        cli.replace('\'', "''"),
-        quoted.join(" "),
-        tmp_err.display().to_string().replace('\'', "''"),
-        tmp_done.display().to_string().replace('\'', "''"),
-    );
-    std::fs::write(&tmp_ps1, inner).map_err(|e| format!("写入提权脚本失败：{e}"))?;
+    build_elevation_scripts(cli, args, &f, None)?;
+    spawn_elevation(&f)?;
+    f.log("stream-spawned");
 
-    let ps1_path = tmp_ps1.display().to_string();
-    let oerr_path = outer_err.display().to_string();
-    let vbs = format!(
-        r#"On Error Resume Next
-Set s = CreateObject("Shell.Application")
-r = s.ShellExecute("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File {ps1}", "", "runas", 0)
-If r <= 32 Then
-  Set fso = CreateObject("Scripting.FileSystemObject")
-  fso.CreateTextFile("{oerr}", True).Write CStr(r)
-End If"#,
-        ps1 = ps1_path,
-        oerr = oerr_path,
-    );
-    std::fs::write(&tmp_vbs, vbs).map_err(|e| format!("写入提权脚本失败：{e}"))?;
-
-    let spawn_result = Command::new("wscript.exe")
-        .arg(&tmp_vbs)
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
-    if let Err(e) = spawn_result {
-        log(&format!("spawn-error: {e}"));
-        cleanup();
-        return Err(format!("提权启动失败：{e}"));
-    }
-    log("stream-spawned");
-
-    let mut progress_offset: u64 = 0;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
-    loop {
-        drain_progress(progress, &mut progress_offset, on_event);
-
-        let done = std::fs::read_to_string(&tmp_done).unwrap_or_default();
-        let done_raw = done.trim().trim_start_matches('\u{feff}').trim();
-        if !done_raw.is_empty() {
-            let code: i32 = done_raw.parse().unwrap_or(1);
-            drain_progress(progress, &mut progress_offset, on_event);
-            let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
-            let msg = err.trim().to_string();
-            log(&format!("stream-done:{code}"));
-            cleanup();
+    let mut offset: u64 = 0;
+    let outcome = poll_completion(&f, std::time::Duration::from_secs(300), 200, || {
+        drain_progress(progress, &mut offset, on_event);
+    });
+    match outcome {
+        PollResult::Done(code) => {
+            drain_progress(progress, &mut offset, on_event);
+            let msg = f.stderr();
+            f.log(&format!("stream-done:{code}"));
+            f.cleanup();
             if code == 0 {
-                let _ = std::fs::remove_file(&log_file);
-                let _ = std::fs::remove_file(&tmp_err);
-                return Ok(msg);
-            }
-            return Err(if msg.is_empty() {
-                "安装失败".to_string()
+                let _ = std::fs::remove_file(&f.log);
+                let _ = std::fs::remove_file(&f.err);
+                Ok(msg)
+            } else if msg.is_empty() {
+                Err(E_INSTALL_FAILED.to_string())
             } else {
-                msg
-            });
+                Err(msg)
+            }
         }
-
-        let err = std::fs::read_to_string(&tmp_err).unwrap_or_default();
-        if !err.trim().is_empty() {
-            let msg = err.trim().to_string();
-            log(&format!("stream-err: {msg}"));
-            cleanup();
-            return Err(msg);
+        PollResult::Failed(msg) => {
+            f.cleanup();
+            Err(msg)
         }
-        let oerr = std::fs::read_to_string(&outer_err).unwrap_or_default();
-        if !oerr.trim().is_empty() {
-            let msg = oerr.trim().to_string();
-            log(&format!("stream-outer-err: {msg}"));
-            cleanup();
-            return Err(msg);
+        PollResult::Timeout => {
+            f.cleanup();
+            Err(E_TIMEOUT.to_string())
         }
-        if std::time::Instant::now() >= deadline {
-            log("stream-timeout");
-            cleanup();
-            return Err("安装超时（5 分钟）".to_string());
-        }
-        std::thread::sleep(std::time::Duration::from_millis(200));
     }
 }
 
@@ -730,7 +779,7 @@ async fn install_device(app: tauri::AppHandle, guid: String) -> Result<InstallRe
         run_cli_with_events(&cli, &arg_refs, &tag, &mut on_event)
     })
     .await
-    .map_err(|e| format!("安装线程异常：{e}"))?;
+    .map_err(|e| coded(E_INSTALL_THREAD, e))?;
 
     if let Some(complete) = last_complete.lock().unwrap().clone() {
         // 成功：清理临时进度文件；失败保留，供诊断（trace 步骤在 progress 里）。
@@ -741,7 +790,7 @@ async fn install_device(app: tauri::AppHandle, guid: String) -> Result<InstallRe
     }
     let tail = progress_tail(&progress_path, 12);
     let msg = match result {
-        Ok(out) => format!("安装结束但缺少结果事件：{}", out.trim()),
+        Ok(out) => coded(E_INSTALL_NO_RESULT, out.trim()),
         Err(e) => e,
     };
     Err(if tail.is_empty() {
@@ -780,7 +829,7 @@ fn rollback_install(guid: String) -> Result<String, String> {
 fn list_stale_installs() -> Result<serde_json::Value, String> {
     let cli = cli_path();
     let out = run_cli(cli, &["stale", "list", "--json"], "stale_list")?;
-    serde_json::from_str(&out).map_err(|e| format!("stale list 解析失败：{e}"))
+    serde_json::from_str(&out).map_err(|e| coded(E_CLI_PARSE, e))
 }
 
 /// 迁移旧 GUID 到当前端点（需要管理员，run_cli 会自动提权）。
