@@ -21,6 +21,20 @@
 - 预设/自定义卡组支持按组管理、框选批量删除、保存为自定义预设（组名 + 每段语义描述）。
 - 自绘 overlay 滚动条：不占布局宽度、只在真实滚动时出现、停止滚动自动淡出。
 
+## 前端架构
+
+- **状态（zustand）**：五个 store 各管一段——`stores/deviceStore`（设备列表/残留/卸载）、
+  `configStore`（配置状态机，含通道基准电平拆分、整链增益归一化）、`channelStore`
+  （通道选择，逐设备记忆）、`selectionStore`（选中集与工具栏联动）、`uiStore`
+  （错误条/Toast/对话框开关）。组件按需订阅，`App.tsx` 只做编排与视图动画。
+- **组件**：视图舞台 `ViewStage`、应用级浮层 `AppOverlays`（六个对话框 + 拖拽层 + Toast）、
+  空态 `NoDeviceHint`、框选框 `MarqueeBox`；两个主视图 `PresetView` / `AdvancedView`
+  只接收「动画 / 选中 / 拖拽」类 props（分别 5、6 个），配置与通道数据自行订阅。
+- **参数单一来源**：`lib/effects.generated.ts` 由 driver 参数表生成（见下方「开发」），
+  UI 只维护参数文案与「新增效果器的起点」，范围/步进/默认值一律取生成表。
+- **边缘染色**：`lib/edgetint/geometry.ts`（颜色/亮度/环形描边等纯函数）+
+  `hooks/useEdgeTintLayer.ts`（挂载 `startAuto`、卸载 `stopAuto`，多挂载点用引用计数）。
+
 ## 与 Driver 的行为对齐
 
 - **配置契约**：`version=1` / `enabled` / `[meta]` / `[[effects]]`；PEQ 块固定写
@@ -48,6 +62,21 @@ Windows 发布构建（含 exe 图标重嵌入）：
 ```bash
 npm run build:win
 ```
+
+## 开发
+
+```bash
+npm test                     # vitest：TOML 往返 / 参数表一致性 / i18n 查表
+npm run sync:driver-schema   # 用 driver 参数表重新生成 src/lib/effects.generated.ts
+```
+
+- `sync:driver-schema` 经 cli 的 `effects schema --json` 生成 TS 表；cli 定位优先
+  `VXAPO_CLI` 环境变量，其次 App 同目录 / `resources\vxapo-cli.exe`。
+- `src-tauri` 跨 IPC 只传**结构化错误码**（`E_TIMEOUT` / `E_ELEVATION` / `E_CLI_SPAWN` /
+  `E_INSTALL_*` 等，带详情时写作 `E_Xxx: 详情`），文案由前端按码走 i18n；
+  CLI 自己输出的错误文本仍原样透传。
+- 配置解析用 `smol-toml`：畸形 TOML 会放弃解析并把原文放进 `tail`（保存时原样写回，
+  不破坏用户文件），不再像手写解析器那样静默吞掉半张表。
 
 ## 文档
 
@@ -100,6 +129,26 @@ React 19.
 - Custom overlay scrollbar: takes no layout width, appears on genuine scrolling only,
   auto-fades when idle.
 
+## Frontend architecture
+
+- **State (zustand)**: five stores, each owning one slice — `stores/deviceStore` (device
+  list / stale installs / uninstall), `configStore` (config state machine, including
+  per-channel preamp split and whole-chain gain normalization), `channelStore` (channel
+  selection, remembered per device), `selectionStore` (selection set + toolbar coupling),
+  `uiStore` (error bar / toast / dialog flags). Components subscribe as needed; `App.tsx`
+  only orchestrates and drives view animation.
+- **Components**: `ViewStage` (view stage), `AppOverlays` (six dialogs + drag layers +
+  toast), `NoDeviceHint` (empty state), `MarqueeBox` (marquee rectangle). The two main
+  views `PresetView` / `AdvancedView` only receive animation/selection/drag props
+  (5 and 6 respectively) and subscribe to config & channel data themselves.
+- **Single source for parameters**: `lib/effects.generated.ts` is generated from the
+  driver's parameter table (see Development below); the UI keeps only labels and the
+  "starting point for a newly added effect", while ranges, steps and defaults come from
+  the generated table.
+- **Edge tint**: `lib/edgetint/geometry.ts` (pure color/luminance/ring helpers) plus
+  `hooks/useEdgeTintLayer.ts` (starts on mount, stops on unmount, ref-counted across its
+  multiple mount points).
+
 ## Alignment with the Driver
 
 - **Config contract**: `version=1` / `enabled` / `[meta]` / `[[effects]]`; PEQ blocks
@@ -129,6 +178,22 @@ Windows release build (includes exe icon re-embedding):
 ```bash
 npm run build:win
 ```
+
+## Development
+
+```bash
+npm test                     # vitest: TOML round-trip / parameter-table consistency / i18n lookup
+npm run sync:driver-schema   # regenerate src/lib/effects.generated.ts from the driver table
+```
+
+- `sync:driver-schema` calls the CLI's `effects schema --json`. The CLI is located via the
+  `VXAPO_CLI` environment variable first, then next to the app / `resources\vxapo-cli.exe`.
+- `src-tauri` sends **structured error codes** across IPC (`E_TIMEOUT`, `E_ELEVATION`,
+  `E_CLI_SPAWN`, `E_INSTALL_*`, …; details appended as `E_Xxx: detail`). The frontend maps
+  codes through i18n; error text produced by the CLI itself is passed through unchanged.
+- Config parsing uses `smol-toml`: malformed TOML aborts parsing and keeps the raw text in
+  `tail` (written back verbatim on save, so user files are never destroyed) instead of the
+  old hand-written parser silently dropping half the file.
 
 ## Documentation
 
