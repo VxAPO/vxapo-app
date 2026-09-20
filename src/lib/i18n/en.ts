@@ -113,6 +113,7 @@ export const en: Record<string, string> = {
   "uninstall.confirmBtn": "Confirm Uninstall",
   "stale.banner.partial": "Stale GUID record detected. Migrate and repair this device.",
   "stale.banner.healthy": "Stale GUID record detected. Migrate config or clean up old records.",
+  "stale.banner.other": "Stale GUID record detected. Migrate config to {name}.",
   "stale.migrate": "Migrate",
   "stale.migrate.config": "Migrate config",
   "stale.cleanup": "Clean up",

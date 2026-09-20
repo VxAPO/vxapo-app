@@ -113,6 +113,7 @@ export const zh: Record<string, string> = {
   "uninstall.confirmBtn": "确认卸载",
   "stale.banner.partial": "检测到旧 GUID 残留，可迁移并修复当前设备",
   "stale.banner.healthy": "检测到旧 GUID 残留，可迁移配置或清理旧记录",
+  "stale.banner.other": "检测到旧 GUID 残留，可迁移配置到 {name}",
   "stale.migrate": "迁移",
   "stale.migrate.config": "迁移配置",
   "stale.cleanup": "清理旧记录",

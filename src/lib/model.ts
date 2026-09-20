@@ -48,6 +48,17 @@ export interface StaleInstall {
   guid: string;
   device_instance_id: string;
   display_name: string;
+  /**
+   * 配对命中来源：`endpoint_history`（端点历史属性）/ `device_instance_id`
+   * （老端点键）/ `stored_identity`（记录键落盘身份）/ `hardware_id`（硬件 ID
+   * 兜底）；未命中为 null。
+   */
+  matched_by?:
+    | "endpoint_history"
+    | "device_instance_id"
+    | "stored_identity"
+    | "hardware_id"
+    | null;
   config_path?: string | null;
   config_mtime_ms?: number | null;
   snapshot_path?: string | null;
