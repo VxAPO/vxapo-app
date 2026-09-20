@@ -5,82 +5,14 @@ import { COLOR_K, FADE_FRAME_MS, FADE_K, INNER_SAMPLE_R, LINE_ALPHA, MAX_SOURCE_
 import type { RingPoint } from "../lib/edgetint/geometry";
 import { clearDirtyUnion, clipToolbar, dirtyForEls, isToolbar, roundedRectPath, sampleColorGrid, sampleLumGrid, visibleRectOf } from "../lib/edgetint/primitives";
 import type { CardNode, InnerState, LightSet } from "../lib/edgetint/primitives";
-
-/**
- * 外部 Canvas 环带染色层：
- * - 设备卡/曲线卡画在低层（z25），悬浮工具栏自己的环带画在高层（z35）。
- * - 暗部不再单独画黑线：shade 控制内光在该处“留空”（lit=0），
- *   让底层默认高光样式的暗部自己透出来，内光弱的地方暗部自然更弱。
- * 颜色只来自卡片真正带主题色的部分（描边/chip/圆点），黑白区域不掺色相。
- */
-
-
-
-
-
-
-
-let canvas: HTMLCanvasElement | null = null;
-let ctx: CanvasRenderingContext2D | null = null;
-let toolCanvas: HTMLCanvasElement | null = null;
-let toolCtx: CanvasRenderingContext2D | null = null;
-let shadeCanvas: HTMLCanvasElement | null = null;
-let shadeCtx: CanvasRenderingContext2D | null = null;
-let toolShadeCanvas: HTMLCanvasElement | null = null;
-let toolShadeCtx: CanvasRenderingContext2D | null = null;
-let prevBaseDirty: { x: number; y: number; w: number; h: number } | null =
-  null;
-let prevToolDirty: { x: number; y: number; w: number; h: number } | null =
-  null;
-/** 上一次绘制时画布原点（视口坐标）：原点变化等于整块内容失效，必须重开画布。 */
-let prevBaseOrigin: { x: number; y: number } | null = null;
-let prevToolOrigin: { x: number; y: number } | null = null;
-let softCanvas: HTMLCanvasElement | null = null;
-let softCtx: CanvasRenderingContext2D | null = null;
-let ssCanvas: HTMLCanvasElement | null = null;
-let ssCtx: CanvasRenderingContext2D | null = null;
-type PanelBuffer = {
-  c: HTMLCanvasElement;
-  k: CanvasRenderingContext2D;
-  sc: HTMLCanvasElement;
-  sk: CanvasRenderingContext2D;
-  /** 上次完整渲染的时刻（复用窗口以它为基准）。 */
-  at: number;
-  /** 自上次完整渲染以来已连续复用的帧数。 */
-  reused: number;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  dpr: number;
-};
-let panelBuffers = new WeakMap<HTMLElement, PanelBuffer>();
-let raf = 0;
-let running = false;
-let themeObserver: MutationObserver | null = null;
-let layoutObserver: MutationObserver | null = null;
-let scrollIdleTimer = 0;
-let selectionTimer = 0;
-let themePaintTimer = 0;
-let viewAnimUntil = 0;
-let paintMode: "tool" | "full" = "full";
-let scrollingNow = false;
-let fadePending = false;
-let autoScanTimer = 0;
-let autoMo: MutationObserver | null = null;
-let autoScanRaf = 0;
-let autoStarted = false;
-const targetRos = new Map<HTMLElement, ResizeObserver>();
-const targets = new Set<HTMLElement>();
-let colorCache = new WeakMap<HTMLElement, { at: number; color: Rgb | null }>();
-let host: HTMLElement | null = null;
-let cardNodes: CardNode[] | null = null;
+import { ST } from "../lib/edgetint/state";
+import type { PanelBuffer } from "../lib/edgetint/state";
 
 function refreshCardNodes(): CardNode[] {
   // 两套视图常驻 DOM：只把当前视图的卡片当作光源，隐藏视图不参与采样
   const scope =
     document.querySelector<HTMLElement>(".view-stage.is-active") ?? document;
-  cardNodes = [...scope.querySelectorAll<HTMLElement>("[data-dnd-id]")].map(
+  ST.cardNodes = [...scope.querySelectorAll<HTMLElement>("[data-dnd-id]")].map(
     (el) => ({
       el,
       accents: [
@@ -90,13 +22,8 @@ function refreshCardNodes(): CardNode[] {
       ],
     }),
   );
-  return cardNodes;
+  return ST.cardNodes;
 }
-
-const curvePointCache = new WeakMap<
-  SVGPathElement,
-  { key: string; pts: ColorSource[] }
->();
 
 function curvePointSources(): ColorSource[] {
   const path = document.querySelector<SVGPathElement>(
@@ -108,7 +35,7 @@ function curvePointSources(): ColorSource[] {
   const key = `${rect.width.toFixed(1)}|${rect.height.toFixed(1)}|${
     path.getAttribute("d")?.length ?? 0
   }`;
-  const hit = curvePointCache.get(path);
+  const hit = ST.curvePointCache.get(path);
   if (hit && hit.key === key) return hit.pts;
   const cs = getComputedStyle(path);
   const color =
@@ -134,7 +61,7 @@ function curvePointSources(): ColorSource[] {
       inner: true,
     });
   }
-  curvePointCache.set(path, { key, pts });
+  ST.curvePointCache.set(path, { key, pts });
   return pts;
 }
 
@@ -155,58 +82,58 @@ function makeLayer(
     c.remove();
     return null;
   }
-  (host ?? document.body).appendChild(c);
+  (ST.host ?? document.body).appendChild(c);
   return { c, k };
 }
 
 function ensureCanvas(h: HTMLElement | null = null): void {
-  if (h) host = h;
-  if (!host) host = document.body;
-  const mount = host.isConnected ? host : document.body;
-  if (canvas && canvas.parentElement !== mount) mount.appendChild(canvas);
-  if (shadeCanvas && shadeCanvas.parentElement !== mount) {
-    mount.appendChild(shadeCanvas);
+  if (h) ST.host = h;
+  if (!ST.host) ST.host = document.body;
+  const mount = ST.host.isConnected ? ST.host : document.body;
+  if (ST.canvas && ST.canvas.parentElement !== mount) mount.appendChild(ST.canvas);
+  if (ST.shadeCanvas && ST.shadeCanvas.parentElement !== mount) {
+    mount.appendChild(ST.shadeCanvas);
   }
-  if (toolCanvas && toolCanvas.parentElement !== mount) {
-    mount.appendChild(toolCanvas);
+  if (ST.toolCanvas && ST.toolCanvas.parentElement !== mount) {
+    mount.appendChild(ST.toolCanvas);
   }
-  if (toolShadeCanvas && toolShadeCanvas.parentElement !== mount) {
-    mount.appendChild(toolShadeCanvas);
+  if (ST.toolShadeCanvas && ST.toolShadeCanvas.parentElement !== mount) {
+    mount.appendChild(ST.toolShadeCanvas);
   }
   if (
-    canvas &&
-    ctx &&
-    shadeCanvas &&
-    shadeCtx &&
-    toolCanvas &&
-    toolCtx &&
-    toolShadeCanvas &&
-    toolShadeCtx
+    ST.canvas &&
+    ST.ctx &&
+    ST.shadeCanvas &&
+    ST.shadeCtx &&
+    ST.toolCanvas &&
+    ST.toolCtx &&
+    ST.toolShadeCanvas &&
+    ST.toolShadeCtx
   ) {
     return;
   }
-  const base = canvas && ctx ? null : makeLayer(Z_BASE);
-  const shade = shadeCanvas && shadeCtx ? null : makeLayer(Z_SHADE, "multiply");
-  const tool = toolCanvas && toolCtx ? null : makeLayer(Z_TOOL);
+  const base = ST.canvas && ST.ctx ? null : makeLayer(Z_BASE);
+  const shade = ST.shadeCanvas && ST.shadeCtx ? null : makeLayer(Z_SHADE, "multiply");
+  const tool = ST.toolCanvas && ST.toolCtx ? null : makeLayer(Z_TOOL);
   const toolShade =
-    toolShadeCanvas && toolShadeCtx
+    ST.toolShadeCanvas && ST.toolShadeCtx
       ? null
       : makeLayer(Z_TOOL_SHADE, "multiply");
   if (base) {
-    canvas = base.c;
-    ctx = base.k;
+    ST.canvas = base.c;
+    ST.ctx = base.k;
   }
   if (shade) {
-    shadeCanvas = shade.c;
-    shadeCtx = shade.k;
+    ST.shadeCanvas = shade.c;
+    ST.shadeCtx = shade.k;
   }
   if (tool) {
-    toolCanvas = tool.c;
-    toolCtx = tool.k;
+    ST.toolCanvas = tool.c;
+    ST.toolCtx = tool.k;
   }
   if (toolShade) {
-    toolShadeCanvas = toolShade.c;
-    toolShadeCtx = toolShade.k;
+    ST.toolShadeCanvas = toolShade.c;
+    ST.toolShadeCtx = toolShade.k;
   }
 }
 
@@ -220,7 +147,7 @@ function ensureCanvas(h: HTMLElement | null = null): void {
 
 
 function cardColor(el: HTMLElement): Rgb | null {
-  const hit = colorCache.get(el);
+  const hit = ST.colorCache.get(el);
   if (hit && performance.now() - hit.at < 500) return hit.color;
   const cs = getComputedStyle(el);
   const darkKey = "--card-accent-dark";
@@ -241,37 +168,12 @@ function cardColor(el: HTMLElement): Rgb | null {
     !el.classList.contains("sem-group")
       ? fallbackBrand
       : null);
-  colorCache.set(el, { at: performance.now(), color });
+  ST.colorCache.set(el, { at: performance.now(), color });
   return color;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-/** 每个采样点的平滑状态：alpha 独立逼近目标，颜色做插值。 */
-const ringStates = new WeakMap<
-  HTMLElement,
-  {
-    a: number[];
-    r: number[];
-    g: number[];
-    b: number[];
-  }
->();
-
-
-const innerStates = new WeakMap<HTMLElement, InnerState>();
-
 function stateForRing(el: HTMLElement, n: number) {
-  let st = ringStates.get(el);
+  let st = ST.ringStates.get(el);
   if (!st || st.a.length !== n) {
     st = {
       a: new Array(n).fill(0),
@@ -279,13 +181,13 @@ function stateForRing(el: HTMLElement, n: number) {
       g: new Array(n).fill(128),
       b: new Array(n).fill(128),
     };
-    ringStates.set(el, st);
+    ST.ringStates.set(el, st);
   }
   return st;
 }
 
 function stateForInner(el: HTMLElement, n: number): InnerState {
-  let st = innerStates.get(el);
+  let st = ST.innerStates.get(el);
   if (!st || st.gl.length !== n) {
     st = {
       gl: new Array(n).fill(0),
@@ -294,7 +196,7 @@ function stateForInner(el: HTMLElement, n: number): InnerState {
       ig: new Array(n).fill(255),
       ib: new Array(n).fill(255),
     };
-    innerStates.set(el, st);
+    ST.innerStates.set(el, st);
   }
   return st;
 }
@@ -308,36 +210,36 @@ function stateForInner(el: HTMLElement, n: number): InnerState {
 function ensureSoftCanvas(w: number, h: number): void {
   const needW = Math.max(1, Math.ceil(w));
   const needH = Math.max(1, Math.ceil(h));
-  if (!softCanvas) {
-    softCanvas = document.createElement("canvas");
-    softCtx = softCanvas.getContext("2d");
-    if (!softCtx) {
-      softCanvas.remove();
-      softCanvas = null;
-      softCtx = null;
+  if (!ST.softCanvas) {
+    ST.softCanvas = document.createElement("canvas");
+    ST.softCtx = ST.softCanvas.getContext("2d");
+    if (!ST.softCtx) {
+      ST.softCanvas.remove();
+      ST.softCanvas = null;
+      ST.softCtx = null;
       return;
     }
   }
-  if (softCanvas.width < needW || softCanvas.height < needH) {
-    softCanvas.width = Math.max(softCanvas.width, needW);
-    softCanvas.height = Math.max(softCanvas.height, needH);
+  if (ST.softCanvas.width < needW || ST.softCanvas.height < needH) {
+    ST.softCanvas.width = Math.max(ST.softCanvas.width, needW);
+    ST.softCanvas.height = Math.max(ST.softCanvas.height, needH);
   }
 }
 
 function ensureSsCanvas(w: number, h: number): void {
-  if (!ssCanvas) {
-    ssCanvas = document.createElement("canvas");
-    ssCtx = ssCanvas.getContext("2d");
-    if (!ssCtx) {
-      ssCanvas.remove();
-      ssCanvas = null;
-      ssCtx = null;
+  if (!ST.ssCanvas) {
+    ST.ssCanvas = document.createElement("canvas");
+    ST.ssCtx = ST.ssCanvas.getContext("2d");
+    if (!ST.ssCtx) {
+      ST.ssCanvas.remove();
+      ST.ssCanvas = null;
+      ST.ssCtx = null;
       return;
     }
   }
-  if (ssCanvas.width < w || ssCanvas.height < h) {
-    ssCanvas.width = Math.max(ssCanvas.width, Math.ceil(w));
-    ssCanvas.height = Math.max(ssCanvas.height, Math.ceil(h));
+  if (ST.ssCanvas.width < w || ST.ssCanvas.height < h) {
+    ST.ssCanvas.width = Math.max(ST.ssCanvas.width, Math.ceil(w));
+    ST.ssCanvas.height = Math.max(ST.ssCanvas.height, Math.ceil(h));
   }
 }
 
@@ -367,20 +269,20 @@ function strokeHighQualityBand(
   const ow = Math.ceil(maxX - minX + PAD * 2);
   const oh = Math.ceil(maxY - minY + PAD * 2);
   ensureSsCanvas(ow * SCALE, oh * SCALE);
-  if (!ssCanvas || !ssCtx) {
+  if (!ST.ssCanvas || !ST.ssCtx) {
     strokeChunkBand(bandCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
     return;
   }
-  ssCtx.setTransform(1, 0, 0, 1, 0, 0);
+  ST.ssCtx.setTransform(1, 0, 0, 1, 0, 0);
   // 只清本次真正会被读回的窗口：画布会按历史最大尺寸保留，整张清屏纯属浪费
-  ssCtx.clearRect(0, 0, ow * SCALE, oh * SCALE);
-  ssCtx.setTransform(SCALE, 0, 0, SCALE, -ox * SCALE, -oy * SCALE);
-  strokeChunkBand(ssCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
+  ST.ssCtx.clearRect(0, 0, ow * SCALE, oh * SCALE);
+  ST.ssCtx.setTransform(SCALE, 0, 0, SCALE, -ox * SCALE, -oy * SCALE);
+  strokeChunkBand(ST.ssCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
   const smoothing = bandCtx.imageSmoothingEnabled;
   bandCtx.imageSmoothingEnabled = true;
   bandCtx.imageSmoothingQuality = "high";
   bandCtx.drawImage(
-    ssCanvas,
+    ST.ssCanvas,
     0,
     0,
     ow * SCALE,
@@ -432,7 +334,7 @@ function strokeGlowBand(
   const sw = Math.max(1, Math.ceil(ow * dpr));
   const sh = Math.max(1, Math.ceil(oh * dpr));
   ensureSoftCanvas(sw, sh);
-  if (!softCanvas || !softCtx) {
+  if (!ST.softCanvas || !ST.softCtx) {
     const prevFilter = bandCtx.filter;
     bandCtx.filter = `blur(${blurPx}px)`;
     try {
@@ -442,14 +344,14 @@ function strokeGlowBand(
     }
     return;
   }
-  softCtx.setTransform(1, 0, 0, 1, 0, 0);
-  softCtx.clearRect(0, 0, sw, sh);
+  ST.softCtx.setTransform(1, 0, 0, 1, 0, 0);
+  ST.softCtx.clearRect(0, 0, sw, sh);
   // 离屏画布按 DPR 渲染，避免圆角/细线在低分辨率下产生锯齿。
-  softCtx.setTransform(dpr, 0, 0, dpr, -ox * dpr, -oy * dpr);
-  strokeChunkBand(softCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
+  ST.softCtx.setTransform(dpr, 0, 0, dpr, -ox * dpr, -oy * dpr);
+  strokeChunkBand(ST.softCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
   const prevFilter = bandCtx.filter;
   bandCtx.filter = `blur(${blurPx}px)`;
-  bandCtx.drawImage(softCanvas, 0, 0, sw, sh, ox, oy, ow, oh);
+  bandCtx.drawImage(ST.softCanvas, 0, 0, sw, sh, ox, oy, ow, oh);
   bandCtx.filter = prevFilter;
 }
 
@@ -498,7 +400,7 @@ function drawPanel(
     ? Math.max(0, Math.min(1, parseFloat(cs.opacity) || 0))
     : 1;
   const glowAlpha = 1;
-  const movingTool = tool && scrollingNow;
+  const movingTool = tool && ST.scrollingNow;
   // 按时间推进：frameScale=1（正常 33ms 补帧）时与原常数逐字等价；
   // 复用跳帧时按经过的步数放大，保证褪色总时长不变（只是步数更少、每步更大）。
   const scale = Math.max(1, frameScale);
@@ -557,7 +459,7 @@ function drawPanel(
     const targetA = sample ? sample.s : 0;
     const aDelta = targetA - st.a[i];
     st.a[i] += aDelta * fadeK;
-    if (Math.abs(aDelta) > 0.004) fadePending = true;
+    if (Math.abs(aDelta) > 0.004) ST.fadePending = true;
     const c = sample ? sample.c : null;
     if (c) {
       const fresh = st.a[i] < 0.01 && targetA > 0;
@@ -656,7 +558,7 @@ function drawPanel(
   for (let i = 0; i < rawGl.length; i++) {
     const glDelta = rawGl[i] - ist.gl[i];
     ist.gl[i] += glDelta * fadeK;
-    if (Math.abs(glDelta) > 0.004) fadePending = true;
+    if (Math.abs(glDelta) > 0.004) ST.fadePending = true;
     // 暗部只贴在内光带与外光交界处：强度直接跟内光能量走，
     // 不再沿圆周在亮点两侧做 bump（那会围着内光包一圈）。
     rawSh[i] = smoothstep(0.08, 0.5, shadeGl[i]);
@@ -679,7 +581,7 @@ function drawPanel(
     }
     const shDelta = sum / wsum - ist.sh[i];
     ist.sh[i] += shDelta * fadeK;
-    if (Math.abs(shDelta) > 0.004) fadePending = true;
+    if (Math.abs(shDelta) > 0.004) ST.fadePending = true;
   }
   // 暗部不是压暗，而是在该处停止绘制内光（lit=0），
   // 让底层默认高光样式的暗部自己透出来；shade 只是控制这个“留空”的平滑形状。
@@ -797,7 +699,7 @@ function collectCards(): LightSet {
   const curve = curvePointSources();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const nodes = cardNodes ?? refreshCardNodes();
+  const nodes = ST.cardNodes ?? refreshCardNodes();
   nodes.forEach(({ el, accents }) => {
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
@@ -868,7 +770,7 @@ function renderToPanelBuffer(
     }
   }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  let buf = panelBuffers.get(el);
+  let buf = ST.panelBuffers.get(el);
   if (
     !buf ||
     buf.w !== w ||
@@ -885,7 +787,7 @@ function renderToPanelBuffer(
     const sk = sc.getContext("2d");
     if (!k || !sk) return null;
     buf = { c, k, sc, sk, at: 0, reused: 0, x, y, w, h, dpr };
-    panelBuffers.set(el, buf);
+    ST.panelBuffers.set(el, buf);
   }
   /**
    * buf.x/y 是**渲染时**的视口位置：缓冲里的像素就是按它画的（drawPanel 用
@@ -917,7 +819,7 @@ function renderToPanelBuffer(
   // 工具栏滚动期间用更长的 140ms 复用窗口（滚动时几何相对内容不变）
   if (
     isToolbar(el) &&
-    scrollingNow &&
+    ST.scrollingNow &&
     buf.at > 0 &&
     now - buf.at < 140 &&
     Math.abs(x - buf.x) < 0.5 &&
@@ -981,7 +883,7 @@ function paintLayerPair(
     : 1;
   const bw = Math.max(1, Math.round(ow * dpr));
   const bh = Math.max(1, Math.round(oh * dpr));
-  const prevOrigin = kind === "base" ? prevBaseOrigin : prevToolOrigin;
+  const prevOrigin = kind === "base" ? ST.prevBaseOrigin : ST.prevToolOrigin;
   const geomChanged =
     c.width !== bw ||
     c.height !== bh ||
@@ -1005,7 +907,7 @@ function paintLayerPair(
   }
   k.setTransform(dpr, 0, 0, dpr, -ox * dpr, -oy * dpr);
   sk.setTransform(dpr, 0, 0, dpr, -ox * dpr, -oy * dpr);
-  const prev = kind === "base" ? prevBaseDirty : prevToolDirty;
+  const prev = kind === "base" ? ST.prevBaseDirty : ST.prevToolDirty;
   if (!geomChanged) {
     // clearRect 与 drawImage 共用同一 CTM（已含 -原点 平移），这里必须传视口坐标：
     // 再减一次原点会把清屏区域整体挪走，旧像素清不掉、画面层层叠加。
@@ -1013,11 +915,11 @@ function paintLayerPair(
     clearDirtyUnion(sk, prev, next);
   }
   if (kind === "base") {
-    prevBaseDirty = next;
-    prevBaseOrigin = { x: ox, y: oy };
+    ST.prevBaseDirty = next;
+    ST.prevBaseOrigin = { x: ox, y: oy };
   } else {
-    prevToolDirty = next;
-    prevToolOrigin = { x: ox, y: oy };
+    ST.prevToolDirty = next;
+    ST.prevToolOrigin = { x: ox, y: oy };
   }
   if (!els.length) return;
   els.forEach((el) => {
@@ -1082,39 +984,39 @@ function paintLayerPair(
 }
 
 function paint(): void {
-  raf = 0;
+  ST.raf = 0;
   try {
-    if (!running || !targets.size) return;
-    fadePending = false;
+    if (!ST.running || !ST.targets.size) return;
+    ST.fadePending = false;
     const cards = collectCards();
-    const els = [...targets];
-    if (paintMode !== "tool") {
+    const els = [...ST.targets];
+    if (ST.paintMode !== "tool") {
       paintLayerPair(
-        canvas,
-        ctx,
-        shadeCanvas,
-        shadeCtx,
+        ST.canvas,
+        ST.ctx,
+        ST.shadeCanvas,
+        ST.shadeCtx,
         els.filter((el) => !isToolbar(el)),
         cards,
         "base",
       );
     }
     paintLayerPair(
-      toolCanvas,
-      toolCtx,
-      toolShadeCanvas,
-      toolShadeCtx,
+      ST.toolCanvas,
+      ST.toolCtx,
+      ST.toolShadeCanvas,
+      ST.toolShadeCtx,
       els.filter(isToolbar),
       cards,
       "tool",
     );
-    if (paintMode === "full" && fadePending) {
+    if (ST.paintMode === "full" && ST.fadePending) {
       window.setTimeout(() => schedule("full"), 33);
-    } else if (paintMode === "full" && viewAnimUntil > performance.now()) {
+    } else if (ST.paintMode === "full" && ST.viewAnimUntil > performance.now()) {
       window.setTimeout(() => schedule("full"), 16);
     }
-    if (paintMode === "full" && viewAnimUntil <= performance.now()) {
-      viewAnimUntil = 0;
+    if (ST.paintMode === "full" && ST.viewAnimUntil <= performance.now()) {
+      ST.viewAnimUntil = 0;
     }
   } catch (err) {
     console.error("[edgeTint] paint failed", err);
@@ -1122,20 +1024,20 @@ function paint(): void {
 }
 
 function schedule(mode: "tool" | "full" = "full"): void {
-  if (!running) return;
-  paintMode = mode;
-  if (raf) return;
-  raf = requestAnimationFrame(paint);
+  if (!ST.running) return;
+  ST.paintMode = mode;
+  if (ST.raf) return;
+  ST.raf = requestAnimationFrame(paint);
 }
 
 function onScroll(): void {
   // 绘制本身已足够快：滚动期间直接全量刷新，
   // 避免底卡/曲线染色要等停顿后才更新。
-  window.clearTimeout(scrollIdleTimer);
+  window.clearTimeout(ST.scrollIdleTimer);
   document.documentElement.classList.add("is-scrolling");
-  scrollingNow = true;
-  scrollIdleTimer = window.setTimeout(() => {
-    scrollingNow = false;
+  ST.scrollingNow = true;
+  ST.scrollIdleTimer = window.setTimeout(() => {
+    ST.scrollingNow = false;
     document.documentElement.classList.remove("is-scrolling");
     schedule("full");
   }, 140);
@@ -1155,9 +1057,9 @@ function onVisibilityChange(): void {
 }
 
 function start(): void {
-  if (running) return;
+  if (ST.running) return;
   ensureCanvas();
-  running = true;
+  ST.running = true;
   window.addEventListener("scroll", onScroll, {
     capture: true,
     passive: true,
@@ -1165,23 +1067,23 @@ function start(): void {
   window.addEventListener("resize", onResize);
   window.addEventListener("focus", onFocus);
   document.addEventListener("visibilitychange", onVisibilityChange);
-  themeObserver = new MutationObserver(() => {
-    colorCache = new WeakMap();
+  ST.themeObserver = new MutationObserver(() => {
+    ST.colorCache = new WeakMap();
     // 主题切换会整体换色：清掉面板缓冲，避免复用窗口把旧配色留在画面上
-    panelBuffers = new WeakMap();
+    ST.panelBuffers = new WeakMap();
     if (document.documentElement.classList.contains("theme-transition")) {
       // 主题过渡期间不抢帧；等 DOM 动画结束后做一次最终刷新。
-      window.clearTimeout(themePaintTimer);
-      themePaintTimer = window.setTimeout(() => schedule("full"), 460);
+      window.clearTimeout(ST.themePaintTimer);
+      ST.themePaintTimer = window.setTimeout(() => schedule("full"), 460);
     } else {
       schedule("full");
     }
   });
-  themeObserver.observe(document.documentElement, {
+  ST.themeObserver.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["data-theme"],
   });
-  layoutObserver = new MutationObserver((records) => {
+  ST.layoutObserver = new MutationObserver((records) => {
     const toolbarMoved = records.some(
       (m) =>
         m.type === "attributes" &&
@@ -1234,15 +1136,15 @@ function start(): void {
     if (toolbarMoved) {
       // 工具栏位移动画每帧改 style；MutationObserver 在该帧渲染前触发，
       // 同步重画可以对齐当前帧位置，避免 Canvas 永远慢半拍。
-      if (raf) cancelAnimationFrame(raf);
-      raf = 0;
-      paintMode = "tool";
+      if (ST.raf) cancelAnimationFrame(ST.raf);
+      ST.raf = 0;
+      ST.paintMode = "tool";
       paint();
       return;
     }
     if (viewStyleChanged) {
-      if (!viewAnimUntil) {
-        viewAnimUntil = performance.now() + 420;
+      if (!ST.viewAnimUntil) {
+        ST.viewAnimUntil = performance.now() + 420;
         schedule("full");
       }
       return;
@@ -1253,13 +1155,13 @@ function start(): void {
     if (selectionChanged) {
       // 框选拖动会每帧改 is-selected；不立即全量重绘，
       // 停顿后刷新一次，让选中描边权重收敛。
-      window.clearTimeout(selectionTimer);
-      selectionTimer = window.setTimeout(() => schedule("full"), 160);
+      window.clearTimeout(ST.selectionTimer);
+      ST.selectionTimer = window.setTimeout(() => schedule("full"), 160);
       return;
     }
     if (!records.length) return;
   });
-  layoutObserver.observe(document.body, {
+  ST.layoutObserver.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: true,
@@ -1274,80 +1176,80 @@ function start(): void {
 }
 
 function stop(): void {
-  running = false;
-  if (raf) cancelAnimationFrame(raf);
-  raf = 0;
+  ST.running = false;
+  if (ST.raf) cancelAnimationFrame(ST.raf);
+  ST.raf = 0;
   window.removeEventListener("scroll", onScroll, {
     capture: true,
   } as EventListenerOptions);
   window.removeEventListener("resize", onResize);
   window.removeEventListener("focus", onFocus);
   document.removeEventListener("visibilitychange", onVisibilityChange);
-  window.clearTimeout(scrollIdleTimer);
-  scrollIdleTimer = 0;
+  window.clearTimeout(ST.scrollIdleTimer);
+  ST.scrollIdleTimer = 0;
   document.documentElement.classList.remove("is-scrolling");
-  window.clearTimeout(selectionTimer);
-  selectionTimer = 0;
-  window.clearTimeout(themePaintTimer);
-  themePaintTimer = 0;
-  viewAnimUntil = 0;
-  themeObserver?.disconnect();
-  themeObserver = null;
-  layoutObserver?.disconnect();
-  layoutObserver = null;
-  colorCache = new WeakMap();
-  panelBuffers = new WeakMap();
-  canvas?.remove();
-  canvas = null;
-  ctx = null;
-  shadeCanvas?.remove();
-  shadeCanvas = null;
-  shadeCtx = null;
-  toolCanvas?.remove();
-  toolCanvas = null;
-  toolCtx = null;
-  toolShadeCanvas?.remove();
-  toolShadeCanvas = null;
-  toolShadeCtx = null;
-  softCanvas?.remove();
-  softCanvas = null;
-  softCtx = null;
-  ssCanvas?.remove();
-  ssCanvas = null;
-  ssCtx = null;
+  window.clearTimeout(ST.selectionTimer);
+  ST.selectionTimer = 0;
+  window.clearTimeout(ST.themePaintTimer);
+  ST.themePaintTimer = 0;
+  ST.viewAnimUntil = 0;
+  ST.themeObserver?.disconnect();
+  ST.themeObserver = null;
+  ST.layoutObserver?.disconnect();
+  ST.layoutObserver = null;
+  ST.colorCache = new WeakMap();
+  ST.panelBuffers = new WeakMap();
+  ST.canvas?.remove();
+  ST.canvas = null;
+  ST.ctx = null;
+  ST.shadeCanvas?.remove();
+  ST.shadeCanvas = null;
+  ST.shadeCtx = null;
+  ST.toolCanvas?.remove();
+  ST.toolCanvas = null;
+  ST.toolCtx = null;
+  ST.toolShadeCanvas?.remove();
+  ST.toolShadeCanvas = null;
+  ST.toolShadeCtx = null;
+  ST.softCanvas?.remove();
+  ST.softCanvas = null;
+  ST.softCtx = null;
+  ST.ssCanvas?.remove();
+  ST.ssCanvas = null;
+  ST.ssCtx = null;
 }
 
 /** 注册绘制目标；返回是否真的新增了目标（用于决定是否需要重绘）。 */
 function registerTarget(el: HTMLElement): boolean {
-  if (targets.has(el)) return false;
+  if (ST.targets.has(el)) return false;
   const nextHost =
     (el.closest(".device-body") as HTMLElement | null) ?? document.body;
-  if (!targets.size) {
-    host = nextHost;
+  if (!ST.targets.size) {
+    ST.host = nextHost;
     start();
-  } else if (host !== nextHost) {
+  } else if (ST.host !== nextHost) {
     // 语言/设备切换会用新的 key 重建 .device-body：旧宿主已脱离文档时，
     // 必须把 Canvas 挪到新宿主，否则画面会画在不可见节点上。
     ensureCanvas(nextHost);
   }
-  targets.add(el);
+  ST.targets.add(el);
   const ro = new ResizeObserver(() => schedule("full"));
   ro.observe(el);
-  targetRos.set(el, ro);
+  ST.targetRos.set(el, ro);
   return true;
 }
 
 function removeTarget(el: HTMLElement): void {
-  targetRos.get(el)?.disconnect();
-  targetRos.delete(el);
-  targets.delete(el);
-  const buf = panelBuffers.get(el);
+  ST.targetRos.get(el)?.disconnect();
+  ST.targetRos.delete(el);
+  ST.targets.delete(el);
+  const buf = ST.panelBuffers.get(el);
   if (buf) {
     buf.c.remove();
     buf.sc.remove();
-    panelBuffers.delete(el);
+    ST.panelBuffers.delete(el);
   }
-  if (!targets.size) stop();
+  if (!ST.targets.size) stop();
 }
 
 function syncTargets(): void {
@@ -1360,7 +1262,7 @@ function syncTargets(): void {
     found.add(el);
     if (registerTarget(el)) changed = true;
   });
-  [...targets].forEach((el) => {
+  [...ST.targets].forEach((el) => {
     if (!found.has(el) || !el.isConnected) {
       removeTarget(el);
       changed = true;
@@ -1369,24 +1271,22 @@ function syncTargets(): void {
   // 集合本身没变时不再无条件重绘：只有几何指纹（目标/卡片/强调块的位置尺寸）
   // 真的变化时才需要一次全量重绘，其余情况保持上一帧画面。
   const sig = targetScanSignature();
-  if (changed || sig !== scanSig) {
-    scanSig = sig;
+  if (changed || sig !== ST.scanSig) {
+    ST.scanSig = sig;
     schedule("full");
   }
 }
 
-let scanSig = "";
-
 /** 目标集合与卡片几何指纹：仅用于判断「是否需要重绘」，不参与绘制。 */
 function targetScanSignature(): string {
-  const cards = cardNodes ?? refreshCardNodes();
+  const cards = ST.cardNodes ?? refreshCardNodes();
   const parts: string[] = [];
   const push = (r: DOMRect) => {
     parts.push(
       `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}`,
     );
   };
-  for (const el of targets) {
+  for (const el of ST.targets) {
     if (el.isConnected) push(el.getBoundingClientRect());
   }
   for (const { el, accents } of cards) {
@@ -1399,17 +1299,17 @@ function targetScanSignature(): string {
 
 /** 模块级自动扫描：不依赖 React hook 生命周期，HMR 或晚挂载都能自愈。 */
 function startAuto(): void {
-  if (autoStarted) return;
-  autoStarted = true;
+  if (ST.autoStarted) return;
+  ST.autoStarted = true;
   // 结构变化合并到一帧一次，避免 React 批量更新时反复全量扫描
-  autoMo = new MutationObserver(() => {
-    if (autoScanRaf) return;
-    autoScanRaf = requestAnimationFrame(() => {
-      autoScanRaf = 0;
+  ST.autoMo = new MutationObserver(() => {
+    if (ST.autoScanRaf) return;
+    ST.autoScanRaf = requestAnimationFrame(() => {
+      ST.autoScanRaf = 0;
       syncTargets();
     });
   });
-  autoMo.observe(document.documentElement, {
+  ST.autoMo.observe(document.documentElement, {
     childList: true,
     subtree: true,
   });
@@ -1420,19 +1320,19 @@ function startAuto(): void {
   }
   // 兜底扫描：不依赖 MutationObserver 时序，保持与原先相同的 300ms 陈旧度上限；
   // 区别是扫描本身只做「集合 + 几何指纹」比较，没有变化就完全不重绘。
-  autoScanTimer = window.setInterval(syncTargets, 300);
+  ST.autoScanTimer = window.setInterval(syncTargets, 300);
 }
 
 function stopAuto(): void {
-  autoStarted = false;
-  window.clearInterval(autoScanTimer);
-  autoScanTimer = 0;
-  if (autoScanRaf) cancelAnimationFrame(autoScanRaf);
-  autoScanRaf = 0;
-  scanSig = "";
-  autoMo?.disconnect();
-  autoMo = null;
-  [...targets].forEach(removeTarget);
+  ST.autoStarted = false;
+  window.clearInterval(ST.autoScanTimer);
+  ST.autoScanTimer = 0;
+  if (ST.autoScanRaf) cancelAnimationFrame(ST.autoScanRaf);
+  ST.autoScanRaf = 0;
+  ST.scanSig = "";
+  ST.autoMo?.disconnect();
+  ST.autoMo = null;
+  [...ST.targets].forEach(removeTarget);
 }
 
 /**
@@ -1447,14 +1347,11 @@ export function useEdgeTintLayer(_ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {
     // 三个挂载点（App / CurvePanel / 选择工具栏），且工具栏随选中态反复挂卸 ⇒
     // 用引用计数保证「首个挂载启动、最后一个卸载停止」，避免工具栏一隐藏就停掉整层染色。
-    autoRefCount += 1;
-    if (autoRefCount === 1) startAuto();
+    ST.autoRefCount += 1;
+    if (ST.autoRefCount === 1) startAuto();
     return () => {
-      autoRefCount -= 1;
-      if (autoRefCount === 0) stopAuto();
+      ST.autoRefCount -= 1;
+      if (ST.autoRefCount === 0) stopAuto();
     };
   }, []);
 }
-
-/** 已挂载的入口数量（见 useEdgeTintLayer 的引用计数说明）。 */
-let autoRefCount = 0;
