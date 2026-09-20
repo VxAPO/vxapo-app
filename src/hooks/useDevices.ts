@@ -1,155 +1,59 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  cleanupStaleInstall,
-  deviceListsEqual,
-  friendlyError,
-  isInstalled,
-  listDevices,
-  listStaleInstalls,
-  migrateStaleInstall,
-  uninstallDevice,
-} from "../lib/api";
-import type { Device, MigrationReport, StaleInstall } from "../lib/model";
+// VxAPO App — 设备列表 / 选中设备（决策 4 阶段 A：逻辑已移入 stores/deviceStore）。
+//
+// 本 hook 只负责三件事：把错误出口与卸载回调注入 store、驱动首次加载与轮询、
+// 按原样暴露派生值（installedDevices / selected）。返回值与重构前逐字段一致。
+import { useCallback, useEffect, useMemo } from "react";
+import { isInstalled } from "../lib/api";
+import { useDeviceStore } from "../stores/deviceStore";
 import { useInterval } from "./useInterval";
-
-/** 逐项浅比较，避免轮询无变化时替换数组引用。 */
-function staleListsEqual(a: StaleInstall[], b: StaleInstall[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  return a.every((s, i) => JSON.stringify(s) === JSON.stringify(b[i]));
-}
 
 export function useDevices(
   onError: (msg: string) => void,
   onUninstalled?: (name: string) => void,
   paused?: boolean,
 ) {
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [staleInstalls, setStaleInstalls] = useState<StaleInstall[]>([]);
-  const [staleBusy, setStaleBusy] = useState(false);
-  const [selectedGuid, setSelectedGuid] = useState<string | null>(null);
-  const [uninstallTarget, setUninstallTarget] = useState<Device | null>(null);
-  const [uninstalling, setUninstalling] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const mountedRef = useRef(true);
-  const firstLoadRef = useRef(true);
+  const devices = useDeviceStore((s) => s.devices);
+  const staleInstalls = useDeviceStore((s) => s.staleInstalls);
+  const staleBusy = useDeviceStore((s) => s.staleBusy);
+  const loading = useDeviceStore((s) => s.loading);
+  const selectedGuid = useDeviceStore((s) => s.selectedGuid);
+  const uninstallTarget = useDeviceStore((s) => s.uninstallTarget);
+  const uninstalling = useDeviceStore((s) => s.uninstalling);
+  const setSelectedGuid = useDeviceStore((s) => s.setSelectedGuid);
+  const setUninstallTarget = useDeviceStore((s) => s.setUninstallTarget);
+  const migrateStale = useDeviceStore((s) => s.migrateStale);
+  const cleanupStale = useDeviceStore((s) => s.cleanupStale);
 
+  // 错误出口（onError）与卸载回调：挂载期注入 store，卸载即摘掉——
+  // 等价于重构前用 mountedRef 抑制卸载后的上报。
   useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  const load = useCallback(() => {
-    if (firstLoadRef.current) setLoading(true);
-    Promise.allSettled([listDevices(), listStaleInstalls()])
-      .then(([devRes, staleRes]) => {
-        if (!mountedRef.current) return;
-        if (devRes.status === "rejected") throw devRes.reason;
-        const ds = devRes.value;
-        setDevices((prev) => (deviceListsEqual(prev, ds) ? prev : ds));
-        const nextStale =
-          staleRes.status === "fulfilled" ? staleRes.value : [];
-        // 内容未变时保留旧数组引用：否则每 5s 都会换一次引用，触发整树重渲染
-        setStaleInstalls((prev) => {
-          if (staleListsEqual(prev, nextStale)) return prev;
-          return nextStale;
-        });
-        setSelectedGuid((prev) => {
-          if (prev && ds.some((d) => d.guid === prev && isInstalled(d))) return prev;
-          return ds.find(isInstalled)?.guid ?? null;
-        });
-      })
-      .catch((e: unknown) => {
-        if (mountedRef.current) onError(friendlyError(e));
-      })
-      .finally(() => {
-        if (mountedRef.current && firstLoadRef.current) {
-          firstLoadRef.current = false;
-          setLoading(false);
-        }
-      });
+    useDeviceStore.getState().setErrorSink(onError);
+    return () => useDeviceStore.getState().setErrorSink(null);
   }, [onError]);
 
+  const load = useCallback((first: boolean) => {
+    void useDeviceStore.getState().load(first);
+  }, []);
+
   useEffect(() => {
-    void load();
+    load(true);
   }, [load]);
 
   // 安装进行中暂停轮询：注册表写入后设备会瞬时显示"已安装"，
   // 但标签页要等安装完成（done/failed 后的 onRefresh）才出现。
-  useInterval(load, paused ? null : 5000);
+  useInterval(() => load(false), paused ? null : 5000);
 
   const installedDevices = useMemo(() => devices.filter(isInstalled), [devices]);
   const selected = devices.find((d) => d.guid === selectedGuid) ?? null;
 
   const refresh = useCallback(async () => {
-    try {
-      const [ds, stale] = await Promise.all([
-        listDevices(),
-        listStaleInstalls().catch(() => [] as StaleInstall[]),
-      ]);
-      setDevices((prev) => (deviceListsEqual(prev, ds) ? prev : ds));
-      setStaleInstalls(stale);
-      setSelectedGuid((prev) =>
-        prev && ds.some((d) => d.guid === prev && isInstalled(d))
-          ? prev
-          : (ds.find(isInstalled)?.guid ?? null),
-      );
-    } catch (e: unknown) {
-      onError(friendlyError(e));
-    }
-  }, [onError]);
-
-  const migrateStale = useCallback(
-    async (
-      from: string,
-      to: string,
-      configFrom?: string | null,
-      snapshotFrom?: string | null,
-    ): Promise<MigrationReport | null> => {
-      setStaleBusy(true);
-      try {
-        const report = await migrateStaleInstall(from, to, configFrom, snapshotFrom);
-        await refresh();
-        return report;
-      } finally {
-        setStaleBusy(false);
-      }
-    },
-    [refresh],
-  );
-
-  const cleanupStale = useCallback(
-    async (guid: string) => {
-      setStaleBusy(true);
-      try {
-        await cleanupStaleInstall(guid);
-        await refresh();
-      } finally {
-        setStaleBusy(false);
-      }
-    },
-    [refresh],
-  );
+    await useDeviceStore.getState().refresh();
+  }, []);
 
   const confirmUninstall = useCallback(async () => {
-    if (!uninstallTarget) return;
-    const target = uninstallTarget;
-    setUninstalling(true);
-    try {
-      await uninstallDevice(target.guid);
-      // 成功后：清掉历史错误、提示成功、立即刷新列表并回退到已有标签
-      onError("");
-      onUninstalled?.(target.name);
-      await refresh();
-      setUninstallTarget(null);
-    } catch (e: unknown) {
-      onError(friendlyError(e));
-    } finally {
-      setUninstalling(false);
-    }
-  }, [uninstallTarget, onError, onUninstalled, refresh]);
+    const name = await useDeviceStore.getState().confirmUninstall();
+    if (name) onUninstalled?.(name);
+  }, [onUninstalled]);
 
   return {
     devices,
