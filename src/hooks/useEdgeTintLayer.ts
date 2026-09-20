@@ -1646,21 +1646,26 @@ function stopAuto(): void {
   [...targets].forEach(removeTarget);
 }
 
-/** 保留组件侧调用点（注册交给模块级扫描统一管理）。 */
+/**
+ * 边缘染色入口（决策 5 阶段 B：生命周期化）。
+ *
+ * 挂载时启动自动扫描、卸载时停掉：
+ * - 删除原先的「import 即自启动」——模块被 import（含类型引用、测试）不再有副作用；
+ * - 删除 `import.meta.hot.dispose` 自救——HMR 更新时 React Fast Refresh 会走 hook 的
+ *   cleanup 卸载旧实例，自救逻辑已冗余。
+ */
 export function useEdgeTintLayer(_ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {
-    startAuto();
+    // 三个挂载点（App / CurvePanel / 选择工具栏），且工具栏随选中态反复挂卸 ⇒
+    // 用引用计数保证「首个挂载启动、最后一个卸载停止」，避免工具栏一隐藏就停掉整层染色。
+    autoRefCount += 1;
+    if (autoRefCount === 1) startAuto();
+    return () => {
+      autoRefCount -= 1;
+      if (autoRefCount === 0) stopAuto();
+    };
   }, []);
 }
 
-try {
-  startAuto();
-} catch (err) {
-  console.error("[edgeTint] init failed", err);
-}
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    stopAuto();
-  });
-}
+/** 已挂载的入口数量（见 useEdgeTintLayer 的引用计数说明）。 */
+let autoRefCount = 0;
