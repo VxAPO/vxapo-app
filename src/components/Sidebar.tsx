@@ -1,12 +1,18 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { X } from "lucide-react";
-import type { EffectItem, PeqBandKind, PresetLibraryEntry, SideSection } from "../lib/model";
+import type { PeqBandKind, PresetLibraryEntry, SideSection } from "../lib/model";
 import { presetAccent, presetCardStyle } from "../lib/blocks";
 import { useI18n } from "../lib/i18n";
 import { displayGroupLabel, t } from "../lib/i18n/core";
 import { EFFECT_DEFS } from "../lib/effects";
 import { snapPx } from "../lib/snap";
+import { LIBRARY } from "../data/library";
+import { isInstalled } from "../lib/api";
+import { useChannelNames } from "../hooks/useChannelNames";
+import { effectiveChannel, useChannelStore } from "../stores/channelStore";
+import { useConfigStore } from "../stores/configStore";
+import { useDeviceStore } from "../stores/deviceStore";
 import PresetDeck from "./PresetDeck";
 import OverlayScrollbar from "./OverlayScrollbar";
 
@@ -16,39 +22,43 @@ const SECTIONS: SideSection[] = ["preset", "custom", "advanced"];
 const sidebarMax = () => Math.min(480, Math.max(SIDEBAR_MIN, window.innerWidth - 486));
 
 interface SidebarProps {
-  disabled: boolean;
   side: SideSection;
   onSideChange: (s: SideSection) => void;
-  library: PresetLibraryEntry[];
   customPresets: PresetLibraryEntry[];
   usedPresets: string[];
-  effects: EffectItem[];
   onApplyPreset: (p: PresetLibraryEntry) => void;
   onDeletePreset: (p: PresetLibraryEntry) => void;
-  onAddEffect: (type: string) => void;
-  onAddBand: (kind: PeqBandKind) => void;
-  channelOn: boolean;
-  activeChannel: string;
   onToggleChannel: () => void;
 }
 
+/**
+ * 侧栏（预设 / 自定义 / 高级）。
+ *
+ * 决策 4 阶段 A：设备/配置/通道数据与动作直接订阅 store，父组件只传
+ * 侧栏自身状态与预设相关回调。
+ */
 function Sidebar({
-  disabled,
   side,
   onSideChange,
-  library,
   customPresets,
   usedPresets,
-  effects,
   onApplyPreset,
   onDeletePreset,
-  onAddEffect,
-  onAddBand,
-  channelOn,
-  activeChannel,
   onToggleChannel,
 }: SidebarProps) {
   const lang = useI18n();
+  const disabled = useDeviceStore((s) => s.devices.filter(isInstalled).length === 0);
+  const effects = useConfigStore((s) => s.effects);
+  const onAddEffect = useConfigStore((s) => s.addEffect);
+  const channelOn = useChannelStore((s) => s.channelOn);
+  const rawActiveChannel = useChannelStore((s) => s.activeChannel);
+  const chNames = useChannelNames();
+  const activeChannel = effectiveChannel(chNames, rawActiveChannel);
+  const onAddBand = useCallback(
+    (kind: PeqBandKind) => useConfigStore.getState().addBand(kind, activeChannel),
+    [activeChannel],
+  );
+  const library = LIBRARY;
   const [sideW, setSideW] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem("vxapo.sidebarWidth"));

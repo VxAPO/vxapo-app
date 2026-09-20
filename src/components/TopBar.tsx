@@ -3,11 +3,12 @@ import { Copy, Minus, SlidersHorizontal, Square, Tags, X } from "lucide-react";
 import type { ViewMode } from "../lib/model";
 import { t } from "../lib/i18n/core";
 import logoUrl from "../assets/VxAPO_icon_v4.svg";
+import { isInstalled } from "../lib/api";
+import { useChannelStore } from "../stores/channelStore";
+import { useDeviceStore } from "../stores/deviceStore";
 
 interface TopBarProps {
   view: ViewMode;
-  channelOn: boolean;
-  noDevices: boolean;
   segDir: "left" | "right";
   isMax: boolean;
   onViewChange: (v: ViewMode) => void;
@@ -19,10 +20,9 @@ interface TopBarProps {
   onClose: () => void;
 }
 
+/** 顶栏（设置 / 导入导出 / 视图切换 / 窗口控制）。 */
 function TopBar({
   view,
-  channelOn,
-  noDevices,
   segDir,
   isMax,
   onViewChange,
@@ -33,6 +33,9 @@ function TopBar({
   onToggleMaximize,
   onClose,
 }: TopBarProps) {
+  // 决策 4 阶段 A：设备/通道状态直接订阅 store。
+  const channelOn = useChannelStore((s) => s.channelOn);
+  const noDevices = useDeviceStore((s) => s.devices.filter(isInstalled).length === 0);
   return (
     <div className="topbar" data-tauri-drag-region>
       <img className="logo" src={logoUrl} alt="VxAPO" draggable={false} />

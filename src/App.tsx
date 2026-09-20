@@ -3,8 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
-import type { Block, Device, PeqBandKind } from "./lib/model";
-import { LIBRARY } from "./data/library";
+import type { Block, Device } from "./lib/model";
 import { channelNamesFor } from "./lib/channels";
 import { exportConfig, friendlyError, writeConfig } from "./lib/api";
 import { parseConfigWithTail } from "./lib/toml";
@@ -98,8 +97,6 @@ export default function App() {
     setEffects,
     markDirty,
     applyPreset,
-    addBand,
-    addEffect,
     removeEffect,
     toggleEffect,
     patchEffectParam,
@@ -350,10 +347,6 @@ export default function App() {
     },
     [channelOn],
   );
-  const handleAddBand = useCallback(
-    (kind: PeqBandKind) => addBand(kind, effActiveChannel),
-    [addBand, effActiveChannel],
-  );
   const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
   const handleToggleMaximize = useCallback(() => void toggleMaximize(), [toggleMaximize]);
   const handleInstalled = useCallback((name: string) => notify(t("notify.installed", { name })), [notify]);
@@ -459,8 +452,6 @@ export default function App() {
     <div key={lang} className="app-shell-new">
       <TopBar
         view={view}
-        channelOn={channelOn}
-        noDevices={installedDevices.length === 0}
         segDir={segDir}
         isMax={isMax}
         onViewChange={switchView}
@@ -481,19 +472,12 @@ export default function App() {
         ) : (
           <>
             <Sidebar
-              disabled={installedDevices.length === 0}
               side={side}
               onSideChange={setSide}
-              library={LIBRARY}
               customPresets={customPresets}
               usedPresets={usedPresetList}
-              effects={effects}
               onApplyPreset={handleApplyPreset}
               onDeletePreset={setDeletePresetTarget}
-              onAddEffect={addEffect}
-              onAddBand={handleAddBand}
-              channelOn={channelOn}
-              activeChannel={effActiveChannel}
               onToggleChannel={toggleChannel}
             />
 
