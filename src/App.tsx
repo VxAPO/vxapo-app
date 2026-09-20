@@ -170,15 +170,7 @@ export default function App() {
     );
     return typeof p?.params?.gain_db === "number" ? p.params.gain_db : 0;
   }, [effects, channelOn, effActiveChannel]);
-  const visibleEffects = useMemo(() => {
-    if (!channelOn) return effects;
-    return effects.filter(
-      (e) =>
-        e.type !== "preamp" ||
-        !e.channels?.length ||
-        e.channels.includes(effActiveChannel),
-    );
-  }, [effects, channelOn, effActiveChannel]);
+  // 通道过滤后的效果器列表已由两个视图各自订阅计算（决策 4 阶段 A-2b）。
   const fs = selected?.sample_rate ?? 48000;
   // 峰值/谷值曲线计算较重（31 段 × 数百评估点），拖动滑块时固定间隔重算
   //（默认 120ms），滑块 move 只重渲染被拖的卡片，保证拖动帧数。
@@ -685,55 +677,20 @@ export default function App() {
                   >
                     {v === "preset" ? (
                   <PresetView
-                    blocks={blocks}
-                    showFilterEmptyHint={blocks.length === 0}
-                    showEffectEmptyHint={visibleEffects.length === 0}
                     hintShift={hintShift}
                     selectedIds={selectedIds}
                     accentOf={accentOf}
-                    effects={visibleEffects}
-                    onToggleEffect={toggleEffect}
-                    onRemoveEffect={removeEffect}
-                    onChangeEffectStrength={patchEffectSemantic}
-                    activeKey={blocksDragApi.activeKey}
-                    flyKey={blocksDragApi.fly?.key ?? null}
-                    virtualIndexOf={blocksDragApi.virtualIndexOf}
-                    onDragStart={blocksDragApi.startDrag}
-                    effectActiveKey={effectsDragApi.activeKey}
-                    effectFlyKey={effectsDragApi.fly?.key ?? null}
-                    effectOnDragStart={effectsDragApi.startDrag}
-                    onRemoveBlock={removeBlock}
-                    onRemoveGroup={removeGroup}
-                    onPatchBlock={patchBlock}
-                    onPatchBand={patchBand}
+                    blocksDrag={blocksDragApi}
+                    effectsDrag={effectsDragApi}
                   />
                     ) : (
                   <AdvancedView
-                    blocks={blocks}
-                    showFilterEmptyHint={blocks.length === 0}
-                    showEffectEmptyHint={visibleEffects.length === 0}
                     hintShift={hintShift}
                     accentOf={accentOf}
-                    channelOn={channelOn}
-                    channelNames={channelNames}
-                    firstChannel={channelNames[0] ?? "L"}
-                    activeChannel={effActiveChannel}
                     onChannelChange={handleChannelChange}
                     selectedIds={selectedIds}
-                    effects={visibleEffects}
-                    onToggleEffect={toggleEffect}
-                    onRemoveEffect={removeEffect}
-                    onChangeEffectParam={patchEffectParam}
-                    activeKey={blocksDragApi.activeKey}
-                    flyKey={blocksDragApi.fly?.key ?? null}
-                    virtualIndexOf={blocksDragApi.virtualIndexOf}
-                    onDragStart={blocksDragApi.startDrag}
-                    effectActiveKey={effectsDragApi.activeKey}
-                    effectFlyKey={effectsDragApi.fly?.key ?? null}
-                    effectOnDragStart={effectsDragApi.startDrag}
-                    onRemoveBlock={removeBlock}
-                    onPatchBlock={patchBlock}
-                    onPatchBand={patchBand}
+                    blocksDrag={blocksDragApi}
+                    effectsDrag={effectsDragApi}
                   />
                     )}
                   </motion.div>

@@ -1,71 +1,66 @@
-import { Fragment, memo } from "react";
+import { Fragment, memo, useMemo } from "react";
 import { t } from "../lib/i18n/core";
-import type { Block, EffectItem } from "../lib/model";
-import { accentStyle, type BandPatch } from "../lib/blocks";
+import type { Block } from "../lib/model";
+import { accentStyle } from "../lib/blocks";
 import { channelLabel } from "../lib/channels";
+import type { DragApi } from "../lib/drag";
+import { visibleEffectsFor } from "../lib/filters";
+import { effectiveChannel, useChannelStore } from "../stores/channelStore";
+import { useConfigStore } from "../stores/configStore";
+import { useChannelNames } from "../hooks/useChannelNames";
 import DragCard from "./DragCard";
 import BandParamCard from "./BandParamCard";
 import EffectCard from "./EffectCard";
 
 interface AdvancedViewProps {
-  blocks: Block[];
-  showFilterEmptyHint: boolean;
-  showEffectEmptyHint: boolean;
   hintShift: number;
   accentOf: (b: Block) => string;
-  channelOn: boolean;
-  channelNames: string[];
-  firstChannel: string;
-  activeChannel: string;
+  /** 切换活动声道（App 侧还要清空选中，故仍由外部传入）。 */
   onChannelChange: (ch: string) => void;
   selectedIds: string[];
-  effects: EffectItem[];
-  onToggleEffect: (type: string) => void;
-  onRemoveEffect: (type: string) => void;
-  onChangeEffectParam: (type: string, key: string, value: number | string) => void;
-  activeKey: string | null;
-  flyKey: string | null;
-  virtualIndexOf: (key: string) => number | null;
-  onDragStart: (key: string, x: number, y: number) => void;
-  effectActiveKey: string | null;
-  effectFlyKey: string | null;
-  effectOnDragStart: (key: string, x: number, y: number) => void;
-  onRemoveBlock: (idx: number) => void;
-  onPatchBlock: (idx: number, patch: Partial<Block>) => void;
-  onPatchBand: (blockIdx: number, bandIdx: number, patch: BandPatch) => void;
+  /** 滤波器/效果器的拖拽 API（useDragSort 返回值子集）。 */
+  blocksDrag: DragApi;
+  effectsDrag: DragApi;
 }
 
-/** 参数视图：滤波器与效果器分区，通道选择只属于滤波器 */
+/**
+ * 参数视图：滤波器与效果器分区，通道选择只属于滤波器。
+ *
+ * 数据与动作直接订阅 configStore/channelStore（决策 4 阶段 A-2b），
+ * 外部只传「视图动画 + 选中态 + 拖拽 + 切声道回调」。
+ */
 function AdvancedView({
-  blocks,
-  showFilterEmptyHint,
-  showEffectEmptyHint,
   hintShift,
   accentOf,
-  channelOn,
-  channelNames,
-  firstChannel,
-  activeChannel,
   onChannelChange,
   selectedIds,
-  effects,
-  onToggleEffect,
-  onRemoveEffect,
-  onChangeEffectParam,
-  activeKey,
-  flyKey,
-  virtualIndexOf,
-  onDragStart,
-  effectActiveKey,
-  effectFlyKey,
-  effectOnDragStart,
-  onRemoveBlock,
-  onPatchBlock,
-  onPatchBand,
+  blocksDrag,
+  effectsDrag,
 }: AdvancedViewProps) {
+  const blocks = useConfigStore((s) => s.blocks);
+  const effects = useConfigStore((s) => s.effects);
+  const toggleEffect = useConfigStore((s) => s.toggleEffect);
+  const removeEffect = useConfigStore((s) => s.removeEffect);
+  const patchEffectParam = useConfigStore((s) => s.patchEffectParam);
+  const removeBlock = useConfigStore((s) => s.removeBlock);
+  const patchBlock = useConfigStore((s) => s.patchBlock);
+  const patchBand = useConfigStore((s) => s.patchBand);
+  const channelOn = useChannelStore((s) => s.channelOn);
+  const activeChannel = useChannelStore((s) => s.activeChannel);
+  const names = useChannelNames();
+
+  const firstChannel = names[0] ?? "L";
+  const effActiveChannel = effectiveChannel(names, activeChannel);
+  const visibleEffects = useMemo(
+    () => visibleEffectsFor(effects, channelOn, effActiveChannel),
+    [effects, channelOn, effActiveChannel],
+  );
+  const showFilterEmptyHint = blocks.length === 0;
+  const showEffectEmptyHint = visibleEffects.length === 0;
+
   const visible = (b: Block) =>
     channelOn
-      ? (b.channel ?? firstChannel) === activeChannel
+      ? (b.channel ?? firstChannel) === effActiveChannel
       : !b.channel || b.channel === firstChannel;
   let chOrdinal = 0;
 
@@ -76,12 +71,12 @@ function AdvancedView({
           <div className="section-title">{t("filters")}</div>
           {channelOn && (
             <div className="col-head">
-              <span className="ch-name">{channelNames.length} {t("channels")}</span>
-              {channelNames.map((c) => (
+              <span className="ch-name">{names.length} {t("channels")}</span>
+              {names.map((c) => (
                 <button
                   key={c}
                   type="button"
-                  className={`ch-pill${c === activeChannel ? " active" : ""}`}
+                  className={`ch-pill${c === effActiveChannel ? " active" : ""}`}
                   onClick={() => onChannelChange(c)}
                 >
                   {channelLabel(c)}
@@ -102,22 +97,23 @@ function AdvancedView({
           {blocks.map((b, bi) => {
             if (!visible(b)) return null;
             chOrdinal += 1;
+            const key = b.id ?? String(bi);
             return (
-              <Fragment key={b.id ?? bi}>
+              <Fragment key={key}>
                 <DragCard
-                  id={b.id ?? String(bi)}
-                  className={`band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${activeKey === (b.id ?? String(bi)) || flyKey === (b.id ?? String(bi)) ? " is-dragging" : ""}${selectedIds.includes(b.id ?? String(bi)) ? " is-selected" : ""}`}
+                  id={key}
+                  className={`band-card${b.enabled ? " enabled" : " disabled"}${b.group ? " sem-group" : ""}${blocksDrag.activeKey === key || blocksDrag.fly?.key === key ? " is-dragging" : ""}${selectedIds.includes(key) ? " is-selected" : ""}`}
                   style={b.group ? accentStyle(accentOf(b)) : undefined}
-                  onDragStart={onDragStart}
+                  onDragStart={blocksDrag.startDrag}
                 >
                   <BandParamCard
                     block={b}
                     index={bi}
-                    num={activeKey == null && flyKey == null ? chOrdinal : undefined}
-                    dragNum={virtualIndexOf(b.id ?? String(bi))}
-                    onRemoveBlock={onRemoveBlock}
-                    onPatchBlock={onPatchBlock}
-                    onPatchBand={onPatchBand}
+                    num={blocksDrag.activeKey == null && blocksDrag.fly == null ? chOrdinal : undefined}
+                    dragNum={blocksDrag.virtualIndexOf(key)}
+                    onRemoveBlock={removeBlock}
+                    onPatchBlock={patchBlock}
+                    onPatchBand={patchBand}
                   />
                 </DragCard>
               </Fragment>
@@ -136,22 +132,23 @@ function AdvancedView({
           </div>
         )}
         <div className="cards device-cards">
-          {effects.map((e) => {
+          {visibleEffects.map((e) => {
             const effKey = `e-${e.id ?? e.type}`;
-            const effActive = effectActiveKey === effKey || effectFlyKey === effKey;
+            const effActive =
+              effectsDrag.activeKey === effKey || effectsDrag.fly?.key === effKey;
             return (
               <DragCard
                 key={effKey}
                 id={effKey}
                 group="effects"
                 className={`effect-card${e.enabled ? " enabled" : " disabled"}${effActive ? " is-dragging" : ""}`}
-                onDragStart={effectOnDragStart}
+                onDragStart={effectsDrag.startDrag}
               >
                 <EffectCard
                   effect={e}
-                  onToggle={onToggleEffect}
-                  onRemove={onRemoveEffect}
-                  onChangeParam={onChangeEffectParam}
+                  onToggle={toggleEffect}
+                  onRemove={removeEffect}
+                  onChangeParam={patchEffectParam}
                 />
               </DragCard>
             );
