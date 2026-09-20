@@ -12,7 +12,7 @@
   - **语义视图**：把音频参数转换为可理解的强度与预设卡组，按感知量调节。
   - **参数视图**：将完整参数开放给高级用户，滑块 + 输入框覆盖每个值。
 - 内置效果器：基准电平、声场处理（M/S + 空气吸收 + 动态侧增益）、谐波激励、
-  板式混响（Dattorro）、压缩器、等响补偿（ISO 226）。
+  板式混响（Dattorro）、压缩器、等响补偿（1/3 倍频程近似 ISO 226 等响曲线，简化实现）。
 - 语义强度映射：干湿交叉淡化（`wet ≤ 0.9`、`dry = 1 - wet`，和 ≤ 1 防削波），
   reverb 强度联动尾长/阻尼/预延迟/房间大小，wide 强度=中置距离（空气吸收深度）。
 - 主动通道选择器：可逐通道独立调音，未设置的通道 passthrough，并可将卡片复制到指定声道。
@@ -114,7 +114,7 @@ React 19.
     boxes for every value.
 - Built-in effects: preamp (reference level), stereo field (M/S + air absorption +
   dynamic side gain), harmonic excitation, plate reverb (Dattorro), compressor, and
-  loudness compensation (ISO 226).
+  loudness compensation (1/3-octave approximation of the ISO 226 curves, simplified).
 - Semantic strength mapping: dry/wet crossfade (`wet ≤ 0.9`, `dry = 1 - wet`, sum ≤ 1 to
   avoid clipping); reverb strength links decay/damping/pre-delay/room size; wide strength
   equals center distance (air absorption depth).
