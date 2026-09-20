@@ -9,6 +9,7 @@ import { isInstalled } from "../lib/api";
 import type { Block, PresetLibraryEntry } from "../lib/model";
 import type { FlyState } from "../lib/dragSortTypes";
 import { useDeviceStore } from "../stores/deviceStore";
+import { useUiStore } from "../stores/uiStore";
 import ConfirmDialog from "./ConfirmDialog";
 import DragLayer from "./DragLayer";
 import ImportDialog from "./ImportDialog";
@@ -29,9 +30,7 @@ interface DragSourceApi {
 }
 
 interface AppOverlaysProps {
-  // 设置
-  settingsOpen: boolean;
-  onSettingsOpenChange: (open: boolean) => void;
+  // 设置（开关与 Toast 在组件内订阅 uiStore）
   theme: ComponentProps<typeof SettingsDialog>["theme"];
   onThemeChange: ComponentProps<typeof SettingsDialog>["onThemeChange"];
   // 保存预设
@@ -45,29 +44,18 @@ interface AppOverlaysProps {
   onCloseDeletePreset: (open: boolean) => void;
   onConfirmDeletePreset: () => void;
   // 导入
-  importOpen: boolean;
-  onImportOpenChange: (open: boolean) => void;
-  importDeviceGuid: string | null;
-  onSelectImportDevice: (guid: string | null) => void;
   onImport: (guid: string, content: string) => void;
   // 安装
-  installOpen: boolean;
-  onInstallOpenChange: (open: boolean) => void;
   onInstalled: (name: string) => void;
-  onInstallBusyChange: (busy: boolean) => void;
   // 拖拽层
   blocksDrag: DragSourceApi;
   effectsDrag: DragSourceApi;
   classForKey: (key: string) => string;
   styleForKey: (key: string) => React.CSSProperties | undefined;
   effectClassForKey: (key: string) => string;
-  /** Toast 文案（空串不显示）。 */
-  notice: string;
 }
 
 export default function AppOverlays({
-  settingsOpen,
-  onSettingsOpenChange,
   theme,
   onThemeChange,
   savePresetOpen,
@@ -78,22 +66,25 @@ export default function AppOverlays({
   deletePresetTarget,
   onCloseDeletePreset,
   onConfirmDeletePreset,
-  importOpen,
-  onImportOpenChange,
-  importDeviceGuid,
-  onSelectImportDevice,
   onImport,
-  installOpen,
-  onInstallOpenChange,
   onInstalled,
-  onInstallBusyChange,
   blocksDrag,
   effectsDrag,
   classForKey,
   styleForKey,
   effectClassForKey,
-  notice,
 }: AppOverlaysProps) {
+  // UI 开关与 Toast 直接订阅 uiStore（决策 4 阶段 A 收尾）；沿用原 prop 名，JSX 无需改。
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const onSettingsOpenChange = useUiStore((s) => s.setSettingsOpen);
+  const installOpen = useUiStore((s) => s.installOpen);
+  const onInstallOpenChange = useUiStore((s) => s.setInstallOpen);
+  const importOpen = useUiStore((s) => s.importOpen);
+  const onImportOpenChange = useUiStore((s) => s.setImportOpen);
+  const importDeviceGuid = useUiStore((s) => s.importDeviceGuid);
+  const onSelectImportDevice = useUiStore((s) => s.setImportDeviceGuid);
+  const onInstallBusyChange = useUiStore((s) => s.setInstallBusy);
+  const notice = useUiStore((s) => s.notice);
   // 设备域数据/动作直接订阅（决策 4 阶段 A）。
   const devices = useDeviceStore((s) => s.devices);
   const installedDevices = devices.filter(isInstalled);

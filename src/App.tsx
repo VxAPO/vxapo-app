@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import logoUrl from "./assets/VxAPO_icon_v4.svg";
 import "./App.css";
 import "./new.css";
 import type { Device } from "./lib/model";
@@ -12,10 +11,12 @@ import { buildEvalFreqs, curveRange } from "./lib/curve";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useSelectionStore } from "./stores/selectionStore";
+import { useUiStore } from "./stores/uiStore";
+import NoDeviceHint from "./components/NoDeviceHint";
+import MarqueeBox from "./components/MarqueeBox";
 import ViewStage from "./components/ViewStage";
 import AppOverlays from "./components/AppOverlays";
 import { useTheme } from "./hooks/useTheme";
-import { useToast } from "./hooks/useToast";
 import { useI18n } from "./lib/i18n";
 import { t } from "./lib/i18n/core";
 import { useWindowControls } from "./hooks/useWindowControls";
@@ -49,14 +50,10 @@ import TopBar from "./components/TopBar";
 const BOTTOM_BAR_PAD = 400;
 
 export default function App() {
-  const { notice, notify } = useToast();
-  const [loadErr, setLoadErr] = useState("");
-  const onError = useCallback((msg: string) => setLoadErr(msg), []);
-  const handleUninstalled = useCallback(
-    (name: string) => notify(t("notify.uninstalled", { name })),
-    [notify],
-  );
-  const [installBusy, setInstallBusy] = useState(false);
+  // 错误条 / Toast / 对话框开关收进 uiStore（决策 4 阶段 A 收尾）。
+  const loadErr = useUiStore((s) => s.loadErr);
+  const notify = useUiStore((s) => s.notify);
+  const installBusy = useUiStore((s) => s.installBusy);
 
   const {
     selectedGuid,
@@ -69,7 +66,7 @@ export default function App() {
     staleBusy,
     migrateStaleSafe,
     cleanupStaleSafe,
-  } = useDevices(onError, handleUninstalled, installBusy);
+  } = useDevices(installBusy);
 
   // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成（决策 4 阶段 A）。
   const channelNames = useMemo(() => channelNamesFor(selected?.channels), [selected?.channels]);
@@ -100,7 +97,7 @@ export default function App() {
     toggleDeviceTuning,
     setChannelPreampMode,
     normalizeChainGain,
-  } = useConfig(installedDevices.length === 0 ? null : selectedGuid, onError, notify, {
+  } = useConfig(installedDevices.length === 0 ? null : selectedGuid, {
     mode: channelOn,
     first: channelNames[0] ?? "L",
     active: effActiveChannel,
@@ -341,11 +338,6 @@ export default function App() {
     [setUninstallTarget],
   );
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [installOpen, setInstallOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importDeviceGuid, setImportDeviceGuid] = useState<string | null>(null);
-
   const toggleChannel = useCallback(() => {
     // 只有通道切换会伴随视图切到 advanced 时才需要 view-stage 动画；
     // 已处于 advanced 时直接清空选择即可，不触发视图退场/进场。
@@ -376,19 +368,19 @@ export default function App() {
     // 打开设置前清除框选，避免浮窗悬空在点击层。
     setSelectedIds([]);
     setCopyOpen(false);
-    setSettingsOpen(true);
+    useUiStore.getState().setSettingsOpen(true);
   }, []);
   const openInstall = useCallback(() => {
     setSelectedIds([]);
     setCopyOpen(false);
-    setInstallOpen(true);
+    useUiStore.getState().setInstallOpen(true);
   }, []);
   const openImport = useCallback(() => {
     setSelectedIds([]);
     setCopyOpen(false);
-    const guid = selectedGuid ?? installedDevices[0]?.guid ?? null;
-    setImportDeviceGuid(guid);
-    setImportOpen(true);
+    const ui = useUiStore.getState();
+    ui.setImportDeviceGuid(selectedGuid ?? installedDevices[0]?.guid ?? null);
+    ui.setImportOpen(true);
   }, [selectedGuid, installedDevices]);
   const handleImport = useCallback(
     async (guid: string, content: string) => {
@@ -401,7 +393,7 @@ export default function App() {
         await writeConfig(guid, content);
         setSelectedGuid(guid);
         forceReload();
-        setImportOpen(false);
+        useUiStore.getState().setImportOpen(false);
         notify(t("import.success"));
       } catch (e) {
         notify(`${t("import.fail")}：${friendlyError(e)}`);
@@ -488,21 +480,7 @@ export default function App() {
                 transition={{ duration: 0.18, ease: "easeInOut" }}
               >
             {installedDevices.length === 0 ? (
-              <div className="no-device">
-                <img className="no-device-logo" src={logoUrl} alt="" draggable={false} />
-                <button
-                  type="button"
-                  className="no-device-row"
-                  onClick={() => setInstallOpen(true)}
-                >
-                  <span className="no-device-plus">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="butt" />
-                    </svg>
-                  </span>
-                  <span className="no-device-tip">{t("no.device")}</span>
-                </button>
-              </div>
+              <NoDeviceHint />
             ) : (
               <>
             <div
@@ -549,17 +527,7 @@ export default function App() {
                 />
               )}
             </AnimatePresence>
-            {marquee && (
-              <div
-                className="marquee-box"
-                style={{
-                  left: snapPx(Math.min(marquee.x1, marquee.x2)),
-                  top: snapPx(Math.min(marquee.y1, marquee.y2)),
-                  width: snapPx(Math.abs(marquee.x2 - marquee.x1)),
-                  height: snapPx(Math.abs(marquee.y2 - marquee.y1)),
-                }}
-              />
-            )}
+            {marquee && <MarqueeBox marquee={marquee} />}
             </div>
             <div className="bottom-row">
               <div className="fx fx-dev" ref={devFxRef}>
@@ -605,8 +573,6 @@ export default function App() {
       </div>
 
       <AppOverlays
-        settingsOpen={settingsOpen}
-        onSettingsOpenChange={setSettingsOpen}
         theme={theme}
         onThemeChange={setTheme}
         savePresetOpen={savePresetOpen}
@@ -617,21 +583,13 @@ export default function App() {
         deletePresetTarget={deletePresetTarget}
         onCloseDeletePreset={closeDeletePreset}
         onConfirmDeletePreset={confirmDeletePreset}
-        importOpen={importOpen}
-        onImportOpenChange={setImportOpen}
-        importDeviceGuid={importDeviceGuid}
-        onSelectImportDevice={setImportDeviceGuid}
         onImport={handleImport}
-        installOpen={installOpen}
-        onInstallOpenChange={setInstallOpen}
         onInstalled={handleInstalled}
-        onInstallBusyChange={setInstallBusy}
         blocksDrag={blocksDragApi}
         effectsDrag={effectsDragApi}
         classForKey={overlayClassForKey}
         styleForKey={overlayStyleForKey}
         effectClassForKey={effectOverlayClassForKey}
-        notice={notice}
       />
     </div>
   );

@@ -4,14 +4,12 @@
 // 按原样暴露派生值（installedDevices / selected）。返回值与重构前逐字段一致。
 import { useCallback, useEffect, useMemo } from "react";
 import { isInstalled } from "../lib/api";
+import { t } from "../lib/i18n/core";
 import { useDeviceStore } from "../stores/deviceStore";
+import { useUiStore } from "../stores/uiStore";
 import { useInterval } from "./useInterval";
 
-export function useDevices(
-  onError: (msg: string) => void,
-  onUninstalled?: (name: string) => void,
-  paused?: boolean,
-) {
+export function useDevices(paused?: boolean) {
   const devices = useDeviceStore((s) => s.devices);
   const staleInstalls = useDeviceStore((s) => s.staleInstalls);
   const staleBusy = useDeviceStore((s) => s.staleBusy);
@@ -26,12 +24,12 @@ export function useDevices(
   const migrateStaleSafe = useDeviceStore((s) => s.migrateStaleSafe);
   const cleanupStaleSafe = useDeviceStore((s) => s.cleanupStaleSafe);
 
-  // 错误出口（onError）与卸载回调：挂载期注入 store，卸载即摘掉——
+  // 错误出口指向 uiStore（决策 4 阶段 A 收尾）：挂载期注入、卸载即摘掉——
   // 等价于重构前用 mountedRef 抑制卸载后的上报。
   useEffect(() => {
-    useDeviceStore.getState().setErrorSink(onError);
+    useDeviceStore.getState().setErrorSink(useUiStore.getState().setLoadErr);
     return () => useDeviceStore.getState().setErrorSink(null);
-  }, [onError]);
+  }, []);
 
   const load = useCallback((first: boolean) => {
     void useDeviceStore.getState().load(first);
@@ -54,8 +52,8 @@ export function useDevices(
 
   const confirmUninstall = useCallback(async () => {
     const name = await useDeviceStore.getState().confirmUninstall();
-    if (name) onUninstalled?.(name);
-  }, [onUninstalled]);
+    if (name) useUiStore.getState().notify(t("notify.uninstalled", { name }));
+  }, []);
 
   return {
     devices,

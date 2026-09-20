@@ -6,14 +6,13 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { Block, EffectItem, PeqBandKind, PresetLibraryEntry } from "../lib/model";
 import { useConfigStore } from "../stores/configStore";
+import { useUiStore } from "../stores/uiStore";
 import type { BandPatch } from "../lib/blocks";
 import type { ChannelCtx } from "../lib/toml";
 import { useInterval } from "./useInterval";
 
 export function useConfig(
   selectedGuid: string | null,
-  onError: (msg: string) => void,
-  notify: (msg: string) => void,
   channelCtx: ChannelCtx = { mode: false, first: "L", active: "L" },
   deviceGuids: string[] = [],
 ) {
@@ -26,17 +25,18 @@ export function useConfig(
   const reloadNonce = useConfigStore((s) => s.reloadNonce);
   const dirtyRef = useConfigStore((s) => s.dirtyRef);
 
-  // 出口注入：挂载期注入 store、卸载即摘掉（等价原先闭包捕获的回调生命周期）。
+  // 出口注入：错误条与 Toast 都指向 uiStore（决策 4 阶段 A 收尾），卸载即摘掉。
   useEffect(() => {
     const st = useConfigStore.getState();
-    st.setErrorSink(onError);
-    st.setNotifySink(notify);
+    const ui = useUiStore.getState();
+    st.setErrorSink(ui.setLoadErr);
+    st.setNotifySink(ui.notify);
     return () => {
       const s = useConfigStore.getState();
       s.setErrorSink(null);
       s.setNotifySink(null);
     };
-  }, [onError, notify]);
+  }, []);
 
   // 输入按值推入（对象/数组每次渲染都是新引用，store 内部按值比较后才写入）。
   const guidKey = deviceGuids.join("|");
