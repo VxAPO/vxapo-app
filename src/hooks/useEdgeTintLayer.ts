@@ -1,6 +1,8 @@
 import { useEffect, type RefObject } from "react";
-import { distToBorder, distToRect, edgeShadeAlpha, edgeShadeRgb, isDark, panelBaseLum, parseColor, rgbLuminance, rgba, ringBaseRgb, scaleK, smoothstep, surfaceLumOf } from "../lib/edgetint/geometry";
+import { distToBorder, distToRect, edgeShadeAlpha, edgeShadeRgb, isDark, panelBaseLum, parseColor, rgbLuminance, ringBaseRgb, scaleK, smoothstep, surfaceLumOf } from "../lib/edgetint/geometry";
 import type { ColorSource, LumSource, Rgb } from "../lib/edgetint/geometry";
+import { COLOR_K, FADE_FRAME_MS, FADE_K, INNER_SAMPLE_R, LINE_ALPHA, MAX_POWER, MAX_SOURCE_R, MENISCUS_ALPHA, MENISCUS_BLUR, MENISCUS_HALO_ALPHA, MENISCUS_HALO_BLUR, MENISCUS_HALO_WIDTH, MENISCUS_INSET, MENISCUS_WIDTH, PANEL_REUSE_MAX, PANEL_REUSE_MS, SAMPLE_R, SHADE_OUT_SMOOTH_R, SHADE_SMOOTH_R, Z_BASE, Z_SHADE, Z_TOOL, Z_TOOL_SHADE, buildGrid, insetRing, mapRingToReference, panelRectsForTool, ringPoints, sampleColor, strokeChunkBand, strokeUniformBand } from "../lib/edgetint/geometry";
+import type { EdgeSample, Grid, RingPoint } from "../lib/edgetint/geometry";
 
 /**
  * 外部 Canvas 环带染色层：
@@ -21,42 +23,7 @@ type LightSet = {
   lumGrid: Grid<LumSource>;
 };
 
-type Grid<T> = {
-  cell: number;
-  buckets: Map<number, number[]>;
-  list: T[];
-  marks: Uint8Array;
-  gen: number;
-};
 
-function buildGrid<T extends { r: DOMRect }>(
-  list: T[],
-  cell = 64,
-): Grid<T> {
-  const buckets = new Map<number, number[]>();
-  for (let i = 0; i < list.length; i++) {
-    const r = list[i].r;
-    const minX = Math.floor(r.left / cell);
-    const maxX = Math.floor(r.right / cell);
-    const minY = Math.floor(r.top / cell);
-    const maxY = Math.floor(r.bottom / cell);
-    for (let y = minY; y <= maxY; y++) {
-      for (let x = minX; x <= maxX; x++) {
-        const key = y * 100000 + x;
-        const arr = buckets.get(key);
-        if (arr) arr.push(i);
-        else buckets.set(key, [i]);
-      }
-    }
-  }
-  return {
-    cell,
-    buckets,
-    list,
-    marks: new Uint8Array(list.length),
-    gen: 0,
-  };
-}
 
 function queryGrid<T>(
   grid: Grid<T>,
@@ -207,34 +174,6 @@ function curvePointSources(): ColorSource[] {
   return pts;
 }
 
-const SAMPLE_R = 32;
-const INNER_SAMPLE_R = 16;
-const MAX_POWER = 2.4;
-const MAX_SOURCE_R = Math.ceil(SAMPLE_R * Math.sqrt(MAX_POWER));
-const RING_STEP = 8;
-const ARC_STEP = 1;
-const LINE_ALPHA = 0.3;
-const FADE_K = 0.3;
-const COLOR_K = 0.4;
-const SHADE_SMOOTH_R = 4;
-const SHADE_OUT_SMOOTH_R = 14;
-const MENISCUS_INSET = 2;
-const MENISCUS_WIDTH = 3;
-const MENISCUS_ALPHA = 0.22;
-const MENISCUS_BLUR = 1.2;
-const MENISCUS_HALO_WIDTH = 8;
-const MENISCUS_HALO_ALPHA = 0.18;
-const MENISCUS_HALO_BLUR = 4;
-/** 面板离屏缓冲复用窗口：位置由本次 blit 偏移保证精确，只有环带配色最多滞后这么久。 */
-const PANEL_REUSE_MS = 100;
-/** 连续复用上限：保证至少每 3 帧完整重算一次，配色不会长时间停在上一次采样。 */
-const PANEL_REUSE_MAX = 2;
-/** 褪色补帧链的基准步长：插值按「距上次真实渲染过了多少个基准步」推进，保证复用不改褪色时长。 */
-const FADE_FRAME_MS = 33;
-const Z_BASE = 25;
-const Z_TOOL = 35;
-const Z_SHADE = 26;
-const Z_TOOL_SHADE = 36;
 
 function makeLayer(
   z: number,
@@ -344,40 +283,7 @@ function cardColor(el: HTMLElement): Rgb | null {
 
 
 
-type EdgeSample = { c: Rgb; s: number } | null;
 
-/** 距离主导的加权混色 + 强度：越近 alpha 越高，远处自然淡出。 */
-function sampleColor(
-  x: number,
-  y: number,
-  sources: ColorSource[],
-  radius: number,
-  radiusFor?: (r: DOMRect) => number,
-): EdgeSample {
-  let wSum = 0;
-  let wMax = 0;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  for (const c of sources) {
-    const d = c.border ? distToBorder(x, y, c.r) : distToRect(x, y, c.r);
-    // 光源半径随强度缩放：徽标 2.4 -> 约 1.55 倍基础半径，框选次之，默认最短
-    const p = c.power ?? 1;
-    const sr =
-      radius * Math.sqrt(p) * (radiusFor ? radiusFor(c.r) : 1);
-    if (d >= sr) continue;
-    const w = Math.pow(1 - d / sr, 2) * p;
-    if (w <= 0) continue;
-    wSum += w;
-    if (w > wMax) wMax = w;
-    r += c.color.r * w;
-    g += c.color.g * w;
-    b += c.color.b * w;
-  }
-  if (wSum <= 0) return null;
-  // 同一采样点多个光源只取最强一个的强度，避免选中数量增加导致亮度叠加。
-  return { c: { r: r / wSum, g: g / wSum, b: b / wSum }, s: Math.min(2.4, wMax) };
-}
 
 function sampleColorGrid(
   x: number,
@@ -444,7 +350,6 @@ function sampleLumGrid(
 
 
 
-type RingPoint = { x: number; y: number; brk?: boolean };
 
 function roundedRectPath(
   ctx: CanvasRenderingContext2D,
@@ -464,65 +369,6 @@ function roundedRectPath(
   ctx.closePath();
 }
 
-/** 沿圆角矩形路径生成连续采样点，并用 brk 标记每条直边/圆角起点。 */
-function ringPoints(
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  rc: number,
-): Array<RingPoint> {
-  const pts: Array<RingPoint> = [];
-  const addLine = (
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number,
-    brk: boolean,
-  ) => {
-    const len = Math.hypot(bx - ax, by - ay);
-    if (len < 0.5) return;
-    const n = Math.max(1, Math.ceil(len / RING_STEP));
-    for (let i = 0; i <= n; i++) {
-      const t = i / n;
-      pts.push({
-        x: ax + (bx - ax) * t,
-        y: ay + (by - ay) * t,
-        brk: brk && i === 0,
-      });
-    }
-  };
-  const addArc = (
-    cx: number,
-    cy: number,
-    a0: number,
-    a1: number,
-    brk: boolean,
-  ) => {
-    const span = Math.abs(a1 - a0);
-    const len = span * rc;
-    if (len < 0.5) return;
-    const n = Math.max(1, Math.ceil(len / ARC_STEP));
-    for (let i = 0; i < n; i++) {
-      const a = a0 + (a1 - a0) * (i / n);
-      pts.push({
-        x: cx + Math.cos(a) * rc,
-        y: cy + Math.sin(a) * rc,
-        brk: brk && i === 0,
-      });
-    }
-  };
-
-  addArc(x0 + rc, y0 + rc, Math.PI, Math.PI * 1.5, true);
-  addLine(x0 + rc, y0, x1 - rc, y0, true);
-  addArc(x1 - rc, y0 + rc, Math.PI * 1.5, Math.PI * 2, true);
-  addLine(x1, y0 + rc, x1, y1 - rc, true);
-  addArc(x1 - rc, y1 - rc, 0, Math.PI * 0.5, true);
-  addLine(x1 - rc, y1, x0 + rc, y1, true);
-  addArc(x0 + rc, y1 - rc, Math.PI * 0.5, Math.PI, true);
-  addLine(x0, y1 - rc, x0, y0 + rc, true);
-  return pts;
-}
 
 /** 每个采样点的平滑状态：alpha 独立逼近目标，颜色做插值。 */
 const ringStates = new WeakMap<
@@ -574,179 +420,11 @@ function stateForInner(el: HTMLElement, n: number): InnerState {
   return st;
 }
 
-function panelRectsForTool(): DOMRect[] {
-  return [...document.querySelectorAll<HTMLElement>(".fx-curve, .fx-dev")]
-    .map((el) => el.getBoundingClientRect())
-    .filter((r) => r.width > 2 && r.height > 2);
-}
 
-function insetRing(
-  rect: DOMRect,
-  corner: number,
-  inset: number,
-): Array<RingPoint> {
-  const rad = Math.max(0.5, corner - inset);
-  return ringPoints(
-    rect.left + inset,
-    rect.top + inset,
-    rect.right - inset,
-    rect.bottom - inset,
-    rad,
-  );
-}
 
-/** 按 ringPoints 的 brk 标记切出每段 [start, end]（含端点）。 */
-function segmentRanges(pts: Array<RingPoint>): Array<[number, number]> {
-  const ranges: Array<[number, number]> = [];
-  let start = 0;
-  for (let i = 1; i < pts.length; i++) {
-    if (pts[i].brk) {
-      if (i - 1 >= start) ranges.push([start, i - 1]);
-      start = i;
-    }
-  }
-  if (start < pts.length) ranges.push([start, pts.length - 1]);
-  return ranges;
-}
 
-/// 把目标环的点映射到参考环：同段（直边/圆角）内按局部比例对齐，
-/// 避免点数不同导致暗部沿路径逐渐斜跑。
-function mapRingToReference(
-  target: Array<RingPoint>,
-  reference: Array<RingPoint>,
-): number[] {
-  const tRanges = segmentRanges(target);
-  const rRanges = segmentRanges(reference);
-  const map = new Array<number>(target.length).fill(0);
-  if (tRanges.length !== rRanges.length || !rRanges.length) {
-    for (let i = 0; i < target.length; i++) {
-      map[i] = Math.round(
-        (i / Math.max(1, target.length - 1)) * (reference.length - 1),
-      );
-    }
-    return map;
-  }
-  for (let s = 0; s < tRanges.length; s++) {
-    const [ts, te] = tRanges[s];
-    const [rs, re] = rRanges[s];
-    const tn = Math.max(1, te - ts);
-    const rn = Math.max(0, re - rs);
-    for (let i = ts; i <= te && i < map.length; i++) {
-      const t = (i - ts) / tn;
-      map[i] = rs + Math.round(t * rn);
-    }
-  }
-  return map;
-}
 
-function strokeChunkBand(
-  bandCtx: CanvasRenderingContext2D,
-  pts: Array<RingPoint>,
-  lineWidth: number | ((i: number) => number),
-  alphaAt: (i: number) => number,
-  colorAt: (i: number) => Rgb,
-  toolFade: number,
-): void {
-  if (pts.length < 2) return;
-  const segs = pts.length - 1;
-  // 以 ringPoints 的 brk 标记切段：每条直边/圆角各一段。
-  // 圆角不会被切成两截，直边也可以一段画完（直线渐变是精确的）。
-  let start = 0;
-  while (start < segs) {
-    let end = segs;
-    for (let j = start + 1; j < segs; j++) {
-      if (pts[j].brk) {
-        end = j;
-        break;
-      }
-    }
-    if (end <= start) {
-      start += 1;
-      continue;
-    }
-    let has = false;
-    for (let i = start; i <= end; i++) {
-      if (alphaAt(i) > 0.003) {
-        has = true;
-        break;
-      }
-    }
-    if (!has) {
-      start = end;
-      continue;
-    }
-    const grad = bandCtx.createLinearGradient(
-      pts[start].x,
-      pts[start].y,
-      pts[end].x,
-      pts[end].y,
-    );
-    for (let i = start; i <= end; i++) {
-      const t = (i - start) / Math.max(1, end - start);
-      const a = alphaAt(i) * toolFade;
-      grad.addColorStop(
-        Math.min(1, Math.max(0, t)),
-        rgba(colorAt(i), Math.max(0, Math.min(1, a))),
-      );
-    }
-    bandCtx.strokeStyle = grad;
-    let w: number;
-    if (typeof lineWidth === "function") {
-      let sum = 0;
-      for (let i = start; i <= end; i++) sum += lineWidth(i);
-      w = Math.max(0.1, sum / (end - start + 1));
-    } else {
-      w = lineWidth;
-    }
-    bandCtx.lineWidth = w;
-    bandCtx.lineCap = "butt";
-    bandCtx.lineJoin = "round";
-    bandCtx.beginPath();
-    bandCtx.moveTo(pts[start].x, pts[start].y);
-    for (let i = start + 1; i <= end; i++) {
-      bandCtx.lineTo(pts[i].x, pts[i].y);
-    }
-    bandCtx.stroke();
-    start = end;
-  }
-}
 
-function strokeUniformBand(
-  bandCtx: CanvasRenderingContext2D,
-  pts: Array<RingPoint>,
-  lineWidth: number,
-  alpha: number,
-  color: Rgb,
-  toolFade: number,
-): void {
-  if (pts.length < 2 || alpha <= 0) return;
-  const segs = pts.length - 1;
-  let start = 0;
-  while (start < segs) {
-    let end = segs;
-    for (let j = start + 1; j < segs; j++) {
-      if (pts[j].brk) {
-        end = j;
-        break;
-      }
-    }
-    if (end <= start) {
-      start += 1;
-      continue;
-    }
-    bandCtx.strokeStyle = rgba(color, alpha * toolFade);
-    bandCtx.lineWidth = lineWidth;
-    bandCtx.lineCap = "butt";
-    bandCtx.lineJoin = "round";
-    bandCtx.beginPath();
-    bandCtx.moveTo(pts[start].x, pts[start].y);
-    for (let i = start + 1; i <= end; i++) {
-      bandCtx.lineTo(pts[i].x, pts[i].y);
-    }
-    bandCtx.stroke();
-    start = end;
-  }
-}
 
 function ensureSoftCanvas(w: number, h: number): void {
   const needW = Math.max(1, Math.ceil(w));
