@@ -25,65 +25,10 @@ export interface Block {
   bands: Band[];
 }
 
-export interface Device {
-  index: number;
-  name: string;
-  guid: string;
-  device_id?: string | null;
-  connection?: string | null;
-  installed_version: string;
-  install_mode: string;
-  slots: Record<string, string | null>;
-  sample_rate?: number | null;
-  channels?: number | null;
-  bit_depth?: number | null;
-  kind?: "playback" | "capture" | null;
-  volume?: number | null;
-  eapo?: string;
-  lost_slot?: string;
-}
-
-/** 旧 GUID 安装记录（Windows 重新枚举端点后可能残留） */
-export interface StaleInstall {
-  guid: string;
-  device_instance_id: string;
-  display_name: string;
-  /**
-   * 配对命中来源：`endpoint_history`（端点历史属性）/ `device_instance_id`
-   * （老端点键）/ `stored_identity`（记录键落盘身份）/ `hardware_id`（硬件 ID
-   * 兜底）；未命中为 null。
-   */
-  matched_by?:
-    | "endpoint_history"
-    | "device_instance_id"
-    | "stored_identity"
-    | "hardware_id"
-    | null;
-  config_path?: string | null;
-  config_mtime_ms?: number | null;
-  snapshot_path?: string | null;
-  snapshot_mtime_ms?: number | null;
-  premix_slot?: string | null;
-  postmix_slot?: string | null;
-  inferred_mode: string;
-  has_child_backup: boolean;
-  has_sysfx_backup: boolean;
-  target_guid?: string | null;
-  target_name?: string | null;
-  target_state: "matched_partial" | "matched_healthy" | "unmatched";
-}
-
-export interface MigrationReport {
-  success: boolean;
-  target_guid: string;
-  config_from?: string | null;
-  snapshot_from?: string | null;
-  config_migrated: boolean;
-  snapshot_migrated: boolean;
-  install_repaired: boolean;
-  removed_guids: string[];
-  warnings: string[];
-}
+// 设备 / 残留记录 / 迁移报告的类型来自 CLI 契约（vxapo-cli/protocol），
+// 由 `TS_RS_EXPORT_DIR=... cargo test -p vxapo-protocol export_bindings` 生成，
+// 此处只 re-export，避免手写第二份定义漂移。
+export type { Device, MigrationReport, StaleInstall } from "./generated";
 
 export interface PresetLibraryEntry {
   id: string;

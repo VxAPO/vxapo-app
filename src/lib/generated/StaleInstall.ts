@@ -9,4 +9,4 @@ export type StaleInstall = { guid: string, device_instance_id: string, display_n
 /**
  * 命中来源；未命中为 `null`。
  */
-matched_by: StaleMatchedBy | null, config_path: string | null, config_mtime_ms: bigint | null, snapshot_path: string | null, snapshot_mtime_ms: bigint | null, premix_slot: string | null, postmix_slot: string | null, inferred_mode: string, has_child_backup: boolean, has_sysfx_backup: boolean, target_guid: string | null, target_name: string | null, target_state: StaleTargetState, };
+matched_by: StaleMatchedBy | null, config_path: string | null, config_mtime_ms: number, snapshot_path: string | null, snapshot_mtime_ms: number, premix_slot: string | null, postmix_slot: string | null, inferred_mode: string, has_child_backup: boolean, has_sysfx_backup: boolean, target_guid: string | null, target_name: string | null, target_state: StaleTargetState, };

@@ -97,32 +97,16 @@ export async function repairStaleAcl(guid: string): Promise<void> {
   await invoke<string>("repair_stale_acl", { guid });
 }
 
-export interface InstallResult {
-  success: boolean;
-  mode?: string | null;
-  score?: number | null;
-  attempts: number;
-  best_mode?: string | null;
-  best_score?: number | null;
-}
+// 进度事件取自 CLI 契约（vxapo-cli/protocol 生成，见 lib/generated/index.ts）。
+import type { InstallProgressEvent } from "./generated";
 
-export type InstallProgressEvent =
-  | { event: "install_write"; mode: string }
-  | { event: "service"; action: "stopping" | "stopped" | "starting" | "running" }
-  | { event: "test"; pipe?: string; mode?: string }
-  | { event: "retry"; from: string; to: string; reason?: string }
-  | {
-      event: "complete";
-      success: boolean;
-      mode?: string;
-      score?: number;
-      attempts?: number;
-      best_mode?: string;
-      best_score?: number;
-    };
+export type { InstallProgressEvent } from "./generated";
+
+/** 安装结果 = 进度流里 `complete` 事件的载荷（src-tauri 取进度文件最后一行）。 */
+export type InstallResult = Extract<InstallProgressEvent, { event: "complete" }>;
 
 export async function installDevice(guid: string): Promise<InstallResult> {
-  if (!isTauri) return { success: false, attempts: 0 };
+  if (!isTauri) return { event: "complete", success: false, attempts: 0 };
   return invoke<InstallResult>("install_device", { guid });
 }
 
