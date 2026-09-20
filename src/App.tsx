@@ -83,38 +83,11 @@ export default function App() {
     confirmUninstall,
     staleInstalls,
     staleBusy,
-    migrateStale,
-    cleanupStale,
+    migrateStaleSafe,
+    cleanupStaleSafe,
   } = useDevices(onError, handleUninstalled, installBusy);
 
-  const handleStaleMigrate = useCallback(
-    async (
-      from: string,
-      to: string,
-      configFrom?: string | null,
-      snapshotFrom?: string | null,
-    ) => {
-      try {
-        return await migrateStale(from, to, configFrom, snapshotFrom);
-      } catch (e: unknown) {
-        onError(friendlyError(e));
-        return null;
-      }
-    },
-    [migrateStale, onError],
-  );
-
-  const handleStaleCleanup = useCallback(
-    async (guid: string) => {
-      try {
-        await cleanupStale(guid);
-      } catch (e: unknown) {
-        onError(friendlyError(e));
-      }
-    },
-    [cleanupStale, onError],
-  );
-
+  // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成（决策 4 阶段 A）。
   const channelNames = useMemo(() => channelNamesFor(selected?.channels), [selected?.channels]);
   const { channelOn, setChannelOn, setActiveChannel, effActiveChannel, firstChannel } =
     useChannelState(selectedGuid, channelNames);
@@ -599,8 +572,8 @@ export default function App() {
             items={staleInstalls}
             selectedGuid={selectedGuid}
             busy={staleBusy}
-            onMigrate={handleStaleMigrate}
-            onCleanup={handleStaleCleanup}
+            onMigrate={migrateStaleSafe}
+            onCleanup={cleanupStaleSafe}
             onDone={notify}
           />
 
@@ -776,7 +749,7 @@ export default function App() {
         onThemeChange={setTheme}
         staleUnmatched={staleInstalls.filter((s) => s.target_state === "unmatched")}
         staleBusy={staleBusy}
-        onCleanupStale={handleStaleCleanup}
+        onCleanupStale={cleanupStaleSafe}
       />
       <SavePresetDialog
         open={savePresetOpen}

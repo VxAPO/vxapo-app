@@ -23,6 +23,8 @@ export function useDevices(
   const setUninstallTarget = useDeviceStore((s) => s.setUninstallTarget);
   const migrateStale = useDeviceStore((s) => s.migrateStale);
   const cleanupStale = useDeviceStore((s) => s.cleanupStale);
+  const migrateStaleSafe = useDeviceStore((s) => s.migrateStaleSafe);
+  const cleanupStaleSafe = useDeviceStore((s) => s.cleanupStaleSafe);
 
   // 错误出口（onError）与卸载回调：挂载期注入 store，卸载即摘掉——
   // 等价于重构前用 mountedRef 抑制卸载后的上报。
@@ -71,5 +73,7 @@ export function useDevices(
     confirmUninstall,
     migrateStale,
     cleanupStale,
+    migrateStaleSafe,
+    cleanupStaleSafe,
   };
 }

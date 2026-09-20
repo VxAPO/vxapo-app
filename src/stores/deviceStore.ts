@@ -51,6 +51,15 @@ interface DeviceStore {
   ): Promise<MigrationReport | null>;
   /** 清理旧 GUID 残留；失败向上抛。 */
   cleanupStale(guid: string): Promise<void>;
+  /** 迁移残留并自行上报错误（失败返回 null，不抛）——原 App 侧包装回调的等价物。 */
+  migrateStaleSafe(
+    from: string,
+    to: string,
+    configFrom?: string | null,
+    snapshotFrom?: string | null,
+  ): Promise<MigrationReport | null>;
+  /** 清理残留并自行上报错误（不抛）——原 App 侧包装回调的等价物。 */
+  cleanupStaleSafe(guid: string): Promise<void>;
   /** 卸载 uninstallTarget；成功回传设备名（调用方据此提示）。 */
   confirmUninstall(): Promise<string | null>;
 }
@@ -139,6 +148,23 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
       await get().refresh();
     } finally {
       set({ staleBusy: false });
+    }
+  },
+
+  async migrateStaleSafe(from, to, configFrom, snapshotFrom) {
+    try {
+      return await get().migrateStale(from, to, configFrom, snapshotFrom);
+    } catch (e: unknown) {
+      get().errorSink?.(friendlyError(e));
+      return null;
+    }
+  },
+
+  async cleanupStaleSafe(guid) {
+    try {
+      await get().cleanupStale(guid);
+    } catch (e: unknown) {
+      get().errorSink?.(friendlyError(e));
     }
   },
 
