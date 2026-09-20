@@ -654,8 +654,8 @@ export default function App() {
               className="view-stack"
               style={{
                 minHeight: viewTransitionH ?? undefined,
-                // 先快后慢：起步就带走大部分距离，尾巴只做收敛（原来 0.4,0,0.2,1 是慢起，
-                // 高度差小时前段几乎不动机，看起来像平移完了先停一下）
+                // 先快后慢：起步就带走大部分距离，尾巴只做收敛——慢起曲线在高度差
+                // 小时前段几乎不动，看起来像平移完了先停一下
                 transition: viewCollapsing
                   ? `min-height ${viewCollapseMs}ms ${COLLAPSE_EASE}`
                   : "none",

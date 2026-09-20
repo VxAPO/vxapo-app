@@ -29,8 +29,7 @@ function StaleInstallBanner({
   const [confirmOpen, setConfirmOpen] = useState(false);
   // 候选集：优先命中当前选中设备；当前设备没有残留时回退到「全部命中」里优先级
   // 最高、配置最新的一条——Windows 重排端点 GUID 后老记录挂在**新**设备 GUID 上，
-  // 若只在选中设备里找，用户不切到那台设备就看不到迁移入口（2026-09-16 实测：
-  // 两条记录都 unmatched，App 只剩清理出口）。
+  // 若只在选中设备里找，用户不切到那台设备就看不到迁移入口。
   const matches = useMemo(() => {
     const matched = items.filter((s) => !!s.target_guid);
     if (matched.length === 0) return [];
