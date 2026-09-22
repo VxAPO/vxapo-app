@@ -22,16 +22,17 @@ import { collectCards, refreshCardNodes } from "./targets";
  */
 export function targetVisibility(el: HTMLElement): number {
   const clamp01 = (n: number) => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1);
+  let v = 1;
   if (isToolbar(el)) {
     const cs = getComputedStyle(el);
     const t = Number.parseFloat(cs.getPropertyValue("--glass-t"));
-    if (Number.isFinite(t)) return clamp01(t);
     // 兜底：没有 --glass-t（旧路径/未注册）时退回自身 opacity
-    return clamp01(Number.parseFloat(cs.opacity));
+    v = Number.isFinite(t) ? clamp01(t) : clamp01(Number.parseFloat(cs.opacity));
   }
+  // 再乘所在页面自身的淡入淡出：设备页切换时工具栏若还在（有选中），它得跟着页面一起淡
   const page = el.closest<HTMLElement>(".device-page");
-  if (page) return clamp01(Number.parseFloat(getComputedStyle(page).opacity));
-  return 1;
+  if (page) v *= clamp01(Number.parseFloat(getComputedStyle(page).opacity));
+  return v;
 }
 
 export function renderToPanelBuffer(
