@@ -1,12 +1,11 @@
 import { Fragment, memo, useMemo } from "react";
 import { t } from "../lib/i18n/core";
-import type { Block } from "../lib/model";
+import type { Block, EffectItem } from "../lib/model";
 import { accentStyle } from "../lib/blocks";
 import type { DragApi } from "../lib/drag";
 import { visibleEffectsFor } from "../lib/filters";
-import { useChannelStore, effectiveChannel } from "../stores/channelStore";
+import { effectiveChannel } from "../stores/channelStore";
 import { useConfigStore } from "../stores/configStore";
-import { useChannelNames } from "../hooks/useChannelNames";
 import DragCard from "./DragCard";
 import EffectSemanticCard from "./EffectSemanticCard";
 import SemanticUnitCard from "./SemanticUnitCard";
@@ -18,17 +17,34 @@ interface PresetViewProps {
   /** 滤波器/效果器的拖拽 API（useDragSort 返回值子集）。 */
   blocksDrag: DragApi;
   effectsDrag: DragApi;
+  /** 设备页数据：由 App 经 ViewStage 传入（**不要**改回订阅 store，见下方注释）。 */
+  blocks: Block[];
+  effects: EffectItem[];
+  channelOn: boolean;
+  activeChannel: string;
+  channelNames: string[];
 }
 
 /**
  * 语义视图：滤波器与效果器分区，组内卡只保留组标识。
  *
- * 数据与动作直接订阅 configStore/channelStore（决策 4 阶段 A-2b），
- * 外部只传「视图动画 + 选中态 + 拖拽」这些非配置数据。
+ * **数据走 props，动作仍直连 store**：动作是与设备无关的 store 单例；而数据若直连
+ * store，设备页过渡就失效——过渡靠 AnimatePresence mode="wait" 保留**上一轮的旧元素
+ * 实例**，它带着旧设备的 props 淡出（拆分前原样）。store 是全局实时的，旧元素一旦
+ * 订阅它，淡出途中就会渲染成新设备的内容（连页面高度都一起变），整段过渡就不对了。
  */
-function PresetView({ hintShift, selectedIds, accentOf, blocksDrag, effectsDrag }: PresetViewProps) {
-  const blocks = useConfigStore((s) => s.blocks);
-  const effects = useConfigStore((s) => s.effects);
+function PresetView({
+  hintShift,
+  selectedIds,
+  accentOf,
+  blocksDrag,
+  effectsDrag,
+  blocks,
+  effects,
+  channelOn,
+  activeChannel,
+  channelNames,
+}: PresetViewProps) {
   const toggleEffect = useConfigStore((s) => s.toggleEffect);
   const removeEffect = useConfigStore((s) => s.removeEffect);
   const patchEffectSemantic = useConfigStore((s) => s.patchEffectSemantic);
@@ -36,13 +52,10 @@ function PresetView({ hintShift, selectedIds, accentOf, blocksDrag, effectsDrag 
   const removeGroup = useConfigStore((s) => s.removeGroup);
   const patchBlock = useConfigStore((s) => s.patchBlock);
   const patchBand = useConfigStore((s) => s.patchBand);
-  const channelOn = useChannelStore((s) => s.channelOn);
-  const activeChannel = useChannelStore((s) => s.activeChannel);
-  const names = useChannelNames();
 
   const visibleEffects = useMemo(
-    () => visibleEffectsFor(effects, channelOn, effectiveChannel(names, activeChannel)),
-    [effects, channelOn, names, activeChannel],
+    () => visibleEffectsFor(effects, channelOn, effectiveChannel(channelNames, activeChannel)),
+    [effects, channelOn, channelNames, activeChannel],
   );
   const showFilterEmptyHint = blocks.length === 0;
   const showEffectEmptyHint = visibleEffects.length === 0;

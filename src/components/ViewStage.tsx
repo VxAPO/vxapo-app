@@ -1,6 +1,6 @@
 // 视图舞台：语义视图 / 参数视图两套常驻 DOM 的滑动切换（从 App.tsx 抽出）。
 import { motion } from "framer-motion";
-import type { Block, ViewMode } from "../lib/model";
+import type { Block, EffectItem, ViewMode } from "../lib/model";
 import type { DragApi } from "../lib/drag";
 import { COLLAPSE_EASE, VIEW_SLIDE_MS } from "../lib/viewMotion";
 import AdvancedView from "./AdvancedView";
@@ -20,6 +20,13 @@ interface ViewStageProps {
   accentOf: (b: Block) => string;
   blocksDrag: DragApi;
   effectsDrag: DragApi;
+  /** 设备页数据：透传给两套视图。不在这里订阅 store——设备页过渡要靠旧元素实例保留
+      旧数据淡出（详见 PresetView / AdvancedView 的注释）。 */
+  blocks: Block[];
+  effects: EffectItem[];
+  channelOn: boolean;
+  activeChannel: string;
+  channelNames: string[];
   onChannelChange: (ch: string) => void;
   onStageAnimationComplete: (v: ViewMode) => void;
 }
@@ -41,6 +48,11 @@ export default function ViewStage({
   accentOf,
   blocksDrag,
   effectsDrag,
+  blocks,
+  effects,
+  channelOn,
+  activeChannel,
+  channelNames,
   onChannelChange,
   onStageAnimationComplete,
 }: ViewStageProps) {
@@ -77,6 +89,11 @@ export default function ViewStage({
                 accentOf={accentOf}
                 blocksDrag={blocksDrag}
                 effectsDrag={effectsDrag}
+                blocks={blocks}
+                effects={effects}
+                channelOn={channelOn}
+                activeChannel={activeChannel}
+                channelNames={channelNames}
               />
             ) : (
               <AdvancedView
@@ -86,6 +103,11 @@ export default function ViewStage({
                 selectedIds={selectedIds}
                 blocksDrag={blocksDrag}
                 effectsDrag={effectsDrag}
+                blocks={blocks}
+                effects={effects}
+                channelOn={channelOn}
+                activeChannel={activeChannel}
+                channelNames={channelNames}
               />
             )}
           </motion.div>

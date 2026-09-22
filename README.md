@@ -159,7 +159,7 @@ Chromium 系能力。Windows 端 Tauri 2 通过 WebView2 渲染，因此可直�
 | `AppOverlays` | 应用级浮层：六个对话框、拖拽层、Toast |
 | `NoDeviceHint` | 空态提示 |
 | `MarqueeBox` | 框选框 |
-| `PresetView` / `AdvancedView` | 两个主视图。只接收动画、选中与拖拽类 props（分别 5 个与 6 个），配置与通道数据自行订阅 |
+| `PresetView` / `AdvancedView` | 两个主视图。除动画、选中与拖拽类 props 外，**设备页数据也走 props**（`blocks` / `effects` / `channelOn` / `activeChannel` / `channelNames`，由 `ViewStage` 透传）；只有动作直连 `configStore`。数据不能自行订阅：设备页退场动画演的是上一轮的旧元素实例，实时订阅会让它在淡出途中就渲染成新设备的内容 |
 
 另外两条结构性事实：
 
@@ -400,7 +400,7 @@ Components subscribe as needed, and `App.tsx` only orchestrates and drives view 
 | `AppOverlays` | App-level overlays: six dialogs, drag layers, toast |
 | `NoDeviceHint` | Empty state |
 | `MarqueeBox` | Marquee rectangle |
-| `PresetView` / `AdvancedView` | The two main views. They receive animation, selection and drag props only (5 and 6 of them). They subscribe to config and channel data themselves |
+| `PresetView` / `AdvancedView` | The two main views. Beyond animation, selection and drag props, they also receive the page data (`blocks`, `effects`, `channelOn`, `activeChannel`, `channelNames`) through props from `ViewStage`; only the actions bind to `configStore` directly. Data must not subscribe to the store: the device-page exit animation replays the previous element instance, and a live subscription would repaint it with the new device's content mid-fade |
 
 Two more structural facts:
 

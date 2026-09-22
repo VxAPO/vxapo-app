@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import "./App.css";
 import "./new.css";
 import type { Device } from "./lib/model";
@@ -31,7 +31,7 @@ import {
 } from "./hooks/useViewAnimation";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
 import { DEVICE_FADE_MS } from "./lib/viewMotion";
-import { useDeviceSwapFade, useFrozenWhile } from "./hooks/useDeviceSwapFade";
+import { driveFor } from "./lib/edgetint/renderLoop";
 
 /**
  * 设备卡"静置重绘"心跳（只针对这一张卡）。
@@ -61,7 +61,6 @@ export default function App() {
     selectedGuid,
     setSelectedGuid,
     selected,
-    devices,
     loading,
     installedDevices,
     setUninstallTarget,
@@ -71,35 +70,12 @@ export default function App() {
     cleanupStaleSafe,
   } = useDevices(installBusy);
 
-  // 设备页过渡：页面数据源滞后一拍（旧页淡完才换内容再淡入，见 hooks/useDeviceSwapFade）
-  const { shown: shownGuid, opacity: pageOpacity, swapping } = useDeviceSwapFade(selectedGuid);
-  const shownDevice = useMemo(
-    () => devices.find((d) => d.guid === shownGuid) ?? null,
-    [devices, shownGuid],
-  );
-
-  // 通道状态**即时**跟随选中设备：侧边栏的通道选择器读的是 channelStore，
-  // 这里若挂滞后一拍的 guid，整块侧边栏会等页面淡出完才更新。
-  const liveChannelNames = useMemo(
-    () => channelNamesFor(selected?.channels),
-    [selected?.channels],
-  );
-  const {
-    channelOn: liveChannelOn,
-    setChannelOn,
-    setActiveChannel,
-    effActiveChannel: liveActiveChannel,
-  } = useChannelState(selectedGuid, liveChannelNames);
-
-  // 页面内容用滞后一份的通道状态（侧边栏用上面的即时值）：
-  // 否则旧页淡出到一半会突然按新设备的通道开关/活动声道重排。
-  const channelNames = useMemo(
-    () => channelNamesFor(shownDevice?.channels),
-    [shownDevice?.channels],
-  );
-  const channelOn = useFrozenWhile(swapping, liveChannelOn);
-  const effActiveChannel = useFrozenWhile(swapping, liveActiveChannel);
-  const firstChannel = channelNames[0] ?? "L";
+  // 设备页过渡走 AnimatePresence mode="wait"（见下方 JSX）：退出的是**旧的元素实例**，
+  // 它带着旧设备的 props 淡出，新元素带新数据淡入——两段天然串行、不重叠。数据侧因此
+  // 即时跟随选中设备即可：不同设备的曲线本来就不同，跟着页面一起换才是对的观感。
+  const channelNames = useMemo(() => channelNamesFor(selected?.channels), [selected?.channels]);
+  const { channelOn, setChannelOn, setActiveChannel, effActiveChannel, firstChannel } =
+    useChannelState(selectedGuid, channelNames);
 
   // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成（决策 4 阶段 A）。
 
@@ -127,7 +103,7 @@ export default function App() {
     toggleDeviceTuning,
     setChannelPreampMode,
     normalizeChainGain,
-  } = useConfig(installedDevices.length === 0 ? null : shownGuid, {
+  } = useConfig(installedDevices.length === 0 ? null : selectedGuid, {
     mode: channelOn,
     first: channelNames[0] ?? "L",
     active: effActiveChannel,
@@ -155,7 +131,7 @@ export default function App() {
     return typeof p?.params?.gain_db === "number" ? p.params.gain_db : 0;
   }, [effects, channelOn, effActiveChannel]);
   // 通道过滤后的效果器列表已由两个视图各自订阅计算（决策 4 阶段 A-2b）。
-  const fs = shownDevice?.sample_rate ?? 48000;
+  const fs = selected?.sample_rate ?? 48000;
   // 峰值/谷值曲线计算较重（31 段 × 数百评估点），拖动滑块时固定间隔重算
   //（默认 120ms），滑块 move 只重渲染被拖的卡片，保证拖动帧数。
   const deferredCurve = useThrottledCompute(() => {
@@ -333,20 +309,20 @@ export default function App() {
 
   // 设备切换时保存旧设备通道状态并恢复新设备通道状态（逐设备记忆，
   // 原逻辑在通道记忆 effect 内一并清空选中）。
-  const prevGuidClearRef = useRef<string | null>(shownGuid);
+  const prevGuidClearRef = useRef<string | null>(selectedGuid);
   useEffect(() => {
-    if (prevGuidClearRef.current === shownGuid) return;
-    prevGuidClearRef.current = shownGuid;
+    if (prevGuidClearRef.current === selectedGuid) return;
+    prevGuidClearRef.current = selectedGuid;
     setSelectedIds([]);
     setCopyOpen(false);
-  }, [shownGuid]);
+  }, [selectedGuid]);
 
-  // 换设备后滚动位置归零：旧实现靠 .device-page 按设备重挂载天然归零，
-  // 现在元素常驻（过渡不再重挂载），需要显式复位。
+  // 染色 canvas 在设备页过渡期间要持续重绘：过渡由 framer-motion 驱动 DOM，canvas 不感知，
+  // 得显式开一段重绘窗口（两段淡出淡入 + 余量）。
+  // 滚动位置不必显式复位：`.device-page` 仍按设备重挂载，`.tuning-scroll` 在它内部，天然回顶。
   useEffect(() => {
-    const el = bodyRef.current;
-    if (el) el.scrollTop = 0;
-  }, [shownGuid]);
+    driveFor(DEVICE_FADE_MS * 2 + 120, "full");
+  }, [selectedGuid]);
 
   const handleChannelChange = useCallback((ch: string) => {
     setActiveChannel(ch);
@@ -507,12 +483,17 @@ export default function App() {
           />
 
           <div className="device-body">
-            {/* 设备页过渡：数据源滞后一拍（useDeviceSwapFade）——旧页淡完才换内容再淡入，
-                两段严格串行；元素不按设备重挂载，染色 canvas 也不必重新登记目标。 */}
-            <div
-              className="device-page"
-              style={{ opacity: pageOpacity, transitionDuration: `${DEVICE_FADE_MS}ms` }}
-            >
+            {/* 设备页过渡（拆分前原实现）：AnimatePresence mode="wait" + key=设备。
+                退出的旧元素实例带着旧数据淡出，新元素带新数据淡入，两段串行、不重叠。 */}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={selectedGuid ?? "none"}
+                className="device-page"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: DEVICE_FADE_MS / 1000, ease: "easeInOut" }}
+              >
             {installedDevices.length === 0 ? (
               <NoDeviceHint />
             ) : (
@@ -540,6 +521,11 @@ export default function App() {
                 accentOf={accentOf}
                 blocksDrag={blocksDragApi}
                 effectsDrag={effectsDragApi}
+                blocks={blocks}
+                effects={effects}
+                channelOn={channelOn}
+                activeChannel={effActiveChannel}
+                channelNames={channelNames}
                 onChannelChange={handleChannelChange}
                 onStageAnimationComplete={handleStageAnimationComplete}
               />
@@ -566,7 +552,7 @@ export default function App() {
             <div className="bottom-row">
               <div className="fx fx-dev" ref={devFxRef}>
                 <DevicePropsCard
-                  device={shownDevice}
+                  device={selected}
                   peakGain={peakGain}
                   totalBands={totalBands}
                   channelOn={channelOn}
@@ -589,11 +575,12 @@ export default function App() {
             </div>
               </>
             )}
-            </div>
+              </motion.div>
+            </AnimatePresence>
             <OverlayScrollbar
               targetRef={bodyRef}
               target={bodyNode}
-              deviceKey={shownGuid ?? "none"}
+              deviceKey={selectedGuid ?? "none"}
               rightPx={-2}
               thumbRight={-2}
               bottomInset={26}
