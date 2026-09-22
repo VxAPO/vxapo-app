@@ -31,7 +31,7 @@ import {
 } from "./hooks/useViewAnimation";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
 import { DEVICE_FADE_MS } from "./lib/viewMotion";
-import { useDeviceSwapFade } from "./hooks/useDeviceSwapFade";
+import { useDeviceSwapFade, useFrozenWhile } from "./hooks/useDeviceSwapFade";
 
 /**
  * 设备卡"静置重绘"心跳（只针对这一张卡）。
@@ -60,6 +60,7 @@ export default function App() {
   const {
     selectedGuid,
     setSelectedGuid,
+    selected,
     devices,
     loading,
     installedDevices,
@@ -70,17 +71,37 @@ export default function App() {
     cleanupStaleSafe,
   } = useDevices(installBusy);
 
-  // 设备页过渡：数据源滞后一拍（旧页淡完才换内容再淡入，见 hooks/useDeviceSwapFade）
-  const { shown: shownGuid, opacity: pageOpacity } = useDeviceSwapFade(selectedGuid);
+  // 设备页过渡：页面数据源滞后一拍（旧页淡完才换内容再淡入，见 hooks/useDeviceSwapFade）
+  const { shown: shownGuid, opacity: pageOpacity, swapping } = useDeviceSwapFade(selectedGuid);
   const shownDevice = useMemo(
     () => devices.find((d) => d.guid === shownGuid) ?? null,
     [devices, shownGuid],
   );
 
+  // 通道状态**即时**跟随选中设备：侧边栏的通道选择器读的是 channelStore，
+  // 这里若挂滞后一拍的 guid，整块侧边栏会等页面淡出完才更新。
+  const liveChannelNames = useMemo(
+    () => channelNamesFor(selected?.channels),
+    [selected?.channels],
+  );
+  const {
+    channelOn: liveChannelOn,
+    setChannelOn,
+    setActiveChannel,
+    effActiveChannel: liveActiveChannel,
+  } = useChannelState(selectedGuid, liveChannelNames);
+
+  // 页面内容用滞后一份的通道状态（侧边栏用上面的即时值）：
+  // 否则旧页淡出到一半会突然按新设备的通道开关/活动声道重排。
+  const channelNames = useMemo(
+    () => channelNamesFor(shownDevice?.channels),
+    [shownDevice?.channels],
+  );
+  const channelOn = useFrozenWhile(swapping, liveChannelOn);
+  const effActiveChannel = useFrozenWhile(swapping, liveActiveChannel);
+  const firstChannel = channelNames[0] ?? "L";
+
   // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成（决策 4 阶段 A）。
-  const channelNames = useMemo(() => channelNamesFor(shownDevice?.channels), [shownDevice?.channels]);
-  const { channelOn, setChannelOn, setActiveChannel, effActiveChannel, firstChannel } =
-    useChannelState(shownGuid, channelNames);
 
   const {
     blocks,

@@ -17,6 +17,8 @@ import { driveFor } from "../lib/edgetint/renderLoop";
 export function useDeviceSwapFade(selectedGuid: string | null): {
   shown: string | null;
   opacity: number;
+  /** 是否正处在"旧页淡出、尚未换数据"的窗口里（页面内容需要冻结旧值） */
+  swapping: boolean;
 } {
   const [shown, setShown] = useState(selectedGuid);
   const [opacity, setOpacity] = useState(1);
@@ -42,5 +44,19 @@ export function useDeviceSwapFade(selectedGuid: string | null): {
     return () => window.clearTimeout(timer.current);
   }, [selectedGuid, shown]);
 
-  return { shown, opacity };
+  return { shown, opacity, swapping: selectedGuid !== shown };
+}
+
+/**
+ * 在 `hold` 期间冻结上一个值。
+ *
+ * 设备切换时页面内容要滞后一拍（旧页淡出期间仍显示旧设备的数据），但侧边栏、页签这类
+ * "壳"必须即时响应——于是把页面用的值冻结，壳用实时值（两侧各自取用，互不牵制）。
+ */
+export function useFrozenWhile<T>(hold: boolean, value: T): T {
+  const [frozen, setFrozen] = useState(value);
+  useEffect(() => {
+    if (!hold) setFrozen(value);
+  }, [hold, value]);
+  return hold ? frozen : value;
 }

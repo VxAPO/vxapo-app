@@ -287,7 +287,10 @@
 .sel-toolbar::before {
   content: "";
   position: absolute;
-  inset: 0;
+  /* 必须盖住面板那圈 1px 透明边框：绝对定位子元素的 inset:0 对齐的是 **padding box**，
+     只铺 inset:0 会留下 1px 没上底色的环——描边（::after，落在 -2px）与模糊底之间就会
+     露出一圈缝隙色。border-radius 作用在 border box 上，故这里按 -1px 对齐同一圈。 */
+  inset: -1px;
   border-radius: inherit;
   pointer-events: none;
   background: var(--glass-bg);
