@@ -230,8 +230,32 @@
   border-left-color: var(--border-strong);
 }
 
+/* 玻璃进度（0→1）：选中工具栏的淡入淡出用它，而不是 opacity——祖先 opacity<1 会让
+   面板自身的 backdrop-filter 整组降级，表现为「高斯模糊等淡入结束才出现」。
+   注册成 <number> 才能被 transition 插值；inherits 让面板与内容共用同一个进度。 */
+@property --glass-t {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.fx-toolbar {
+  --glass-t: 0;
+  transition: --glass-t 180ms ease-out;
+}
+
+.fx-toolbar.is-in {
+  --glass-t: 1;
+}
+
 /* 选中工具栏：圆角矩形，浮动在选中网格下方，按选中宽度动态居中 */
 .sel-toolbar {
+  /* 底衬色与投影：暗色主题在 dark.css 覆盖这两个变量 */
+  --glass-bg: color-mix(in srgb,
+    color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
+    transparent);
+  --glass-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.16);
+  --glass-blur: 12px;
   position: relative; /* 由外层 .fx-toolbar 定位（染色环采样不能挂在自身 backdrop-filter 下） */
   width: max-content;
   display: flex;
@@ -240,21 +264,34 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 14px;
-  /* 小半径模糊 + 适中透明度：背板颜色透出更多，又不至于出现生硬分层 */
-  background: color-mix(in srgb,
-    color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
-    transparent);
-  /* 浅色：提亮背板采样并降低饱和,避免背后暗影/彩灰把玻璃染脏 */
-  backdrop-filter: blur(12px) saturate(1.1) contrast(0.55) brightness(1.38);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1) contrast(0.55) brightness(1.38);
+  /* 底衬与投影放 ::before：它们要跟着 --glass-t 淡，而 backdrop-filter 只能留在
+     面板本体上（挂到子层就采样不到面板背后的内容） */
+  background: transparent;
+  box-shadow: none;
+  /* 浅色：提亮背板采样并降低饱和,避免背后暗影/彩灰把玻璃染脏。
+     模糊半径由 --glass-t 驱动（0→满值）：模糊与淡入同时发生，不再滞后出现。 */
+  backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.1) contrast(0.55) brightness(1.38);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.1) contrast(0.55) brightness(1.38);
   border: 1px solid transparent; /* 描边颜色已掺进外侧环带 */
-  box-shadow:
-    /* 单层连续投影：负扩散把近端收回贴住下缘，从底部起连续衰减，
-       不产生断层，也不会向上糊到顶缘 */
-    0 6px 16px -6px rgba(15, 23, 42, 0.16);
-  transition:
-    backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-    -webkit-backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sel-toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--glass-bg);
+  /* 单层连续投影：负扩散把近端收回贴住下缘，从底部起连续衰减，
+     不产生断层，也不会向上糊到顶缘 */
+  box-shadow: var(--glass-shadow);
+  opacity: var(--glass-t);
+}
+
+/* 内容与玻璃同一条时间轴：不能给 .sel-toolbar 自身加 opacity（会再次压掉 backdrop-filter） */
+.sel-toolbar-label,
+.sel-toolbar-actions {
+  opacity: var(--glass-t);
 }
 
 .sel-toolbar-label {

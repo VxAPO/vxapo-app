@@ -117,17 +117,20 @@
 }
 
 :root[data-theme="dark"] .sel-toolbar {
-  background: color-mix(in srgb,
+  /* 底衬色与投影的暗色取值（浅色见 drag.css 的 .sel-toolbar 变量），
+     仍由 ::before 与 --glass-t 驱动淡入淡出 */
+  --glass-bg: color-mix(in srgb,
     color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
     transparent);
+  --glass-shadow:
+    var(--hover-shadow),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  --glass-blur: 8px;
   /* 不用高对比度的整圈白描边：极淡边界勾勒外形，光只从顶部打进来、
      底部收光，形成方向性的轮廓感（与浅色"近表面色 + 顶部高光"同理） */
   border: 1px solid transparent; /* 描边由外侧环带替代 */
-  backdrop-filter: blur(8px) saturate(1.15);
-  -webkit-backdrop-filter: blur(8px) saturate(1.15);
-  box-shadow:
-    var(--hover-shadow),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.15);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.15);
 }
 
 @keyframes sel-toolbar-in-dark {

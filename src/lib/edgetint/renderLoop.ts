@@ -10,6 +10,30 @@ import { ensureCanvas } from "./canvasPool";
 import { drawPanel } from "./tint";
 import { collectCards, refreshCardNodes } from "./targets";
 
+/**
+ * 目标当前的可见度（0..1）。染色画布是独立图层，不随 DOM 的淡入淡出变化，
+ * 绘制时必须按它缩放透明度，否则会出现「页面/工具栏在淡出、染色纹丝不动，
+ * 等 DOM 消失那一刻硬消失」。
+ *
+ * - 选中工具栏：读 `--glass-t`（0→1 的玻璃进度，见 drag.css；注册过的自定义属性
+ *   在过渡期间取到的是插值中的值）；
+ * - 页面内目标：读所在设备页的实时 opacity（进入是 CSS 过渡、退出是 framer-motion，
+ *   两者都反映在 computed 值上）。
+ */
+export function targetVisibility(el: HTMLElement): number {
+  const clamp01 = (n: number) => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1);
+  if (isToolbar(el)) {
+    const cs = getComputedStyle(el);
+    const t = Number.parseFloat(cs.getPropertyValue("--glass-t"));
+    if (Number.isFinite(t)) return clamp01(t);
+    // 兜底：没有 --glass-t（旧路径/未注册）时退回自身 opacity
+    return clamp01(Number.parseFloat(cs.opacity));
+  }
+  const page = el.closest<HTMLElement>(".device-page");
+  if (page) return clamp01(Number.parseFloat(getComputedStyle(page).opacity));
+  return 1;
+}
+
 export function renderToPanelBuffer(
   el: HTMLElement,
   cards: LightSet,
@@ -23,8 +47,7 @@ export function renderToPanelBuffer(
   const h = rect.height + PAD * 2;
   // 工具栏被滚动容器裁掉/淡出后不再生成 buffer，让上一帧脏区被清掉。
   if (isToolbar(el)) {
-    const opacity = parseFloat(getComputedStyle(el).opacity);
-    if (!Number.isFinite(opacity) || opacity <= 0.02) return null;
+    if (targetVisibility(el) <= 0.02) return null;
     if (
       rect.right < -PAD ||
       rect.left > window.innerWidth + PAD ||
@@ -219,10 +242,14 @@ export function paintLayerPair(
         }
         if (vis.w < 0.5 || vis.h < 0.5) return;
       }
+      // 目标正在淡入/淡出时按可见度缩放：画布像素要跟着 DOM 一起淡
+      const fade = targetVisibility(el);
+      if (fade <= 0.01) return;
       if (toolbar) {
         k.save();
         clipToolbar(k, vis);
       }
+      k.globalAlpha = fade;
       k.drawImage(
         buf.c,
         buf.x,
@@ -230,11 +257,13 @@ export function paintLayerPair(
         buf.w,
         buf.h,
       );
+      k.globalAlpha = 1;
       if (toolbar) k.restore();
       if (toolbar) {
         sk.save();
         clipToolbar(sk, vis);
       }
+      sk.globalAlpha = fade;
       sk.drawImage(
         buf.sc,
         buf.x,
@@ -242,6 +271,7 @@ export function paintLayerPair(
         buf.w,
         buf.h,
       );
+      sk.globalAlpha = 1;
       if (toolbar) sk.restore();
     }
   });
@@ -274,6 +304,17 @@ export function paint(): void {
       cards,
       "tool",
     );
+    // 淡入淡出期间逐帧重绘：DOM 的透明度/玻璃进度在变，画布得跟着走。
+    // 只有工具栏在淡就只刷工具栏画布；有页面内目标在淡就必须走 full（底图也在变）。
+    const fadingBase = els.some(
+      (el) => !isToolbar(el) && targetVisibility(el) < 0.999,
+    );
+    const fadingTool = els.some(
+      (el) => isToolbar(el) && targetVisibility(el) < 0.999,
+    );
+    if (fadingBase || fadingTool) {
+      window.setTimeout(() => schedule(fadingBase ? "full" : "tool"), 16);
+    }
     if (ST.paintMode === "full" && ST.fadePending) {
       window.setTimeout(() => schedule("full"), 33);
     } else if (ST.paintMode === "full" && ST.viewAnimUntil > performance.now()) {
