@@ -2,7 +2,7 @@
 
 <!-- 徽章区（待补）：CI 状态 · 许可证 · 最近发布 -->
 
-[中文](#vxapo-app) · [English](#vxapo-app-english) · [项目总览](../vxapo-docs/overview/zh/项目概览.md)
+[中文](#vxapo-app) · [English](#vxapo-app-english)
 
 VxAPO App 是 VxAPO 的桌面调音端，技术栈为 Rust（Tauri 2）与 React 19。它把 driver 的能力
 实现为一套图形交互界面：多设备并行调音、两种调音视图、卡片级开关与预设卡组，改动即时生效。
@@ -223,7 +223,7 @@ npm run sync:driver-schema   # 用 driver 参数表重新生成 src/lib/effects.
 
 <!-- Badges (TODO): CI status · license · latest release -->
 
-[中文](#vxapo-app) · [English](#vxapo-app-english) · [Project overview](../vxapo-docs/overview/en/Project%20Overview.md)
+[中文](#vxapo-app) · [English](#vxapo-app-english)
 
 VxAPO App is the desktop tuning client for VxAPO, built with Rust (Tauri 2) and React 19. It
 presents the driver's capabilities as a graphical interface: tune several devices side by
