@@ -51,6 +51,8 @@ export interface EdgeTintState {
   selectionTimer: number;
   themePaintTimer: number;
   viewAnimUntil: number;
+  /** 工具栏画布的逐帧重绘截止时刻（工具栏淡入淡出期间由 driveFor 推着走） */
+  toolAnimUntil: number;
   paintMode: "tool" | "full";
   scrollingNow: boolean;
   fadePending: boolean;
@@ -99,6 +101,7 @@ export const ST: EdgeTintState = {
   selectionTimer: 0,
   themePaintTimer: 0,
   viewAnimUntil: 0,
+  toolAnimUntil: 0,
   paintMode: "full",
   scrollingNow: false,
   fadePending: false,

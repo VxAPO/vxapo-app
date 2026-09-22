@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import "./App.css";
 import "./new.css";
 import type { Device } from "./lib/model";
@@ -30,7 +30,8 @@ import {
   useViewAnimation,
 } from "./hooks/useViewAnimation";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
-import { DEVICE_FADE_EASE, DEVICE_FADE_MS } from "./lib/viewMotion";
+import { DEVICE_FADE_MS } from "./lib/viewMotion";
+import { useDeviceSwapFade } from "./hooks/useDeviceSwapFade";
 
 /**
  * 设备卡"静置重绘"心跳（只针对这一张卡）。
@@ -59,7 +60,7 @@ export default function App() {
   const {
     selectedGuid,
     setSelectedGuid,
-    selected,
+    devices,
     loading,
     installedDevices,
     setUninstallTarget,
@@ -69,10 +70,17 @@ export default function App() {
     cleanupStaleSafe,
   } = useDevices(installBusy);
 
+  // 设备页过渡：数据源滞后一拍（旧页淡完才换内容再淡入，见 hooks/useDeviceSwapFade）
+  const { shown: shownGuid, opacity: pageOpacity } = useDeviceSwapFade(selectedGuid);
+  const shownDevice = useMemo(
+    () => devices.find((d) => d.guid === shownGuid) ?? null,
+    [devices, shownGuid],
+  );
+
   // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成（决策 4 阶段 A）。
-  const channelNames = useMemo(() => channelNamesFor(selected?.channels), [selected?.channels]);
+  const channelNames = useMemo(() => channelNamesFor(shownDevice?.channels), [shownDevice?.channels]);
   const { channelOn, setChannelOn, setActiveChannel, effActiveChannel, firstChannel } =
-    useChannelState(selectedGuid, channelNames);
+    useChannelState(shownGuid, channelNames);
 
   const {
     blocks,
@@ -98,7 +106,7 @@ export default function App() {
     toggleDeviceTuning,
     setChannelPreampMode,
     normalizeChainGain,
-  } = useConfig(installedDevices.length === 0 ? null : selectedGuid, {
+  } = useConfig(installedDevices.length === 0 ? null : shownGuid, {
     mode: channelOn,
     first: channelNames[0] ?? "L",
     active: effActiveChannel,
@@ -126,7 +134,7 @@ export default function App() {
     return typeof p?.params?.gain_db === "number" ? p.params.gain_db : 0;
   }, [effects, channelOn, effActiveChannel]);
   // 通道过滤后的效果器列表已由两个视图各自订阅计算（决策 4 阶段 A-2b）。
-  const fs = selected?.sample_rate ?? 48000;
+  const fs = shownDevice?.sample_rate ?? 48000;
   // 峰值/谷值曲线计算较重（31 段 × 数百评估点），拖动滑块时固定间隔重算
   //（默认 120ms），滑块 move 只重渲染被拖的卡片，保证拖动帧数。
   const deferredCurve = useThrottledCompute(() => {
@@ -304,13 +312,13 @@ export default function App() {
 
   // 设备切换时保存旧设备通道状态并恢复新设备通道状态（逐设备记忆，
   // 原逻辑在通道记忆 effect 内一并清空选中）。
-  const prevGuidClearRef = useRef<string | null>(selectedGuid);
+  const prevGuidClearRef = useRef<string | null>(shownGuid);
   useEffect(() => {
-    if (prevGuidClearRef.current === selectedGuid) return;
-    prevGuidClearRef.current = selectedGuid;
+    if (prevGuidClearRef.current === shownGuid) return;
+    prevGuidClearRef.current = shownGuid;
     setSelectedIds([]);
     setCopyOpen(false);
-  }, [selectedGuid]);
+  }, [shownGuid]);
 
   const handleChannelChange = useCallback((ch: string) => {
     setActiveChannel(ch);
@@ -471,15 +479,12 @@ export default function App() {
           />
 
           <div className="device-body">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={selectedGuid ?? "none"}
-                className="device-page"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: DEVICE_FADE_MS / 1000, ease: DEVICE_FADE_EASE }}
-              >
+            {/* 设备页过渡：数据源滞后一拍（useDeviceSwapFade）——旧页淡完才换内容再淡入，
+                两段严格串行；元素不按设备重挂载，染色 canvas 也不必重新登记目标。 */}
+            <div
+              className="device-page"
+              style={{ opacity: pageOpacity, transitionDuration: `${DEVICE_FADE_MS}ms` }}
+            >
             {installedDevices.length === 0 ? (
               <NoDeviceHint />
             ) : (
@@ -533,7 +538,7 @@ export default function App() {
             <div className="bottom-row">
               <div className="fx fx-dev" ref={devFxRef}>
                 <DevicePropsCard
-                  device={selected}
+                  device={shownDevice}
                   peakGain={peakGain}
                   totalBands={totalBands}
                   channelOn={channelOn}
@@ -543,7 +548,7 @@ export default function App() {
               </div>
               <CurvePanel
                 blocks={blocks}
-                fs={selected?.sample_rate ?? 48000}
+                fs={fs}
                 yTop={yTop}
                 yBottom={yBottom}
                 preampGainDb={preampGainDb}
@@ -556,12 +561,11 @@ export default function App() {
             </div>
               </>
             )}
-              </motion.div>
-            </AnimatePresence>
+            </div>
             <OverlayScrollbar
               targetRef={bodyRef}
               target={bodyNode}
-              deviceKey={selectedGuid ?? "none"}
+              deviceKey={shownGuid ?? "none"}
               rightPx={-2}
               thumbRight={-2}
               bottomInset={26}

@@ -129,8 +129,13 @@
   /* 不用高对比度的整圈白描边：极淡边界勾勒外形，光只从顶部打进来、
      底部收光，形成方向性的轮廓感（与浅色"近表面色 + 顶部高光"同理） */
   border: 1px solid transparent; /* 描边由外侧环带替代 */
-  backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.15);
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.15);
+  /* 暗色只提饱和（无 contrast/brightness），同样要随 --glass-t 回中性 */
+  backdrop-filter:
+    blur(calc(var(--glass-blur) * var(--glass-t)))
+    saturate(calc(1 + 0.15 * var(--glass-t)));
+  -webkit-backdrop-filter:
+    blur(calc(var(--glass-blur) * var(--glass-t)))
+    saturate(calc(1 + 0.15 * var(--glass-t)));
 }
 
 @keyframes sel-toolbar-in-dark {

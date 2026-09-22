@@ -268,10 +268,19 @@
      面板本体上（挂到子层就采样不到面板背后的内容） */
   background: transparent;
   box-shadow: none;
-  /* 浅色：提亮背板采样并降低饱和,避免背后暗影/彩灰把玻璃染脏。
-     模糊半径由 --glass-t 驱动（0→满值）：模糊与淡入同时发生，不再滞后出现。 */
-  backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.1) contrast(0.55) brightness(1.38);
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * var(--glass-t))) saturate(1.1) contrast(0.55) brightness(1.38);
+  /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏。
+     **整套滤镜都要随 --glass-t 归零**（不是只缩模糊）：contrast(0.55)+brightness(1.38) 单独留着，
+     淡出到一半就会漏出一层发白的底，而且它不跟淡出一起走。t=0 时四个分量都回到中性值。 */
+  backdrop-filter:
+    blur(calc(var(--glass-blur) * var(--glass-t)))
+    saturate(calc(1 + 0.1 * var(--glass-t)))
+    contrast(calc(1 - 0.45 * var(--glass-t)))
+    brightness(calc(1 + 0.38 * var(--glass-t)));
+  -webkit-backdrop-filter:
+    blur(calc(var(--glass-blur) * var(--glass-t)))
+    saturate(calc(1 + 0.1 * var(--glass-t)))
+    contrast(calc(1 - 0.45 * var(--glass-t)))
+    brightness(calc(1 + 0.38 * var(--glass-t)));
   border: 1px solid transparent; /* 描边颜色已掺进外侧环带 */
 }
 

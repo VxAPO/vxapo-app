@@ -14,6 +14,10 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* 设备页过渡：透明度由 useDeviceSwapFade 逐段驱动（时长在 App 里按 DEVICE_FADE_MS 注入），
+     淡出 → 换数据 → 淡入，两段串行。元素不重挂载，所以不能改成 animation。 */
+  transition-property: opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .app-loading-sidebar {

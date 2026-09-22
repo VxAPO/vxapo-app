@@ -5,6 +5,7 @@ import { channelLabel } from "../lib/channels";
 import { t } from "../lib/i18n/core";
 import { useGlassRing } from "../hooks/useGlassRing";
 import { useEdgeTintLayer } from "../hooks/useEdgeTintLayer";
+import { driveFor } from "../lib/edgetint/renderLoop";
 
 /** 玻璃淡入淡出时长：与 .fx-toolbar 的 --glass-t 过渡时长一致（退出卸载也等这么久）。 */
 export const TOOLBAR_FADE_MS = 180;
@@ -58,6 +59,12 @@ export default function SelectionToolbar({
     const id = window.setTimeout(() => safeToRemove?.(), TOOLBAR_FADE_MS);
     return () => window.clearTimeout(id);
   }, [isPresent, safeToRemove]);
+
+  // 淡入与淡出都要显式推动绘制循环：canvas 是独立图层，DOM 只改 class 不会触发
+  // MutationObserver，没人推就会停在上一帧、直到元素卸载才被清掉（"比 DOM 慢一截"）。
+  useEffect(() => {
+    driveFor(TOOLBAR_FADE_MS + 80, "tool");
+  }, [shown]);
 
   return (
     // 位置（transform）由 useMarqueeSelection 的跟随循环独占；居中与入场 6px 抬升

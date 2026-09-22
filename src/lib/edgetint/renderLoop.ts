@@ -316,6 +316,12 @@ export function paint(): void {
     if (fadingBase || fadingTool) {
       window.setTimeout(() => schedule(fadingBase ? "full" : "tool"), 16);
     }
+    // driveFor 的截止期：在窗口内无条件逐帧重绘（不依赖采样值），保证 canvas 跟得上 DOM 过渡
+    if (ST.toolAnimUntil > performance.now()) {
+      window.setTimeout(() => schedule("tool"), 16);
+    } else if (ST.toolAnimUntil) {
+      ST.toolAnimUntil = 0;
+    }
     if (ST.paintMode === "full" && ST.fadePending) {
       window.setTimeout(() => schedule("full"), 33);
     } else if (ST.paintMode === "full" && ST.viewAnimUntil > performance.now()) {
@@ -334,6 +340,23 @@ export function schedule(mode: "tool" | "full" = "full"): void {
   ST.paintMode = mode;
   if (ST.raf) return;
   ST.raf = requestAnimationFrame(paint);
+}
+
+/**
+ * 让绘制循环在接下来 `ms` 毫秒内保持逐帧重绘。
+ *
+ * 必需的原因：DOM 侧的淡入淡出只改 class/内联样式，**不产生 childList 变更**，
+ * 也就不会有 MutationObserver 回调；仅靠"采样到透明度 < 1 再续帧"也不可靠
+ * （过渡刚开始那一帧取到的还是起始值 1）。没人推的话，独立图层的 canvas 会一直停在
+ * 上一帧，直到元素卸载才被清掉——表现为「canvas 比 DOM 慢一截才消失」。
+ *
+ * `mode="tool"` 只刷工具栏画布；页面内目标在淡用 `"full"`（底图也在变）。
+ */
+export function driveFor(ms: number, mode: "tool" | "full" = "tool"): void {
+  const until = performance.now() + ms;
+  if (mode === "full") ST.viewAnimUntil = Math.max(ST.viewAnimUntil, until);
+  else ST.toolAnimUntil = Math.max(ST.toolAnimUntil, until);
+  schedule(mode);
 }
 
 export function onScroll(): void {
