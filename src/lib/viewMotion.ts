@@ -7,6 +7,11 @@
 
 /** 视图平移动画时长（ms）；stage 的 transition 与收窄启动时刻共用 */
 export const VIEW_SLIDE_MS = 320;
+/** 设备页切换的淡出/淡入时长（ms，两段各自；AnimatePresence mode="wait" 先退后进）。
+    0.18s 时两段合计 0.36s，观感像闪一下；280 是"看得出是过渡、又不拖"的位置，可单点调。 */
+export const DEVICE_FADE_MS = 280;
+/** 设备页淡入淡出的贝塞尔控制点（framer-motion 侧用；与 CSS 侧同族曲线） */
+export const DEVICE_FADE_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1];
 /** 高度收窄动画时长上限（ms） */
 export const VIEW_COLLAPSE_MS = 800;
 /** 收窄时长的下限（ms）与按高度差的换算：差值越小收得越快 */

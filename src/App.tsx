@@ -30,6 +30,7 @@ import {
   useViewAnimation,
 } from "./hooks/useViewAnimation";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
+import { DEVICE_FADE_EASE, DEVICE_FADE_MS } from "./lib/viewMotion";
 
 /**
  * 设备卡"静置重绘"心跳（只针对这一张卡）。
@@ -477,7 +478,7 @@ export default function App() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.18, ease: "easeInOut" }}
+                transition={{ duration: DEVICE_FADE_MS / 1000, ease: DEVICE_FADE_EASE }}
               >
             {installedDevices.length === 0 ? (
               <NoDeviceHint />

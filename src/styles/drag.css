@@ -291,6 +291,10 @@
 /* 内容与玻璃同一条时间轴：不能给 .sel-toolbar 自身加 opacity（会再次压掉 backdrop-filter） */
 .sel-toolbar-label,
 .sel-toolbar-actions {
+  /* 必须压在底衬 ::before 之上：伪元素是定位元素，会盖住未定位的文字
+     （否则淡入到一半开始「像蒙了一层东西」，越淡完越明显） */
+  position: relative;
+  z-index: 1;
   opacity: var(--glass-t);
 }
 

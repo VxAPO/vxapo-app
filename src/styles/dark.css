@@ -335,3 +335,12 @@
 }
 
 
+
+
+/* 工具栏高光带跟随玻璃进度：基底不透明度改由 --ring-op 承担（基础规则见 curve.css）。
+   必须写在文件末尾覆盖上面那条三合一规则里的 opacity: 0.8 —— 它会盖掉基础规则的
+   calc()，高光就不再跟 --glass-t 一起淡（表现为「canvas 淡了、默认高光还在」）。 */
+:root[data-theme="dark"] .fx-toolbar::after {
+  --ring-op: 0.8;
+  opacity: calc(var(--ring-op) * var(--glass-t));
+}

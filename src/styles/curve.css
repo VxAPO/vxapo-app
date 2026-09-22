@@ -226,10 +226,24 @@
   pointer-events: none;
 }
 
+/* 工具栏高光带的不透明度基数（浅色 0.4 / 暗色 0.8，见 dark.css）。
+   注册成 <number> 才能被主题切换平滑插值；实际 opacity = 基数 × 玻璃进度。 */
+@property --ring-op {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.4;
+}
+
 .fx-toolbar::after {
   border-radius: 16px;
   backdrop-filter: blur(10px) saturate(1.6) brightness(1.06);
   -webkit-backdrop-filter: blur(10px) saturate(1.6) brightness(1.06);
+  /* 高光带必须跟玻璃一起淡：只让 canvas 淡、默认高光硬出现/硬消失，
+     观感就是「环带淡了、描边却还在」。transition 只挂 --ring-op（主题切换用它平滑），
+     opacity 本身不设过渡，否则会和 --glass-t 的渐变叠成两段减速。 */
+  --ring-op: 0.4;
+  opacity: calc(var(--ring-op) * var(--glass-t));
+  transition: --ring-op 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 双层采样：
@@ -264,6 +278,9 @@
 .fx-toolbar::before {
   border-radius: 16px;
   padding: 8px; /* 工具栏较小，内伸少一些避免盖到按钮 */
+  /* 内渗模糊层同样跟玻璃一起淡；不设过渡，避免与 --glass-t 的渐变叠加 */
+  opacity: var(--glass-t);
+  transition: none;
 }
 
 .dev-props-title {
