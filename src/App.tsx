@@ -320,6 +320,13 @@ export default function App() {
     setCopyOpen(false);
   }, [shownGuid]);
 
+  // 换设备后滚动位置归零：旧实现靠 .device-page 按设备重挂载天然归零，
+  // 现在元素常驻（过渡不再重挂载），需要显式复位。
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) el.scrollTop = 0;
+  }, [shownGuid]);
+
   const handleChannelChange = useCallback((ch: string) => {
     setActiveChannel(ch);
     setSelectedIds([]);
