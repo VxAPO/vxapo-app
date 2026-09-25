@@ -7,7 +7,7 @@ import { channelNamesFor } from "./lib/channels";
 import { exportConfig, friendlyError, writeConfig } from "./lib/api";
 import { parseConfigWithTail } from "./lib/toml";
 import { snapPx } from "./lib/snap";
-import { buildEvalFreqs, curveRange } from "./lib/curve";
+import { axisRange, buildEvalFreqs, curveRange } from "./lib/curve";
 import { useConfig } from "./hooks/useConfig";
 import { useDevices } from "./hooks/useDevices";
 import { useSelectionStore } from "./stores/selectionStore";
@@ -151,8 +151,12 @@ export default function App() {
       troughGain: range.min,
     };
   }, [deferredCurve, visibleBlocks, fs, preampGainDb]);
-  const yTop = Math.max(6, Math.min(30, Math.ceil((peakGain + 1) / 2) * 2));
-  const yBottom = Math.min(-6, Math.max(-30, Math.floor((troughGain - 1) / 2) * 2));
+  // 纵轴量程：峰值/谷值取整到 2dB 档，并对齐到刻度步长（否则网格首末两条压不住绘图区上下沿，
+  // 表现为"虚线没贴住纵轴顶端、刻度数字整体偏移"，见 lib/curve.axisRange）
+  const { top: yTop, bottom: yBottom } = useMemo(
+    () => axisRange(peakGain, troughGain),
+    [peakGain, troughGain],
+  );
 
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [bodyNode, setBodyNode] = useState<HTMLDivElement | null>(null);

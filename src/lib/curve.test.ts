@@ -1,6 +1,15 @@
 // curve.ts 测试（任务 12 后续）：坐标映射、评估频率点、峰值/谷值。
 import { describe, expect, it } from "vitest";
-import { buildEvalFreqs, curveMax, curveMin, curveRange, dbY, logX } from "./curve";
+import {
+  axisRange,
+  buildEvalFreqs,
+  curveMax,
+  curveMin,
+  curveRange,
+  dbY,
+  logX,
+  yStepFor,
+} from "./curve";
 import type { Band, Block } from "./model";
 
 const FS = 48000;
@@ -101,5 +110,57 @@ describe("curveMax / curveMin / curveRange", () => {
 
   it("空输入时 curveRange 返回 0/0（防 -Infinity 泄漏到 UI）", () => {
     expect(curveRange([], [], FS)).toEqual({ min: 0, max: 0 });
+  });
+});
+
+describe("axisRange", () => {
+  it("量程对齐到步长整数倍：网格首末两条能压住绘图区上下沿", () => {
+    // 峰值 +4 / 谷值 -26：按 2dB 档先取 6 / -28，跨度 34 → 步长 4 → 对齐成 8 / -28
+    const r = axisRange(4, -26);
+    expect(r.step).toBe(4);
+    expect(r.top).toBe(8);
+    expect(r.bottom).toBe(-28);
+    // 对齐后首末两条网格线正好落在绘图区顶沿 / 底沿（从前 floor 会缩进来半格）
+    expect(dbY(r.top, r.top, r.bottom)).toBeCloseTo(24, 6);
+    expect(dbY(r.bottom, r.top, r.bottom)).toBeCloseTo(204, 6);
+  });
+
+  it("0dB 必然落在刻度线上（对齐后两端都是步长倍数）", () => {
+    for (const [peak, trough] of [
+      [4, -26],
+      [0, -10],
+      [12, -12],
+      [-2, -18],
+      [20, -30],
+    ] as const) {
+      const r = axisRange(peak, trough);
+      expect(r.top % r.step).toBe(0);
+      expect(Math.abs(r.bottom) % r.step).toBe(0);
+      expect(0 % r.step).toBe(0);
+    }
+  });
+
+  it("量程永远包得住峰值 / 谷值（对齐只放大、不切断）", () => {
+    for (const [peak, trough] of [
+      [4, -26],
+      [9, -3],
+      [30, -30],
+      [0, 0],
+    ] as const) {
+      const r = axisRange(peak, trough);
+      expect(r.top).toBeGreaterThanOrEqual(peak);
+      expect(r.bottom).toBeLessThanOrEqual(trough);
+    }
+  });
+
+  it("步长与跨度绑定：小量程 2dB、大量程 4dB", () => {
+    expect(yStepFor(6, -6)).toBe(2);
+    expect(yStepFor(14, -14)).toBe(4);
+  });
+
+  it("无峰无谷时仍保持最小量程（曲线不被压扁）", () => {
+    const r = axisRange(0, 0);
+    expect(r.top).toBeGreaterThanOrEqual(6);
+    expect(r.bottom).toBeLessThanOrEqual(-6);
   });
 });

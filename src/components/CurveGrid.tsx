@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
-import { dbY, logX } from "../lib/curve";
+import { dbY, logX, yStepFor } from "../lib/curve";
+import { snapPx } from "../lib/snap";
 
 interface CurveGridProps {
   curveW: number;
@@ -9,15 +10,16 @@ interface CurveGridProps {
 
 /** 频响图坐标轴：虚线网格 + 实线主轴 + 刻度标签（Y 自适应，步长统一）。 */
 function CurveGrid({ curveW, yTop, yBottom }: CurveGridProps) {
-  const yStep = yTop - yBottom > 26 ? 4 : 2;
+  // 步长与 lib/curve.axisRange 同规则。量程已被它对齐到步长整数倍，所以网格能从 yTop 一路铺到
+  // yBottom：首末两条正好压在绘图区上下沿，0dB 也必然落在某条线上。从前是在绘制侧用
+  // floor/ceil 去凑步长整数倍，量程非倍数时首条会缩进来半格——虚线便贴不住纵轴顶端。
+  const yStep = yStepFor(yTop, yBottom);
   const yGrid = useMemo(() => {
     const g: { db: number; y: number }[] = [];
-    // 网格行统一落在步长整数倍：间距全程一致，0 是任意步长的倍数自然包含，
-    // 不再出现“0 附近 2dB、其余 4dB”的混合刻度。
-    const topRow = Math.floor(yTop / yStep) * yStep;
-    const bottomRow = Math.ceil(yBottom / yStep) * yStep;
-    for (let db = topRow; db >= bottomRow; db -= yStep) {
-      g.push({ db, y: dbY(db, yTop, yBottom) });
+    for (let db = yTop; db >= yBottom; db -= yStep) {
+      // 行位置取整到设备像素：间距常带半像素（如 180×4/32 = 22.5px），不 snap 时文字落在
+      // 亚像素上会被渲染器取整——看起来就是"刻度数字有概率往下偏"。
+      g.push({ db, y: snapPx(dbY(db, yTop, yBottom)) });
     }
     return g;
   }, [yTop, yBottom, yStep]);
@@ -62,7 +64,8 @@ function CurveGrid({ curveW, yTop, yBottom }: CurveGridProps) {
           <text key={f} x={xGrid[i]} y={plotBottom + 12} textAnchor="middle">{f}</text>
         ))}
         {yGrid.map(({ db, y }) => (
-          <text key={`l${db}`} x="34" y={y + 3} textAnchor="end">{db >= 0 ? `+${db}` : `${db}`}</text>
+          /* 用 dominantBaseline="middle" 让文字垂直中心正对网格行，不再依赖 `+3` 这类经验偏移 */
+          <text key={`l${db}`} x="34" y={y} textAnchor="end" dominantBaseline="middle">{db >= 0 ? `+${db}` : `${db}`}</text>
         ))}
       </g>
     </>

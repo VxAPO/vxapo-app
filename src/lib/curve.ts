@@ -13,6 +13,48 @@ export function dbY(db: number, top: number, bottom: number): number {
   return 24 + ((top - db) / span) * 180;
 }
 
+/** 纵轴量程的步长分界：跨度超过它就用 4dB 一格，否则 2dB。 */
+export const Y_STEP_SPAN = 26;
+/** 纵轴量程的软边界：低于 6 曲线被压得过扁，高于 30 曲线挤成一条。 */
+export const Y_RANGE_MIN = 6;
+export const Y_RANGE_MAX = 30;
+
+/** 纵轴刻度步长（与量程跨度绑定，`CurveGrid` 与 `axisRange` 必须同规则）。 */
+export function yStepFor(top: number, bottom: number): number {
+  return top - bottom > Y_STEP_SPAN ? 4 : 2;
+}
+
+/**
+ * 纵轴量程：按峰值/谷值取整到 2dB 档，再**对齐到刻度步长的整数倍**。
+ *
+ * 为什么必须对齐到步长：网格线与刻度是按步长一路铺下来的，量程若不是步长的整数倍，
+ * 最上面一条网格线就压不到绘图区顶沿（绘制侧只能 `floor`，于是缩进来半格），刻度标签随之整体
+ * 偏移——观感就是「虚线没贴住纵轴顶端、数字莫名往下偏」。对齐之后各端点都落在步长倍数上；
+ * 0dB 是任意步长的倍数，于是也必然正好落在某条刻度线上（跨度的段数奇偶都成立）。
+ *
+ * 步长本身由量程跨度决定，对齐可能小幅放宽量程、从而跨过 `Y_STEP_SPAN` 这个界，故迭代两次收敛；
+ * 软边界 6..30 只约束第一步，对齐允许小幅超出。
+ */
+export function axisRange(
+  peakGain: number,
+  troughGain: number,
+): { top: number; bottom: number; step: number } {
+  let top = Math.max(Y_RANGE_MIN, Math.min(Y_RANGE_MAX, Math.ceil((peakGain + 1) / 2) * 2));
+  let bottom = Math.min(
+    -Y_RANGE_MIN,
+    Math.max(-Y_RANGE_MAX, Math.floor((troughGain - 1) / 2) * 2),
+  );
+  for (let i = 0; i < 2; i++) {
+    const step = yStepFor(top, bottom);
+    const alignedTop = Math.ceil(top / step) * step;
+    const alignedBottom = Math.floor(bottom / step) * step;
+    if (alignedTop === top && alignedBottom === bottom) break;
+    top = alignedTop;
+    bottom = alignedBottom;
+  }
+  return { top, bottom, step: yStepFor(top, bottom) };
+}
+
 /**
  * 峰值评估频率点：全局对数扫描 + 频段中心 + 高 Q 邻域细化 + 相邻中心中点。
  * 曲线路径与 y 轴峰值共用，避免高 Q 窄峰落在粗网格之间被画平。
