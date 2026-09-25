@@ -349,3 +349,11 @@
   --ring-op: 0.8;
   opacity: calc(var(--ring-op) * var(--glass-t));
 }
+
+/* 选色块选中态的描边，深色下要再压深一档：
+   `--swatch-hover` 是 L 0.45 的加深变体，浅色下压亮底很清楚，但深色下它与填充（L 0.6）差得不够，
+   那圈描边读不出来。这里掺 32% 纯黑再往下压一档（≈L 0.35），靠"亮盘被切掉一圈"的**深浅差**读选中
+   ——不引入亮色描边。填充保持原色不动，浅色规则也不动（本文件只做深色覆盖）。 */
+:root[data-theme="dark"] .preset-swatch.active {
+  border-color: color-mix(in srgb, var(--swatch-hover, var(--text-primary)) 68%, #000);
+}
