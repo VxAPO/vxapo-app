@@ -6,7 +6,9 @@ import { t } from "../lib/i18n/core";
 interface DeviceTabsProps {
   devices: Device[];
   selectedGuid: string | null;
-  tuningOn: (guid: string) => boolean;
+  /** 逐设备总开关状态。传**数据**而不是 `(guid) => boolean` 取值函数：
+      本组件是 memo 的，函数引用恒定就等于「开关变了也不重渲」，圆点不会跟随（曾经的 bug）。 */
+  tuningMap: Record<string, boolean>;
   onSelect: (guid: string) => void;
   onToggleTuning: (guid: string) => void;
   onUninstall: (device: Device) => void;
@@ -16,7 +18,7 @@ interface DeviceTabsProps {
 function DeviceTabs({
   devices,
   selectedGuid,
-  tuningOn,
+  tuningMap,
   onSelect,
   onToggleTuning,
   onUninstall,
@@ -25,13 +27,15 @@ function DeviceTabs({
   return (
     <div className="tab-bar">
       <div className="tab-group">
-        {devices.map((d) => (
+        {devices.map((d) => {
+          const on = tuningMap[d.guid] ?? true;
+          return (
           <div className={`tab-item ${d.guid === selectedGuid ? "active" : ""}`} key={d.guid}>
             <button
-              className={`tab-dot ${tuningOn(d.guid) ? "on" : ""}`}
+              className={`tab-dot ${on ? "on" : ""}`}
               type="button"
-              aria-label={tuningOn(d.guid) ? t("disable.device") : t("enable.device")}
-              title={tuningOn(d.guid) ? t("disable.device") : t("enable.device")}
+              aria-label={on ? t("disable.device") : t("enable.device")}
+              title={on ? t("disable.device") : t("enable.device")}
               onClick={() => onToggleTuning(d.guid)}
             />
             <button className="tab-btn" type="button" onClick={() => onSelect(d.guid)}>
@@ -46,7 +50,8 @@ function DeviceTabs({
               <X size={14} strokeWidth={2.5} />
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
       {devices.length > 0 && (
         <button

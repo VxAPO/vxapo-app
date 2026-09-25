@@ -97,10 +97,10 @@ export default function App() {
     patchBand,
     totalBands,
     channelBandCounts,
+    tuningMap,
     configChannelMode,
     loaded,
     forceReload,
-    deviceTuningOn,
     toggleDeviceTuning,
     setChannelPreampMode,
     normalizeChainGain,
@@ -503,7 +503,7 @@ export default function App() {
           <DeviceTabs
             devices={installedDevices}
             selectedGuid={selectedGuid}
-            tuningOn={deviceTuningOn}
+            tuningMap={tuningMap}
             onSelect={setSelectedGuid}
             onToggleTuning={toggleDeviceTuning}
             onUninstall={openUninstall}

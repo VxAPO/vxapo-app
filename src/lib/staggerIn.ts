@@ -47,11 +47,12 @@ export function playStaggerIn(root: ParentNode | null | undefined): void {
     }
     rows[rows.length - 1].push(el);
   }
-  // 行主序权重 → 延迟：行内一张一跳、跨行一次跨一整行，所以「越靠右下越晚」全程单调。
-  // 张数多时压缩步长（窗口 / 最大权重），而不是把超窗口的卡片挤到同一时刻。
+  // 对角线权重（r + c）：同一反对角线上的卡片同时刻起跑，整体推进方向沿对角线从左上扫到右下。
+  // 延迟 = 窗口 × √(权重 / 最大权重)：越靠后越晚，且**间隔前疏后密**（开方曲线斜率递减）。
+  // 全部延迟在这里一次算好，动画互相重叠——不是「等上一张跑完再跑下一张」那种串行。
   const cols = Math.max(1, ...rows.map((row) => row.length));
-  const maxWeight = (rows.length - 1) * cols + rows[rows.length - 1].length - 1;
-  const unit = maxWeight > 0 ? Math.min(STAGGER_STEP_MS, STAGGER_WINDOW_MS / maxWeight) : 0;
+  const maxWeight = rows.length - 1 + (cols - 1);
+  const windowMs = Math.min(STAGGER_WINDOW_MS, maxWeight * STAGGER_STEP_MS);
   rows.forEach((rowEls, r) => {
     rowEls.forEach((el, c) => {
       el.animate(
@@ -62,7 +63,7 @@ export function playStaggerIn(root: ParentNode | null | undefined): void {
         ],
         {
           duration: STAGGER_FADE_MS,
-          delay: (r * cols + c) * unit,
+          delay: maxWeight > 0 ? windowMs * Math.sqrt((r + c) / maxWeight) : 0,
           easing: EASE_OUT_BACK,
           fill: "backwards",
         },

@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
@@ -44,15 +44,46 @@ interface CurvePlotProps {
   yTop: number;
   yBottom?: number;
   preampGainDb?: number;
+  /** 声道标识：值变化时把曲线**补间**过去，而不是直接换 d。
+      页面切换之所以不闪，是因为它只平移、曲线本身不重算；切声道必然重算，
+      所以这里补上平滑变形，避免两条完全不同形状的曲线之间"跳"一下。 */
+  morphKey?: string;
 }
 
-function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }: CurvePlotProps) {
+function CurvePlot({
+  blocks,
+  fs,
+  curveW,
+  yTop,
+  yBottom = -16,
+  preampGainDb = 0,
+  morphKey,
+}: CurvePlotProps) {
   // 曲线路径始终按当前 curveW/blocks 重算，保证与网格/viewBox 完全一致，
   // 拖拽改宽度时不会出现"旧宽度的线配当前宽度网格"导致的越界。
   const curveD = useMemo(
     () => freqPath(blocks, fs, curveW, yTop, preampGainDb, buildEvalFreqs(blocks), yBottom),
     [blocks, fs, curveW, yTop, preampGainDb, yBottom],
   );
+  const pathRef = useRef<SVGPathElement | null>(null);
+  const prevDRef = useRef<string | null>(null);
+  const morphKeyRef = useRef(morphKey);
+  useEffect(() => {
+    const el = pathRef.current;
+    const prev = prevDRef.current;
+    const switched = morphKeyRef.current !== morphKey;
+    morphKeyRef.current = morphKey;
+    prevDRef.current = curveD;
+    // 只在**声道切换**时补间。拖参数时 d 每帧都在变，补间会变成橡皮筋式滞后。
+    if (!el || !prev || !switched || prev === curveD) return;
+    // 320ms 与 curve.css 里 stroke 过渡的 0.32s 对齐（同一条 `cubic-bezier(0.4,0,0.2,1)`）。
+    // d 的插值要求两侧命令序列一致：本组件固定 241 个采样点，点与结构都相同。
+    el.animate([{ d: `path("${prev}")` }, { d: `path("${curveD}")` }], {
+      duration: 320,
+      easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+    });
+  }, [curveD, morphKey]);
+
   const plotTop = dbY(yTop, yTop, yBottom);
   const plotBottom = dbY(yBottom, yTop, yBottom);
   const { hoverPt, tipPos, svgRef, tipRef, onSvgMove, onMouseLeave } = useCurveHover({
@@ -82,7 +113,7 @@ function CurvePlot({ blocks, fs, curveW, yTop, yBottom = -16, preampGainDb = 0 }
         onMouseLeave={onMouseLeave}
       >
         <CurveGrid curveW={curveW} yTop={yTop} yBottom={yBottom} />
-        <path d={curveD} fill="none" stroke="var(--curve-path)" strokeWidth="2" />
+        <path ref={pathRef} d={curveD} fill="none" stroke="var(--curve-path)" strokeWidth="2" />
         {hoverPt && (
           <>
             <line
