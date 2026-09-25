@@ -31,6 +31,7 @@ import {
 } from "./hooks/useViewAnimation";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
 import { DEVICE_FADE_MS } from "./lib/viewMotion";
+import { playStaggerIn } from "./lib/staggerIn";
 import { driveFor } from "./lib/edgetint/renderLoop";
 
 /**
@@ -206,6 +207,7 @@ export default function App() {
     viewCollapseMs,
     viewMorph,
     viewRef,
+    viewAnimating,
     viewAnimatingRef,
     switchView,
     beginViewAnim,
@@ -353,6 +355,38 @@ export default function App() {
     [setUninstallTarget],
   );
 
+  /** 上一次播过错峰的 device-page 元素：用来判断「新的一页出现了」 */
+  const devPageRef = useRef<HTMLElement | null>(null);
+
+  /** 视图切换：新视图刚进 DOM 就播卡片错峰淡入。
+      useLayoutEffect（绘制前）而不是 useEffect，否则可能先看到整块视图再被拉回 0 闪一下。 */
+  useLayoutEffect(() => {
+    if (!viewAnimating) return;
+    playStaggerIn(document.querySelector<HTMLElement>(".view-stage.is-active"));
+  }, [viewAnimating]);
+
+  /**
+   * 设备页切换：`AnimatePresence mode="wait"` 先让旧页淡出、再挂新页，
+   * 所以用 rAF 等「新的 .device-page 出现」再播错峰——比拍一个固定延时稳，日后改淡出时长也不会失准。
+   * 等不到（无设备 / 加载失败）就两秒后放弃，不留空转的 rAF。
+   */
+  useLayoutEffect(() => {
+    let raf = 0;
+    let frames = 0;
+    const tick = () => {
+      const el = document.querySelector<HTMLElement>(".device-page");
+      if (el && el !== devPageRef.current) {
+        devPageRef.current = el;
+        playStaggerIn(el);
+        return;
+      }
+      if (++frames > 120) return;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [selectedGuid]);
+
   const toggleChannel = useCallback(() => {
     // 只有通道切换会伴随视图切到 advanced 时才需要 view-stage 动画；
     // 已处于 advanced 时直接清空选择即可，不触发视图退场/进场。
@@ -493,8 +527,17 @@ export default function App() {
                 className="device-page"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: DEVICE_FADE_MS / 1000, ease: "easeInOut" }}
+                exit={{
+                  opacity: 0,
+                  transition: { duration: DEVICE_FADE_MS / 1000, ease: "easeInOut" },
+                }}
+                transition={{
+                  // 进场不补间 opacity（退场的淡出在上面单独给）：淡入交给卡片错峰，
+                  // 整体再淡一层会和卡片自己的淡入相乘，卡片永远亮不满
+                  duration: DEVICE_FADE_MS / 1000,
+                  ease: "easeInOut",
+                  opacity: { duration: 0 },
+                }}
               >
             {installedDevices.length === 0 ? (
               <NoDeviceHint />

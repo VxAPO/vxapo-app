@@ -26,6 +26,19 @@ export const COLLAPSE_EASE = EASE_OUT_SOFT;
 const EASE_P1 = EASE_OUT_SOFT_P1;
 const EASE_P2 = EASE_OUT_SOFT_P2;
 
+/**
+ * 切换时卡片的错峰淡入（左上 → 右下）。
+ * 张数多（31 张参数卡）时靠 `STAGGER_MAX_DELAY_MS` 把队列压进一个窗口里，
+ * 后面的卡片同时收尾，避免整段拖到半秒以上。
+ */
+export const STAGGER_FADE_MS = 200;
+export const STAGGER_STEP_MS = 14;
+export const STAGGER_MAX_DELAY_MS = 200;
+/** 淡入同时的轻微上移（px）：0 = 纯淡入 */
+export const STAGGER_RISE_PX = 6;
+/** 排序行容差：top 差在此以内视为同一行、行内按 left 排 */
+export const STAGGER_ROW_TOL_PX = 8;
+
 /** 高度差 → 动画时长：夹在 [COLLAPSE_MS_MIN, VIEW_COLLAPSE_MS] 之间 */
 export function heightDeltaMs(deltaPx: number): number {
   return Math.round(
