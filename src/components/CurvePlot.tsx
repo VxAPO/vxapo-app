@@ -3,7 +3,7 @@ import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
-import { alignPaths } from "../lib/pathMorph";
+import { alignPaths, remapPathY } from "../lib/pathMorph";
 import { useCurveHover } from "../hooks/useCurveHover";
 import CurveGrid from "./CurveGrid";
 
@@ -63,6 +63,10 @@ function CurvePlot({
   );
   const pathRef = useRef<SVGPathElement | null>(null);
   const morphAnimRef = useRef<Animation | null>(null);
+  /** 上一次的**目标**路径。不能靠 getComputedStyle 拿旧值：layout 阶段 React 已经写入新 d 了 */
+  const prevDRef = useRef<string | null>(null);
+  /** 上一次的纵轴量程：量程跨档时要先把起点换算到新坐标系 */
+  const scaleRef = useRef({ top: yTop, bottom: yBottom });
   // 用 layout effect：必须在浏览器绘制**之前**接管，否则新 d 会先画一帧再被动画拉回去（闪一下）
   useLayoutEffect(() => {
     const el = pathRef.current;
@@ -70,27 +74,54 @@ function CurvePlot({
     /**
      * 曲线自己会变形：只要路径变了就平滑补间过去，不区分场景——切声道、开关/增删滤波器、
      * 拖频段参数、切设备全走这一条路，调用方不必再特判「该不该动画」。
-     *
-     * 起点取**当前实际渲染**的 d（含上一条动画的中间值），不是「上一次的 d」：这样变形途中
-     * 目标又变时会从当前位置接着跑，不会跳回旧值。连续变更（拖滑块）因此表现为指数式平滑
-     * 跟随，松手后自然收敛到准确值。
-     *
-     * 采样点数量随滤波器集合变化（`buildEvalFreqs` 会追加中心频率与高 Q 细化点），
-     * 直接补间两条点数不同的路径会画出乱线；点数对齐交给 `alignPaths`，两侧 x 跨度不一致
-     * （改宽度/换量程）时它返回 null，此时宁可不动画。
      */
-    const shown = getComputedStyle(el).getPropertyValue("d");
-    const from = shown && shown !== "none" ? shown : curveD;
-    const pair = alignPaths(from, curveD);
+    const fromScale = scaleRef.current;
+    const toScale = { top: yTop, bottom: yBottom };
+    scaleRef.current = toScale;
+
+    /**
+     * 起点取「上一条动画的当前位置」：先 `commitStyles()` 把动画当前值定格进内联样式，再取消。
+     * 这样变形途中目标又变时会从当前位置接着跑，不会跳回旧值（连续拖动＝指数式平滑跟随）。
+     * 没有在跑的动画时退回「上一个目标」——**不能**读 `getComputedStyle(el).d`，
+     * 那时 React 已写入新 d，拿到的是新值本身，补间会退化成「新值→新值」＝完全看不到动画。
+     */
+    let from: string | null = null;
+    const prevAnim = morphAnimRef.current;
+    if (prevAnim) {
+      try {
+        prevAnim.commitStyles();
+        from = el.style.d || null;
+      } catch {
+        from = null;
+      }
+      prevAnim.cancel();
+      morphAnimRef.current = null;
+      el.style.removeProperty("d");
+    }
+    if (!from) from = prevDRef.current;
+    prevDRef.current = curveD;
+    if (!from || from === curveD) return;
+
+    // 纵轴量程可能刚跳了一档（按峰值自适应、每 2dB 一档）：把起点换算到**当前量程**再补间。
+    // 否则等于拿另一套坐标系的形状去插值，曲线会先冲出刻度范围再滑回来。
+    const pair = alignPaths(remapPathY(from, fromScale, toScale), curveD);
     if (!pair) return;
-    // 只取消我们自己起的动画：curve.css 里 stroke 的 CSS 过渡别动
-    morphAnimRef.current?.cancel();
-    morphAnimRef.current = el.animate([{ d: pair[0] }, { d: pair[1] }], {
-      // 320ms 与 stroke 过渡的 0.32s 对齐；不设 fill，结束后回到 React 写入的 d
+    const anim = el.animate([{ d: pair[0] }, { d: pair[1] }], {
+      // 320ms 与 curve.css 里 stroke 过渡的 0.32s 对齐；不设 fill，结束后回到 React 写的 d
       duration: 320,
       easing: "cubic-bezier(0.4, 0, 0.2, 1)",
     });
-  }, [curveD]);
+    morphAnimRef.current = anim;
+    // 结束（或被取消）时清掉 commitStyles 留下的内联 d，把控制权交回 React 的 attribute
+    anim.finished
+      .then(() => {
+        if (morphAnimRef.current === anim) {
+          morphAnimRef.current = null;
+          el.style.removeProperty("d");
+        }
+      })
+      .catch(() => {});
+  }, [curveD, yTop, yBottom]);
 
   const plotTop = dbY(yTop, yTop, yBottom);
   const plotBottom = dbY(yBottom, yTop, yBottom);

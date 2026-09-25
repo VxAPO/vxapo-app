@@ -51,16 +51,13 @@ export function toPathD(flat: number[]): string {
   return `M${pts.join(" L")}`;
 }
 
-/** 按 x 线性重采样到 n 个点（x 单调递增；两端点原样保留）。 */
-export function resampleByX(flat: number[], n: number): number[] {
+/** 按 x 线性重采样到给定网格（x 单调递增；命中网格点则原样保留）。 */
+export function resampleToXs(flat: number[], xs: number[]): number[] {
   const count = flat.length / 2;
-  if (count === n) return flat.slice();
-  const x0 = flat[0];
-  const x1 = flat[(count - 1) * 2];
-  const out: number[] = new Array(n * 2);
+  const out: number[] = new Array(xs.length * 2);
   let j = 0;
-  for (let i = 0; i < n; i++) {
-    const x = n === 1 ? x0 : x0 + ((x1 - x0) * i) / (n - 1);
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i];
     while (j < count - 2 && flat[(j + 1) * 2] < x) j++;
     const xa = flat[j * 2];
     const xb = flat[(j + 1) * 2];
@@ -72,9 +69,42 @@ export function resampleByX(flat: number[], n: number): number[] {
   return out;
 }
 
+/** 取两条路径 x 的并集（两边都递增，归并去重；基础网格本就相同）。 */
+export function mergeXs(a: number[], b: number[]): number[] {
+  const out: number[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length / 2 || j < b.length / 2) {
+    const xa = i < a.length / 2 ? a[i * 2] : Infinity;
+    const xb = j < b.length / 2 ? b[j * 2] : Infinity;
+    let x: number;
+    if (Math.abs(xa - xb) < 1e-9) {
+      x = xa;
+      i++;
+      j++;
+    } else if (xa < xb) {
+      x = xa;
+      i++;
+    } else {
+      x = xb;
+      j++;
+    }
+    if (!out.length || x - out[out.length - 1] > 1e-9) out.push(x);
+  }
+  return out;
+}
+
 /**
- * 把两条路径对齐到同一点数（取两者较大者），返回可直接交给 `el.animate` 的 CSS `d` 值。
- * 任一侧解析失败或两条曲线 x 跨度不同（换了宽度/量程，不该做形状补间）时返回 null。
+ * 把两条路径对齐到**同一条 x 网格**（关键点并集），返回可直接交给 `el.animate` 的 CSS `d`。
+ *
+ * 为什么是并集而不是"均匀重采样到较大点数"：高 Q 窄峰靠 `buildEvalFreqs` 追加的细化点撑起来
+ * （几十个点挤在峰周围），均匀重采样会把它们稀释成两三个点——峰在动画中被削平，
+ * 结束时又跳回尖峰，看起来就是"低采样点的曲线变成了高采样点的曲线"。取并集则细化点全保留。
+ *
+ * 为什么要强制公共网格（而不是各用各的点直接按索引插）：两侧 x 序列不同时，插值会连 x 一起插，
+ * 峰在横向漂移——观感是"整条线被揉"而不是"每个关键点各自升降"。
+ *
+ * 任一侧解析失败或 x 跨度不同（改宽度）时返回 null，放弃动画。
  */
 export function alignPaths(a: string, b: string): [string, string] | null {
   const fa = parsePathD(a);
@@ -82,10 +112,38 @@ export function alignPaths(a: string, b: string): [string, string] | null {
   if (!fa || !fb) return null;
   const ca = fa.length / 2;
   const cb = fb.length / 2;
-  // x 两端必须一致，否则补间会把曲线横向拉扯（如拖动改宽度、Y 轴量程变化）
+  if (ca < 2 || cb < 2) return null;
+  // x 两端必须一致，否则补间会把曲线横向拉扯（如拖动改宽度）
   if (fa[0] !== fb[0] || fa[(ca - 1) * 2] !== fb[(cb - 1) * 2]) return null;
-  const n = Math.max(ca, cb);
-  const ra = ca === n ? fa : resampleByX(fa, n);
-  const rb = cb === n ? fb : resampleByX(fb, n);
+  const xs = mergeXs(fa, fb);
+  const ra = resampleToXs(fa, xs);
+  const rb = resampleToXs(fb, xs);
   return [`path("${toPathD(ra)}")`, `path("${toPathD(rb)}")`];
+}
+
+/**
+ * 把路径的 y 从**旧量程的像素**换算到**新量程的像素**。
+ *
+ * 曲线纵轴量程（`yTop`/`yBottom`）由峰值自适应、还会阶梯跳动（每 2dB 一档）：量程一变，
+ * 同一形状的 y 像素含义就完全不同。补间起点若直接沿用旧像素，等于拿"另一套坐标系的形状"
+ * 去插值当前坐标系——曲线会先跑到刻度范围外再回来。先换算到新量程，动画就发生在同一坐标系里。
+ */
+export function remapPathY(
+  d: string,
+  from: { top: number; bottom: number },
+  to: { top: number; bottom: number },
+): string {
+  const flat = parsePathD(d);
+  if (!flat) return d;
+  const fromSpan = Math.max(1, from.top - from.bottom);
+  const toSpan = Math.max(1, to.top - to.bottom);
+  const out = flat.slice();
+  for (let i = 1; i < out.length; i += 2) {
+    // dbY 的逆：y = 24 + ((top - db) / span) * 180
+    const db = from.top - ((out[i] - 24) / 180) * fromSpan;
+    // 夹在绘图区内：新量程装不下旧曲线时（纵轴量程按峰值自适应、每 2dB 跳一档），
+    // 宁可短暂贴边，也不要让曲线冲出刻度范围再滑回来——那是肉眼可见的破绽。
+    out[i] = Math.max(24, Math.min(204, 24 + ((to.top - db) / toSpan) * 180));
+  }
+  return toPathD(out);
 }
