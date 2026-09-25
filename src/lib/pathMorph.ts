@@ -121,29 +121,3 @@ export function alignPaths(a: string, b: string): [string, string] | null {
   return [`path("${toPathD(ra)}")`, `path("${toPathD(rb)}")`];
 }
 
-/**
- * 把路径的 y 从**旧量程的像素**换算到**新量程的像素**。
- *
- * 曲线纵轴量程（`yTop`/`yBottom`）由峰值自适应、还会阶梯跳动（每 2dB 一档）：量程一变，
- * 同一形状的 y 像素含义就完全不同。补间起点若直接沿用旧像素，等于拿"另一套坐标系的形状"
- * 去插值当前坐标系——曲线会先跑到刻度范围外再回来。先换算到新量程，动画就发生在同一坐标系里。
- */
-export function remapPathY(
-  d: string,
-  from: { top: number; bottom: number },
-  to: { top: number; bottom: number },
-): string {
-  const flat = parsePathD(d);
-  if (!flat) return d;
-  const fromSpan = Math.max(1, from.top - from.bottom);
-  const toSpan = Math.max(1, to.top - to.bottom);
-  const out = flat.slice();
-  for (let i = 1; i < out.length; i += 2) {
-    // dbY 的逆：y = 24 + ((top - db) / span) * 180
-    const db = from.top - ((out[i] - 24) / 180) * fromSpan;
-    // 夹在绘图区内：新量程装不下旧曲线时（纵轴量程按峰值自适应、每 2dB 跳一档），
-    // 宁可短暂贴边，也不要让曲线冲出刻度范围再滑回来——那是肉眼可见的破绽。
-    out[i] = Math.max(24, Math.min(204, 24 + ((to.top - db) / toSpan) * 180));
-  }
-  return toPathD(out);
-}

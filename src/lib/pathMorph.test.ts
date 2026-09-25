@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alignPaths, mergeXs, parsePathD, remapPathY, resampleToXs, toPathD } from "./pathMorph";
+import { alignPaths, mergeXs, parsePathD, resampleToXs, toPathD } from "./pathMorph";
 
 describe("parsePathD", () => {
   it("解析 M/L 路径为扁平点数组", () => {
@@ -68,6 +68,13 @@ describe("alignPaths", () => {
     expect(pb.startsWith('path("M')).toBe(true);
   });
 
+  it("补间只在像素空间进行：两侧 y 原样保留，不做任何量程换算", () => {
+    const pair = alignPaths("M0.0 102.0 L10.0 126.0", "M0.0 30.0 L10.0 198.0");
+    const [pa, pb] = pair as [string, string];
+    expect(parsePathD(pa)).toEqual([0, 102, 10, 126]);
+    expect(parsePathD(pb)).toEqual([0, 30, 10, 198]);
+  });
+
   it("x 跨度不同（改宽度）时拒绝补间，避免横向拉扯", () => {
     expect(alignPaths("M0.0 0.0 L20.0 5.0", "M0.0 0.0 L40.0 5.0")).toBeNull();
   });
@@ -75,28 +82,5 @@ describe("alignPaths", () => {
   it("点数过少或解析失败时返回 null", () => {
     expect(alignPaths("nonsense", "M0.0 0.0 L10.0 0.0")).toBeNull();
     expect(alignPaths("M0.0 0.0", "M0.0 0.0 L10.0 0.0")).toBeNull();
-  });
-});
-
-describe("remapPathY", () => {
-  it("量程相同时保持原值", () => {
-    const d = "M0.0 24.0 L10.0 204.0";
-    const scale = { top: 12, bottom: -12 };
-    expect(remapPathY(d, scale, scale)).toBe(d);
-  });
-
-  it("量程收窄时按 dB 换算，并夹在绘图区内", () => {
-    const from = { top: 12, bottom: -12 };
-    const to = { top: 6, bottom: -6 };
-    // y=114 在旧量程里是 0 dB，在新量程里仍是 0 dB（视口中线）：114 → 114
-    expect(parsePathD(remapPathY("M0.0 114.0 L10.0 114.0", from, to))?.[1]).toBeCloseTo(114, 6);
-    // y=24 在旧量程是 +12 dB，新量程只到 +6 → 夹在顶边 24
-    expect(parsePathD(remapPathY("M0.0 24.0 L10.0 24.0", from, to))?.[1]).toBeCloseTo(24, 6);
-    // 旧量程的 -12 dB（y=204）在新量程只到 -6 → 夹在底边 204
-    expect(parsePathD(remapPathY("M0.0 204.0 L10.0 204.0", from, to))?.[1]).toBeCloseTo(204, 6);
-  });
-
-  it("解析失败时原样返回", () => {
-    expect(remapPathY("nonsense", { top: 6, bottom: -6 }, { top: 12, bottom: -12 })).toBe("nonsense");
   });
 });

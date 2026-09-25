@@ -3,7 +3,7 @@ import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
-import { alignPaths, remapPathY } from "../lib/pathMorph";
+import { alignPaths } from "../lib/pathMorph";
 import { useCurveHover } from "../hooks/useCurveHover";
 import CurveGrid from "./CurveGrid";
 
@@ -65,20 +65,20 @@ function CurvePlot({
   const morphAnimRef = useRef<Animation | null>(null);
   /** 上一次的**目标**路径。不能靠 getComputedStyle 拿旧值：layout 阶段 React 已经写入新 d 了 */
   const prevDRef = useRef<string | null>(null);
-  /** 上一次的纵轴量程：量程跨档时要先把起点换算到新坐标系 */
-  const scaleRef = useRef({ top: yTop, bottom: yBottom });
   // 用 layout effect：必须在浏览器绘制**之前**接管，否则新 d 会先画一帧再被动画拉回去（闪一下）
   useLayoutEffect(() => {
     const el = pathRef.current;
     if (!el) return;
     /**
-     * 曲线自己会变形：只要路径变了就平滑补间过去，不区分场景——切声道、开关/增删滤波器、
+     * 曲线自己变自己的形状：只要路径变了就平滑补间过去，不区分场景——切声道、开关/增删滤波器、
      * 拖频段参数、切设备全走这一条路，调用方不必再特判「该不该动画」。
+     *
+     * 补间全程在**像素空间**做，不换算 dB↔量程、也不夹边界。曲线和坐标轴是两件独立的事：
+     * 纵轴量程（按峰值自适应、每 2dB 一档）该瞬时变就瞬时变，网格由 React 直接重画；
+     * 曲线只管从「旧形状所在的屏幕位置」平滑过渡到「新形状所在的屏幕位置」。
+     * 起点与终点本来就都在绘图区内，插值自然也落在区内——一旦改成"先按量程换算再钳位"，
+     * 量程收窄时旧形状换算后必然越界，会被压在顶边（或底边）成一段直线再变回曲线，观感极差（踩过）。
      */
-    const fromScale = scaleRef.current;
-    const toScale = { top: yTop, bottom: yBottom };
-    scaleRef.current = toScale;
-
     /**
      * 起点取「上一条动画的当前位置」：先 `commitStyles()` 把动画当前值定格进内联样式，再取消。
      * 这样变形途中目标又变时会从当前位置接着跑，不会跳回旧值（连续拖动＝指数式平滑跟随）。
@@ -102,9 +102,7 @@ function CurvePlot({
     prevDRef.current = curveD;
     if (!from || from === curveD) return;
 
-    // 纵轴量程可能刚跳了一档（按峰值自适应、每 2dB 一档）：把起点换算到**当前量程**再补间。
-    // 否则等于拿另一套坐标系的形状去插值，曲线会先冲出刻度范围再滑回来。
-    const pair = alignPaths(remapPathY(from, fromScale, toScale), curveD);
+    const pair = alignPaths(from, curveD);
     if (!pair) return;
     const anim = el.animate([{ d: pair[0] }, { d: pair[1] }], {
       // 320ms 与 curve.css 里 stroke 过渡的 0.32s 对齐；不设 fill，结束后回到 React 写的 d
@@ -121,7 +119,7 @@ function CurvePlot({
         }
       })
       .catch(() => {});
-  }, [curveD, yTop, yBottom]);
+  }, [curveD]);
 
   const plotTop = dbY(yTop, yTop, yBottom);
   const plotBottom = dbY(yBottom, yTop, yBottom);
