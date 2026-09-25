@@ -1,8 +1,10 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { usePresence } from "framer-motion";
 import { ChevronDown, Copy, Save, Trash2 } from "lucide-react";
 import { channelLabel } from "../lib/channels";
 import { t } from "../lib/i18n/core";
+import { snapPx } from "../lib/snap";
 import { useGlassRing } from "../hooks/useGlassRing";
 import { useEdgeTintLayer } from "../hooks/useEdgeTintLayer";
 import { driveFor } from "../lib/edgetint/renderLoop";
@@ -66,6 +68,46 @@ export default function SelectionToolbar({
     driveFor(TOOLBAR_FADE_MS + 80, "tool");
   }, [shown]);
 
+  const copyBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [menuBox, setMenuBox] = useState<{ left: number; top: number; width: number } | null>(
+    null,
+  );
+
+  /**
+   * 「复制到声道」菜单的位置：它 portal 到 `document.body`（见下面的 createPortal），
+   * 不能再靠 `.sel-copy` 做绝对定位，改按按钮的**视口矩形**写 `left/top/min-width`。
+   *
+   * 为什么用 rAF 跟着按钮：工具栏本身会被 `useMarqueeSelection` 的跟随循环写 transform
+   * 移动（选区变化、滚动都会），原来的绝对定位天然跟随；改成 portal 后必须自己跟，否则会脱开。
+   * 只在位置真的变了才 setState，别每帧白重渲一次。
+   */
+  useLayoutEffect(() => {
+    if (!copyOpen) {
+      setMenuBox(null);
+      return;
+    }
+    let raf = 0;
+    let last = "";
+    const step = () => {
+      const r = copyBtnRef.current?.getBoundingClientRect();
+      if (r) {
+        const next = {
+          left: snapPx(r.left),
+          top: snapPx(r.bottom + 6),
+          width: Math.round(r.width),
+        };
+        const key = `${next.left}|${next.top}|${next.width}`;
+        if (key !== last) {
+          last = key;
+          setMenuBox(next);
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    step();
+    return () => cancelAnimationFrame(raf);
+  }, [copyOpen]);
+
   return (
     // 位置（transform）由 useMarqueeSelection 的跟随循环独占；居中与入场 6px 抬升
     // 交给 CSS 的 translate/动画，这里不再用 motion，避免两个所有者写同一属性。
@@ -79,6 +121,7 @@ export default function SelectionToolbar({
           {channelOn && (
             <div className="sel-copy">
               <button
+                ref={copyBtnRef}
                 type="button"
                 className="sel-copy-btn"
                 onClick={onToggleCopy}
@@ -87,22 +130,32 @@ export default function SelectionToolbar({
                 <span>{t("copy.toChannel")}</span>
                 <ChevronDown size={14} />
               </button>
-              {copyOpen && (
-                <div className="sel-copy-menu">
-                  {channelNames
-                    .filter((c) => c !== activeChannel)
-                    .map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className="sel-copy-item"
-                        onClick={() => onCopyToChannel(c)}
-                      >
-                        {channelLabel(c)}
-                      </button>
-                    ))}
-                </div>
-              )}
+              {copyOpen &&
+                menuBox &&
+                createPortal(
+                  <div
+                    className="sel-copy-menu"
+                    style={{
+                      left: menuBox.left,
+                      top: menuBox.top,
+                      minWidth: menuBox.width,
+                    }}
+                  >
+                    {channelNames
+                      .filter((c) => c !== activeChannel)
+                      .map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className="sel-copy-item"
+                          onClick={() => onCopyToChannel(c)}
+                        >
+                          {channelLabel(c)}
+                        </button>
+                      ))}
+                  </div>,
+                  document.body,
+                )}
             </div>
           )}
           <button className="sel-action save" type="button" onClick={onSave}>

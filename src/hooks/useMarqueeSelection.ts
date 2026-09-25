@@ -528,7 +528,11 @@ export function useMarqueeSelection({
     if (!copyOpen) return;
     const close = (e: PointerEvent) => {
       const t = e.target;
-      if (t instanceof Element && t.closest(".sel-copy")) return;
+      // 菜单是 portal 到 body 的（见 SelectionToolbar），不在 `.sel-copy` 子树里：
+      // 漏了 `.sel-copy-menu` 这一条，点在菜单项上会先被判成"点外面"而卸载菜单，
+      // 后面的 click 就没元素可派了——复制直接失效。
+      if (t instanceof Element && (t.closest(".sel-copy") || t.closest(".sel-copy-menu")))
+        return;
       setCopyOpen(false);
     };
     window.addEventListener("pointerdown", close);

@@ -349,11 +349,14 @@
 }
 
 .sel-copy-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 60;
-  min-width: 100%;
+  /* portal 到 document.body（见 SelectionToolbar）：位置改由 JS 按按钮的视口矩形写
+     left/top/min-width，所以这里不再有绝对定位的 top/left。
+     必须**逃离 `.fx-toolbar` 的层叠上下文**：染色 canvas（`Z_TOOL 35` / `Z_TOOL_SHADE 36`）
+     与 `.fx-toolbar::after` 高光环带都排在工具栏（`z-index: 30`）之上；而 `.sel-toolbar` 带
+     `backdrop-filter`、自成层叠上下文，菜单留在面板内部**无论给多大 z-index 都翻不上去**，
+     看上去就像"底色是透明的"。z-index 70 与 `.vx-select-content` 同档，也压过染色层 25/26/35/36。 */
+  position: fixed;
+  z-index: 70;
   padding: 4px;
   border-radius: 12px;
   background: var(--card);
