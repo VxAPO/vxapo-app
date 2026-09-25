@@ -535,9 +535,25 @@ export function useMarqueeSelection({
     return () => window.removeEventListener("pointerdown", close);
   }, [copyOpen]);
 
-  // 工具栏高度变化（如复制到声道菜单展开）时重新避让，避免被顶部/底部裁剪
+  /**
+   * 工具栏尺寸实测（宽度/高度都参与"内缩 8px"的夹取）。
+   *
+   * 盯的是**元素本身**，所以没有 deps、每轮渲染只做一次 ref 比较——**不能**拿
+   * `selectedIds.length > 0` 之类当 deps：工具栏要等 `selGeom` 算出来才挂载，而 `selGeom`
+   * 是**被动** effect 的产物，比 layout effect 晚一轮；按布尔量做 deps 的话，effect 会在
+   * 元素还不存在的那个 commit 跑一次、`el` 为 null 直接 return，之后再也不会重跑，尺寸就
+   * 永远停在兜底值（280×64）。通道选择器会把工具栏拉宽到远超兜底值，首次框选的右边界便按
+   * 280 去算，工具栏直接顶出 8px 内缩线；等取消一次时退场动画期间元素还挂着，effect 才补上
+   * ResizeObserver，所以第二次就正常——这个"只有首次出界"的现象就是这么来的（踩过）。
+   */
+  const toolbarRoRef = useRef<ResizeObserver | null>(null);
+  const toolbarRoElRef = useRef<Element | null>(null);
   useLayoutEffect(() => {
     const el = toolbarElRef.current;
+    if (toolbarRoElRef.current === el) return; // 已经盯着它（含两者同为 null 的未挂载态）
+    toolbarRoRef.current?.disconnect();
+    toolbarRoRef.current = null;
+    toolbarRoElRef.current = el;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const h = entries[0]?.contentRect.height;
@@ -546,9 +562,13 @@ export function useMarqueeSelection({
       if (w && w > 0) setToolbarW((prev) => (prev === w ? prev : w));
     });
     ro.observe(el);
-    return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds.length > 0]);
+    toolbarRoRef.current = ro;
+    // 元素刚出现：ResizeObserver 的首帧回调要等下一次布局，这里**同步**量一次，
+    // 让首次落位就用真实尺寸。否则会先拿兜底尺寸算目标、落位后再飞回来，就是"出界然后再收回"。
+    const r = el.getBoundingClientRect();
+    if (r.width > 0) setToolbarW((prev) => (prev === r.width ? prev : r.width));
+    if (r.height > 0) setToolbarH((prev) => (prev === r.height ? prev : r.height));
+  });
 
   // 选中工具栏几何：按选中卡片包围盒宽度取水平中心，下边距按网格行高动态计算
   useEffect(() => {
