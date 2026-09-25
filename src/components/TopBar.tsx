@@ -43,17 +43,22 @@ function TopBar({
       <button className="pill" type="button" disabled={noDevices} onClick={onImport}>{t("import")}</button>
       <button className="pill" type="button" disabled={noDevices} onClick={onExport}>{t("export")}</button>
       <span className="spacer" data-tauri-drag-region />
-      <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label={t("view.switch")}>
-        <span className={`seg-thumb ${view === "advanced" ? "right" : ""}`} />
-        <button type="button" disabled={channelOn || noDevices} aria-pressed={view === "preset"} onClick={() => onViewChange("preset")}>
-          <Tags size={13} />
-          {t("view.semantic")}
-        </button>
-        <button type="button" disabled={noDevices} aria-pressed={view === "advanced"} onClick={() => onViewChange("advanced")}>
-          <SlidersHorizontal size={13} />
-          {t("view.params")}
-        </button>
-      </div>
+      {/* 视图切换外面这圈是「死区」：容器不挂 data-tauri-drag-region，点歪到控件四周
+          不会落到顶栏/占位条的拖拽区上，也就不会触发双击最大化/还原。靠 padding 撑出这一圈，
+          居中仍由它负责，视觉与布局不变（尺寸见 topbar.css 的 .view-seg-zone）。 */}
+      <span className="view-seg-zone">
+        <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label={t("view.switch")}>
+          <span className={`seg-thumb ${view === "advanced" ? "right" : ""}`} />
+          <button type="button" disabled={channelOn || noDevices} aria-pressed={view === "preset"} onClick={() => onViewChange("preset")}>
+            <Tags size={13} />
+            {t("view.semantic")}
+          </button>
+          <button type="button" disabled={noDevices} aria-pressed={view === "advanced"} onClick={() => onViewChange("advanced")}>
+            <SlidersHorizontal size={13} />
+            {t("view.params")}
+          </button>
+        </div>
+      </span>
       <span className="spacer" data-tauri-drag-region />
       <button className="pill winbtn" type="button" aria-label={t("minimize")} onClick={onMinimize}>
         <Minus size={16} />

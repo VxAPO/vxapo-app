@@ -583,11 +583,21 @@
 
 /* ── 视图切换（语义视图 / 参数视图） ─────────────────────────── */
 
-.seg.view-seg {
+/* 死区容器：顶栏整体是 `data-tauri-drag-region` 区，双击会最大化/还原；点歪到切换控件
+   四周时事件落在这里而不是顶栏，于是不误触发。这圈靠 padding 撑出来，居中改由它负责。 */
+.view-seg-zone {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+  display: inline-flex;
+  padding: 8px;
+}
+
+.seg.view-seg {
+  /* 定位上下文：`.seg-thumb` 是它的绝对定位子元素（原来靠自身的 absolute 自居中，
+     现在居中交给 .view-seg-zone） */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
