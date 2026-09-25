@@ -2,6 +2,7 @@ import { Fragment, memo, useMemo } from "react";
 import { t } from "../lib/i18n/core";
 import type { Block, EffectItem } from "../lib/model";
 import { accentStyle } from "../lib/blocks";
+import { channelLabel } from "../lib/channels";
 import type { DragApi } from "../lib/drag";
 import { visibleEffectsFor } from "../lib/filters";
 import { effectiveChannel } from "../stores/channelStore";
@@ -23,6 +24,8 @@ interface PresetViewProps {
   channelOn: boolean;
   activeChannel: string;
   channelNames: string[];
+  /** 切换活动声道（与参数视图头部的声道胶囊同一个入口）。 */
+  onChannelChange: (ch: string) => void;
 }
 
 /**
@@ -44,6 +47,7 @@ function PresetView({
   channelOn,
   activeChannel,
   channelNames,
+  onChannelChange,
 }: PresetViewProps) {
   const toggleEffect = useConfigStore((s) => s.toggleEffect);
   const removeEffect = useConfigStore((s) => s.removeEffect);
@@ -69,7 +73,28 @@ function PresetView({
   return (
     <>
       <div className="tuning-section">
-        <div className="section-title">{t("filters")}</div>
+        <div className="section-head">
+          <div className="section-title">{t("filters")}</div>
+          {/* 声道胶囊：与参数视图头部同一套标记与样式（`.col-head` + `.ch-pill`）。
+              通道模式下语义视图也按声道过滤内容，所以这里必须给切换入口，不能只靠曲线卡的选择器。 */}
+          {channelOn && (
+            <div className="col-head">
+              <span className="ch-name">
+                {channelNames.length} {t("channels")}
+              </span>
+              {channelNames.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`ch-pill${c === effActive ? " active" : ""}`}
+                  onClick={() => onChannelChange(c)}
+                >
+                  {channelLabel(c)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {showFilterEmptyHint && (
           <div
             className="hint-row show"

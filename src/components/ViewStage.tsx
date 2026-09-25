@@ -100,6 +100,7 @@ export default function ViewStage({
                 channelOn={channelOn}
                 activeChannel={activeChannel}
                 channelNames={channelNames}
+                onChannelChange={onChannelChange}
               />
             ) : (
               <AdvancedView

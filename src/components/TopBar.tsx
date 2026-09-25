@@ -4,7 +4,6 @@ import type { ViewMode } from "../lib/model";
 import { t } from "../lib/i18n/core";
 import logoUrl from "../assets/VxAPO_icon_v4.svg";
 import { isInstalled } from "../lib/api";
-import { useChannelStore } from "../stores/channelStore";
 import { useDeviceStore } from "../stores/deviceStore";
 
 interface TopBarProps {
@@ -33,8 +32,7 @@ function TopBar({
   onToggleMaximize,
   onClose,
 }: TopBarProps) {
-  // 决策 4 阶段 A：设备/通道状态直接订阅 store。
-  const channelOn = useChannelStore((s) => s.channelOn);
+  // 决策 4 阶段 A：设备状态直接订阅 store。通道状态不再需要——打开通道选择器不再禁用语义视图。
   const noDevices = useDeviceStore((s) => s.devices.filter(isInstalled).length === 0);
   return (
     <div className="topbar" data-tauri-drag-region>
