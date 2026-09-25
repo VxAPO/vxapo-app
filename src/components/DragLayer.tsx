@@ -73,43 +73,45 @@ function FlyPath({
       top: inv * inv * fly.from.top + 2 * inv * t * ctrlTop + t * t * fly.to.top,
     };
   });
-  // 中间帧取整对齐像素网格，让徽标文字渲染与网格卡片一致；最后一帧保持精确落点
-  const roundedPts = pts.map((p) => ({ left: snapPx(p.left), top: snapPx(p.top) }));
-  roundedPts[roundedPts.length - 1] = { left: fly.to.left, top: fly.to.top };
+  /**
+   * 位置改用 transform 驱动（x / y），left / top 只作静态基准：
+   * - 逐帧改 left/top 属于布局属性，浏览器无法合成，整张卡每帧重排 + 重绘
+   *   （含文字重新折行、阴影重画）——卡片多时就是掉帧的来源。
+   * - transform 只走合成：栅格内容重用，一帧只剩一次合成。
+   * 基准与每帧偏移都取到设备像素栅格上，末帧落在吸附后的落点，
+   * 保证合成偏移是整数设备像素——否则副本的文字栅格原点与静止卡片差几个像素。
+   */
+  const baseLeft = snapPx(fly.from.left);
+  const baseTop = snapPx(fly.from.top);
+  const xs = pts.map((p) => snapPx(p.left) - baseLeft);
+  const ys = pts.map((p) => snapPx(p.top) - baseTop);
+  // 末帧精确落在吸附后的落点（不再取“路径点”的最后一项，避免差半个像素）
+  xs[xs.length - 1] = snapPx(fly.to.left) - baseLeft;
+  ys[ys.length - 1] = snapPx(fly.to.top) - baseTop;
   const moveTimes = pts.map((_, i) => (i / (N - 1)) * 0.72);
-  const widths = pts.map(
-    (_, i) => fly.from.width + (fly.to.width - fly.from.width) * (i / (N - 1)),
-  );
-  const roundedWidths = widths.map((w) => snapPx(w));
-  // 最后一帧必须精确等于落点尺寸，否则落地瞬间与网格卡片差 1px
-  roundedWidths[roundedWidths.length - 1] = fly.to.width;
-  const heights = pts.map(
-    (_, i) => fly.from.height + (fly.to.height - fly.from.height) * (i / (N - 1)),
-  );
-  const roundedHeights = heights.map((h) => snapPx(h));
-  roundedHeights[roundedHeights.length - 1] = fly.to.height;
   const strong = "0 10px 28px rgba(0, 0, 0, 0.18)";
   // 阴影淡出：只收扩散（模糊/偏移缩到 0），透明度保持不变，
   // 最后是 0 半径的不可见阴影，看起来像“收缩消失”而非“褪色”
   const midShadow = "0 4px 10px rgba(0, 0, 0, 0.18)";
   const none = "0 0 0px rgba(0, 0, 0, 0.18)";
+  // 尺寸全程等于原卡尺寸（落点尺寸即原尺寸），静态设定即可：
+  // 逐帧写 width/height 会让卡片文字每帧重新折行，是另一处掉帧来源。
   return (
     <motion.div
       className={`drag-fly fly-anim ${classForKey(fly.key)}`}
-      style={styleForKey?.(fly.key)}
-      initial={{
-        left: fly.from.left,
-        top: fly.from.top,
+      style={{
+        ...(styleForKey?.(fly.key) ?? {}),
+        left: baseLeft,
+        top: baseTop,
         width: fly.from.width,
         height: fly.from.height,
-        opacity: 1,
-        boxShadow: strong,
+        // 提前升为合成层：整段飞行只做合成，不再重排/重绘卡片内容
+        willChange: "transform",
       }}
+      initial={{ x: 0, y: 0, opacity: 1, boxShadow: strong }}
       animate={{
-        left: roundedPts.map((p) => p.left),
-        top: roundedPts.map((p) => p.top),
-        width: roundedWidths,
-        height: roundedHeights,
+        x: xs,
+        y: ys,
         opacity: 1,
         boxShadow: [strong, strong, midShadow, none],
       }}
@@ -119,10 +121,8 @@ function FlyPath({
       }}
       transition={{
         duration: 0.3,
-        left: { duration: 0.3, times: moveTimes, ease: "linear" },
-        top: { duration: 0.3, times: moveTimes, ease: "linear" },
-        width: { duration: 0.3, times: moveTimes, ease: "linear" },
-        height: { duration: 0.3, times: moveTimes, ease: "linear" },
+        x: { duration: 0.3, times: moveTimes, ease: "linear" },
+        y: { duration: 0.3, times: moveTimes, ease: "linear" },
         boxShadow: { duration: 0.3, times: [0, 0.8, 0.94, 1], ease: "easeOut" },
       }}
     >

@@ -38,6 +38,13 @@ export interface DragSession {
   /** 抓取点坐标（positionOverlay 对移动增量取整的基准） */
   startX: number;
   startY: number;
+  /** 最近一次指针位置：滚动时没有 pointermove，重算命中要用它 */
+  lastX: number;
+  lastY: number;
+  /** 抓取时活动视图舞台的视口坐标：滚动增量由它相减得到
+      （卡片上可能挂着布局动画的 transform，不能直接拿卡片量） */
+  scopeLeft: number;
+  scopeTop: number;
   /** 原始卡片位置（悬浮层对齐锚点，保证抓取时完全覆盖原卡片） */
   originLeft: number;
   originTop: number;
@@ -50,6 +57,9 @@ export interface DragListeners {
   move: (e: PointerEvent) => void;
   up: (e: PointerEvent) => void;
   cancel: (e: PointerEvent) => void;
+  /** 拖拽期间页面滚动（捕获阶段挂在 window 上，滚动事件不冒泡）：
+      槽位矩形要按滚动增量平移，命中要用最后指针位置重算 */
+  scroll: () => void;
 }
 
 export interface UseDragSortOptions {
