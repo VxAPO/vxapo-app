@@ -300,13 +300,10 @@
 
 .vx-text-input:focus-visible {
   outline: none;
+  /* 焦点只用**描边变色**交代，不再画外圈光晕——与 `.vx-select:focus-visible` 同套。
+     外圈试过两种（`0 0 0 3px var(--brand-soft)` 硬环、1px 细环 + 6px 模糊晕），
+     都不如描边本身干净；而且**任何外圈都会被外层滚动容器裁掉**（见下面 .preset-band-list）。 */
   border-color: var(--brand);
-  /* 柔光两层：1px 细环交代焦点落在哪，外面再叠一圈**带模糊**的晕让它自然衰减。
-     原来是无模糊的 `0 0 0 3px var(--brand-soft)`——一条等宽的硬边，在浅底上像贴了圈胶带（踩过）。
-     半径 6px 与下面列表留的 6px 内缩配套，晕的尾端刚好落在裁剪边界之前。 */
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--brand) 26%, transparent),
-    0 0 6px 0 color-mix(in srgb, var(--brand) 16%, transparent);
 }
 
 .preset-band-list {
@@ -315,11 +312,11 @@
   gap: 6px;
   max-height: 220px;
   overflow-y: auto;
-  /* 左右各留 6px：这是滚动容器，`overflow-y:auto` 会把横向也一并裁在 **padding box** 上，
-     而输入框是 `flex:1`、右缘正好压着这个边界——聚焦那圈半径 6px 的光晕会整个被裁掉
-     （左缘因为前面有 110px 的频段标签、本来就有余量，所以只有右侧看着"缺一节"）。
-     竖向 12px 是给首/末行的光晕让开上下那 10px 的遮罩淡出。 */
-  padding: 12px 6px;
+  /* 横向不留余量：焦点只用描边交代、不往外画光晕，所以没有会被裁到的东西。
+     留个提醒——它是滚动容器，`overflow-y:auto` 会把**横向也一并裁在 padding box 上**，
+     而输入框是 `flex:1`、右缘正好压着这个边界：**一旦再给焦点加外圈，右侧就会缺一节**
+     （左缘前面有频段标签、本来就有余量，所以只有右边看得出来）。要加外圈就得同时留等宽内缩。 */
+  padding: 10px 0;
   box-sizing: border-box;
   position: relative;
   mask-image:
@@ -343,8 +340,10 @@
 
 .preset-band-tag {
   flex: none;
-  width: 110px;
-  font-size: 11px;
+  /* 列宽按最长标签（`16.00 kHz · +10.5 dB`，等宽数字）在 12px 下的实测宽度留余量：
+     原来 11px + 110px 既字小、列里又空。 */
+  width: 122px;
+  font-size: 12px;
   color: var(--text-weak);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
