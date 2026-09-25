@@ -154,19 +154,6 @@
 }
 
 /* 深色模式：组色/预设色使用预存的深色基础色与深色 hover 色 */
-:root[data-theme="dark"] .preset-card {
-  box-shadow:
-    inset 3px 0 0 var(--preset-accent-dark, var(--preset-accent, transparent)),
-    var(--card-shadow);
-}
-
-:root[data-theme="dark"] .preset-card .p-group {
-  color: var(--preset-accent-dark, var(--preset-accent, var(--brand-deep)));
-}
-
-:root[data-theme="dark"] .preset-card .add {
-  background: var(--preset-accent-dark, var(--preset-accent, var(--brand)));
-}
 
 /* 侧栏预设 pill（预设区 / 自定义区共用）同样要走深色映射：色点、描边、组名三处原先只写了
    浅色的 `--preset-accent`，深色下就停在亮色上、与调音卡片的组色口径不一致

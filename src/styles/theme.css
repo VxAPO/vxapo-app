@@ -365,13 +365,10 @@
   transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0s;
 }
 
-/* 主题切换期间隐藏所有阴影，但预设卡左侧骑边保留 */
-.theme-transition *:not(.preset-card) {
+/* 主题切换期间隐藏所有阴影（预设卡那套「左侧骑边」的老标记已删除，原先为它留的
+   `:not(.preset-card)` 例外一并去掉——侧栏早已换成胶囊条目） */
+.theme-transition * {
   box-shadow: none !important;
-}
-
-.theme-transition .preset-card {
-  box-shadow: inset 3px 0 0 var(--preset-accent, var(--brand)) !important;
 }
 
 /* 主题过渡期间这三个阴影淡出（同结构透明），结束后靠自身 box-shadow 过渡淡入 */

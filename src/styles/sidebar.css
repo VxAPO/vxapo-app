@@ -60,6 +60,9 @@
 }
 
 .preset-pill .p-group {
+  /* 字号原先由 cards.css 里那条**裸** `.p-group { font-size: 14px }` 提供（`.adv-pill` 基础是 13px），
+     那条随预设卡老标记一起删掉了，这里接手，别再让它漏在全局。 */
+  font-size: 14px;
   color: var(--preset-accent, var(--brand-deep));
   font-weight: 700;
   flex: none;
