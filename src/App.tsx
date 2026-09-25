@@ -155,6 +155,8 @@ export default function App() {
 
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [bodyNode, setBodyNode] = useState<HTMLDivElement | null>(null);
+  /** 拖拽悬浮层的挂载容器（`.device-body`，带 clip-path）：挂进去才会被裁在内容区边界 */
+  const [devBodyNode, setDevBodyNode] = useState<HTMLDivElement | null>(null);
   const devFxRef = useRef<HTMLDivElement | null>(null);
   useGlassRing(devFxRef);
   useEdgeTintLayer(devFxRef);
@@ -482,7 +484,7 @@ export default function App() {
             onDone={notify}
           />
 
-          <div className="device-body">
+          <div className="device-body" ref={setDevBodyNode}>
             {/* 设备页过渡（拆分前原实现）：AnimatePresence mode="wait" + key=设备。
                 退出的旧元素实例带着旧数据淡出，新元素带新数据淡入，两段串行、不重叠。 */}
             <AnimatePresence mode="wait" initial={false}>
@@ -608,6 +610,7 @@ export default function App() {
         blocksDrag={blocksDragApi}
         effectsDrag={effectsDragApi}
         flyHost={bodyNode}
+        overlayHost={devBodyNode}
         classForKey={overlayClassForKey}
         styleForKey={overlayStyleForKey}
         effectClassForKey={effectOverlayClassForKey}

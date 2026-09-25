@@ -7,6 +7,13 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* clip-path 只为拖拽悬浮层而加：它是 portal 进来的 `position: fixed` 元素，
+     祖先的 overflow 裁不到它（包含块在视口），但 **clip-path 会连带裁剪整棵子树**——
+     于是卡片被裁在内容区边界（标签栏上方那节不再漏出）。
+     刻意不用「给容器加 transform」那套：transform 会把 fixed 变成"相对容器"的包含块，
+     而容器若是滚动容器，fixed 会跟着内容滚，跟手就废了（滚动多少偏多少）。
+     clip-path 不创建包含块、也不改子元素定位，`.device-body` 内的染色 canvas 与滚动内容都不受影响。 */
+  clip-path: inset(0);
 }
 
 .device-page {
@@ -109,12 +116,9 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  /* transform: translateZ(0) 只为一件事：让拖拽那两层（portal 进来的悬浮层与飞行副本）
-     的 `fixed` 以此容器为包含块，从而被它的 overflow **裁在内容区边界**（标签栏上方那节不再漏）。
-     容器自身不滚动位移，所以「指针不动时悬浮层在视口里也不动」的跟手语义不变。
-     ⚠️ 副作用：它内部任何 `position: fixed` 后代从此都相对这个容器定位（目前只有拖拽悬浮层）。
-     ⚠️ 悬浮层的坐标要减掉本容器的视口偏移（见 useDragSort 的 hostLeft/hostTop）。 */
-  transform: translateZ(0);
+  /* ⚠️ 千万别给这个容器加 `transform`：它内部的 `position: fixed` 元素（拖拽悬浮层）会因此
+     以它为包含块，而"滚动容器内的包含块"会随内容一起位移 —— 悬浮层就再也锁不住指针
+     （现象：滚动多少、卡片就偏多少）。裁剪需求走高层的 clip-path，见 .device-body。 */
   overflow-y: auto;
   overflow-x: hidden;
   will-change: scroll-position;

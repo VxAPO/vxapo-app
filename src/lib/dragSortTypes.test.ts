@@ -77,8 +77,12 @@ describe("拖拽时序契约", () => {
     const tabZ = Number(/\.tab-bar\s*\{[^}]*?z-index:\s*(\d+)/.exec(read("../styles/tabs.css"))?.[1]);
     expect(bodyZ).toBeLessThan(tabZ);
 
-    // 滚动容器上这个 transform 是「悬浮层被内容区边界裁掉、同时不随滚动位移」的前提，别顺手删掉
+    // 悬浮层被裁在内容区边界靠的是 `.device-body` 的 clip-path（clip-path 会连整棵子树一起裁，
+    // 包括 fixed 后代）；**不能**改用「给容器加 transform」那种做法：fixed 的包含块会变成容器，
+    // 而滚动容器里的包含块跟着内容跑 —— 现象就是「滚动多少、卡片偏多少」，跟手直接废掉。
+    const deviceBodyBlock = /\.device-body\s*\{[^}]*\}/.exec(read("../styles/device.css"))?.[0] ?? "";
+    expect(deviceBodyBlock).toMatch(/clip-path:\s*inset\(0\)/);
     const scrollBlock = /\.tuning-scroll\s*\{[^}]*\}/.exec(read("../styles/device.css"))?.[0] ?? "";
-    expect(scrollBlock).toMatch(/transform:\s*translateZ\(0\)/);
+    expect(scrollBlock).not.toMatch(/transform:/);
   });
 });

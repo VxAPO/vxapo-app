@@ -716,12 +716,13 @@
 }
 
 /* 抓取悬浮层：top/left 恒为 0 作静态基准，跟手位移由 JS 写 transform（不触发布局）。
-   它和飞行副本一样被 portal 进滚动内容层（DragLayer），所以这个 z-index 只在 `.device-body`
-   的层叠上下文里比较——两者都会被设备标签栏挡住，不再浮在标签栏上面。
-   `position` 仍是 fixed（相对视口）：跟手语义要求「指针不动时悬浮层在视口里也不动」；
-   若改成 absolute + 内容坐标，滚动时它会跟着内容跑、与指针错位。
-   ⚠️ 这条 fixed 依赖「祖先链上没有 transform」：一旦 .device-body/.tuning-scroll 或更外层被加上
-   transform，包含块会变成那个祖先，坐标基准随之偏移。 */
+   它被 portal 进 `.device-body`（DragLayer）：一是层级落进那个层叠上下文，和飞行副本一样被设备
+   标签栏挡住；二是 `.device-body` 的 `clip-path: inset(0)` 会连带裁剪整棵子树，卡片被裁在内容区
+   边界、标签栏上方不再漏出。
+   `position` 仍是 fixed、也不在滚动容器里，所以**不随内容滚动位移**——跟手锁定就靠这一点：
+   一旦给它套上 transform 祖先（尤其是滚动容器），fixed 的包含块会变成那个祖先、跟着内容跑，
+   现象是「滚动多少、卡片就偏多少」。
+   ⚠️ 也因此绝不要把悬浮层 portal 进 `.tuning-scroll`：那是滚动容器。 */
 .drag-fly.overlay-fixed {
   position: fixed;
   top: 0;

@@ -14,6 +14,11 @@ export const LAYOUT_EASE = EASE_OUT_SOFT;
 export const ANIM_SETTLE_BUFFER_MS = 80;
 /** 距离所有槽位超过该值才算真正离开卡片区 */
 export const OUTSIDE_DIST = 48;
+/** 悬浮层夹取时距内容区边界的内缩：不要贴死边缘（阴影与圆角要留出余地） */
+export const DRAG_BOUNDS_INSET_PX = 8;
+/** 悬浮层贴到内容区上下边缘时的自动滚动速度（px/s）。
+    按帧时长换算成步长，所以 60Hz / 120Hz 观感一致，不会随刷新率翻倍。 */
+export const EDGE_SCROLL_SPEED_PX_S = 600;
 /** 弧线与阴影的总时长（framer-motion 的 duration）：位置段跑完 288ms，余下留给阴影收尾 */
 export const FLY_ANIM_MS = 400;
 /** 位置段占总时长的比例：位置跑完后的余量留给阴影收尾与「落定」停顿 */
@@ -63,14 +68,19 @@ export interface DragSession {
       （卡片上可能挂着布局动画的 transform，不能直接拿卡片量） */
   scopeLeft: number;
   scopeTop: number;
-  /** 抓取时滚动内容容器（`.tuning-scroll`）的视口坐标：悬浮层被 portal 进那个容器、
-      又是它的 fixed 后代（容器带 transform），所以坐标基准要减掉这个偏移。
-      容器自己不会滚动位移，拖拽期间测一次就够。 */
-  hostLeft: number;
-  hostTop: number;
   /** 原始卡片位置（悬浮层对齐锚点，保证抓取时完全覆盖原卡片） */
   originLeft: number;
   originTop: number;
+  /** 被拖卡片尺寸（夹取用） */
+  cardW: number;
+  cardH: number;
+  /** 内容区矩形（`.content` 那个大圆角矩形）：悬浮层被夹在它里面（再内缩
+      `DRAG_BOUNDS_INSET_PX`），拖到边界就停住、不再跟着指针往外跑
+      （系统光标本身锁不住，能限制的是这张卡片） */
+  bounds: { left: number; top: number; right: number; bottom: number };
+  /** 悬浮层当前左上角（视口坐标，已夹取）：边缘自动滚动按它判断有没有贴住上下界 */
+  curLeft: number;
+  curTop: number;
   /** 是否已越过移动阈值真正进入拖拽（未越过前不应用占位/阴影，避免点击闪动） */
   armed: boolean;
   html?: string;

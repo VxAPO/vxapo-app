@@ -13,6 +13,8 @@ interface DragLayerProps {
   flyElRef: RefObject<HTMLDivElement | null>;
   /** 飞行副本的挂载容器（滚动内容层 `.tuning-scroll`）：副本挂进去才能随内容滚 */
   flyHost: HTMLElement | null;
+  /** 抓取悬浮层的挂载容器（`.device-body`）：只吃它的 clip-path 裁剪 + 层级归属，**不能**是滚动容器 */
+  overlayHost: HTMLElement | null;
   activeContent: ReactNode;
   classForKey: (key: string) => string;
   styleForKey?: (key: string) => CSSProperties | undefined;
@@ -25,6 +27,7 @@ export default function DragLayer({
   overlayRef,
   flyElRef,
   flyHost,
+  overlayHost,
   activeContent,
   classForKey,
   styleForKey,
@@ -32,14 +35,15 @@ export default function DragLayer({
   return (
     <>
       {activeKey &&
-        flyHost &&
+        overlayHost &&
         createPortal(
           // 跟手位移由 useDragSort 的 positionOverlay 写 transform（left/top 固定为 0）：
           // 逐帧写 left/top 会反复触发布局，是拖动掉帧的来源之一。
           //
-          // portal 进滚动内容层只为**层级归属**：进了（被标签栏压住的）device-body 层叠上下文，
-          // 悬浮层才会和飞行副本一样被设备标签栏挡住、而不是浮在它上面。
-          // `position` 仍是 fixed（相对视口），所以「指针不动时悬浮层在视口里也不动」的跟手语义不变。
+          // portal 进 `.device-body`（**不是**滚动容器 `.tuning-scroll`），只图两件事：
+          // ① 层级落进那个被标签栏压住的层叠上下文；② 吃 `.device-body` 的 clip-path 裁剪。
+          // 它仍是 fixed、也不在滚动容器里，所以不随内容滚动位移 —— 跟手锁定靠的就是这一点；
+          // 一旦挂进滚动容器或套上 transform 祖先，fixed 的包含块会跟着内容滚（滚动多少偏多少）。
           <div
             ref={overlayRef}
             className={`drag-fly overlay-fixed ${classForKey(activeKey)}`}
@@ -50,7 +54,7 @@ export default function DragLayer({
           >
             {activeContent}
           </div>,
-          flyHost,
+          overlayHost,
         )}
       <AnimatePresence>
         {fly && (

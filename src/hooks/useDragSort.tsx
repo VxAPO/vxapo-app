@@ -4,8 +4,10 @@ import { snapPx } from "../lib/snap";
 
 import {
   ANIM_SETTLE_BUFFER_MS,
+  DRAG_BOUNDS_INSET_PX,
   DragListeners,
   DragSession,
+  EDGE_SCROLL_SPEED_PX_S,
   ENTER_DEBOUNCE_MS,
   FLY_TOTAL_MS,
   FlyState,
@@ -39,6 +41,15 @@ function scopeEl(): HTMLElement {
  */
 function scrollHost(): HTMLElement | null {
   return document.querySelector<HTMLElement>(".tuning-scroll");
+}
+
+/**
+ * 内容区（`.content`，那个大圆角矩形）：拖拽悬浮层被夹在它里面。
+ * 系统光标没法被网页锁住（pointer lock 是完全另一套体验），能限制的是跟着光标的这张卡片——
+ * 指针可以继续往外移，卡片到边界就停住。
+ */
+function contentScope(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".content");
 }
 
 export function useDragSort({ group, markDirty, overlayContent, commitOrder }: UseDragSortOptions) {
@@ -75,6 +86,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   const frameRef = useRef<number | undefined>(undefined);
   const pendingPosRef = useRef<{ x: number; y: number } | null>(null);
   const scrollDirtyRef = useRef(false);
+  /** 上一次边缘自动滚动的时刻（ms，0 = 未在滚）：用来按帧时长算步长 */
+  const lastEdgeScrollRef = useRef(0);
 
   const revealDraggedCards = () => {
     // 兜底：无论 is-dragging 类是否被状态更新打断，落地动画期间原卡片内容都必须保持隐藏
@@ -100,6 +113,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     pendingPosRef.current = null;
     scrollDirtyRef.current = false;
+    lastEdgeScrollRef.current = 0;
   };
 
   const removeListeners = () => {
@@ -145,11 +159,23 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     // 刻意不用 translate3d / will-change —— 那是把悬浮层升成合成层，拖动停住时
     // 文字栅格会与常规层不同（见 DragLayer 的「落地交接」注释），跟手过程中得不偿失。
     //
-    // 坐标基准是**滚动内容容器的 padding box**（悬浮层被 portal 进 `.tuning-scroll`，
-    // 而它带 transform 使 fixed 以它为包含块——这样悬浮层才会被容器边界裁掉），
-    // 所以减掉容器自身的视口偏移；容器不滚动位移，这个偏移拖拽期间不变。
-    const left = d.originLeft - d.hostLeft + snapPx(x - d.startX);
-    const top = d.originTop - d.hostTop + snapPx(y - d.startY);
+    // 坐标就是**视口坐标**：悬浮层 portal 进 `.device-body`，而那个容器只用 clip-path 裁剪、
+    // 不带 transform，所以 fixed 仍相对视口定位、滚动时不位移——跟手锁定靠的就是这一点
+    // （凡是换成 transform 包含块、或挪进滚动容器，fixed 都会跟着内容滚，滚动多少偏多少）。
+    let left = d.originLeft + snapPx(x - d.startX);
+    let top = d.originTop + snapPx(y - d.startY);
+    // 再夹进内容区（`.content` 那个大圆角矩形）并留出内缩：指针可以继续往外移，卡片停在边上。
+    // 内缩是为了不贴死边缘（阴影与圆角要余地）；卡片比区域还大时（理论上不会）退化成贴左上角，
+    // 避免算出反向的夹取区间。
+    const ins = DRAG_BOUNDS_INSET_PX;
+    const minLeft = d.bounds.left + ins;
+    const minTop = d.bounds.top + ins;
+    const maxLeft = d.bounds.right - d.cardW - ins;
+    const maxTop = d.bounds.bottom - d.cardH - ins;
+    left = maxLeft < minLeft ? minLeft : Math.min(Math.max(left, minLeft), maxLeft);
+    top = maxTop < minTop ? minTop : Math.min(Math.max(top, minTop), maxTop);
+    d.curLeft = left;
+    d.curTop = top;
     el.style.transform = `translate(${left}px, ${top}px)`;
   };
 
@@ -366,8 +392,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     const originEl = cardScope().querySelector<HTMLElement>(`[data-dnd-id="${key}"]`);
     const scope = scopeEl().getBoundingClientRect();
-    // 悬浮层的坐标基准是滚动内容容器的 padding box（它被 portal 进那个容器）
-    const host = scrollHost()?.getBoundingClientRect();
+    // 内容区矩形：悬浮层的夹取边界（拖动期间窗口/侧栏一般不变，测一次即可）
+    const area = contentScope()?.getBoundingClientRect();
     dragRef.current = {
       key,
       slots,
@@ -383,10 +409,18 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       lastY: y,
       scopeLeft: scope.left,
       scopeTop: scope.top,
-      hostLeft: host?.left ?? 0,
-      hostTop: host?.top ?? 0,
       originLeft: origin.rect.left,
       originTop: origin.rect.top,
+      curLeft: origin.rect.left,
+      curTop: origin.rect.top,
+      cardW: origin.rect.width,
+      cardH: origin.rect.height,
+      bounds: {
+        left: area?.left ?? 0,
+        top: area?.top ?? 0,
+        right: area?.right ?? window.innerWidth,
+        bottom: area?.bottom ?? window.innerHeight,
+      },
       armed: false,
       html: originEl?.innerHTML,
     };
@@ -467,6 +501,35 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     };
 
     /**
+     * 悬浮层贴住内容区上/下界时带动页面滚：指针可以不动，卡片被夹在边界上就持续把内容滚过去
+     * （拖到远处槽位的常用手段）。速度按帧时长换算，60Hz / 120Hz 观感一致；那个方向滚到头就停住。
+     */
+    const stepEdgeScroll = (d: DragSession) => {
+      const host = scrollHost();
+      if (!host) return;
+      const maxScroll = host.scrollHeight - host.clientHeight;
+      if (maxScroll <= 1) return;
+      const edge = DRAG_BOUNDS_INSET_PX;
+      const dir =
+        d.curTop <= d.bounds.top + edge && host.scrollTop > 0
+          ? -1
+          : d.curTop + d.cardH >= d.bounds.bottom - edge && host.scrollTop < maxScroll - 1
+            ? 1
+            : 0;
+      if (!dir) {
+        lastEdgeScrollRef.current = 0;
+        return;
+      }
+      const now = performance.now();
+      // 首帧没有上一帧时刻，按 16ms 估；长帧夹到 64ms，避免从后台切回来时猛跳一大段
+      const dt = lastEdgeScrollRef.current ? Math.min(64, now - lastEdgeScrollRef.current) : 16;
+      lastEdgeScrollRef.current = now;
+      host.scrollTop += (dir * EDGE_SCROLL_SPEED_PX_S * dt) / 1000;
+      // 接着排下一帧：滚动期间没有 pointermove 也得继续滚
+      scheduleFrame();
+    };
+
+    /**
      * 合帧结算：一帧内攒下的指针位置与滚动只处理一次。
      * 顺序固定「先平移槽位、再定位与命中」——命中要按平移后的槽位算。
      */
@@ -485,6 +548,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
         // 纯滚动（没有新指针位置）：用最后位置重算命中，占位判定要跟着槽位走
         hitTest(d.lastX, d.lastY);
       }
+      // 贴边就继续带着页面滚（指针不动也滚）
+      if (d.armed) stepEdgeScroll(d);
     };
 
     const scheduleFrame = () => {
