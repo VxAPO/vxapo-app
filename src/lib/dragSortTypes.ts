@@ -81,6 +81,11 @@ export interface DragSession {
   /** 悬浮层当前左上角（视口坐标，已夹取）：边缘自动滚动按它判断有没有贴住上下界 */
   curLeft: number;
   curTop: number;
+  /** 悬浮层当前中心（视口坐标，已夹取）：**占位命中按它算**，不按真实指针——
+      指针可以跑到内容区外（卡片被夹在边上），那时按指针判会误判成「槽位外」、
+      占位框跳到末尾，与眼睛看到的卡片位置对不上。 */
+  curMidX: number;
+  curMidY: number;
   /** 是否已越过移动阈值真正进入拖拽（未越过前不应用占位/阴影，避免点击闪动） */
   armed: boolean;
   html?: string;

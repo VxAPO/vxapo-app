@@ -176,6 +176,9 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     top = maxTop < minTop ? minTop : Math.min(Math.max(top, minTop), maxTop);
     d.curLeft = left;
     d.curTop = top;
+    // 命中判定一律用**卡片中心**（不是指针）：卡片会被夹在内容区边界上，那时指针可能已经在区外
+    d.curMidX = left + d.cardW / 2;
+    d.curMidY = top + d.cardH / 2;
     el.style.transform = `translate(${left}px, ${top}px)`;
   };
 
@@ -413,6 +416,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       originTop: origin.rect.top,
       curLeft: origin.rect.left,
       curTop: origin.rect.top,
+      curMidX: origin.rect.left + origin.rect.width / 2,
+      curMidY: origin.rect.top + origin.rect.height / 2,
       cardW: origin.rect.width,
       cardH: origin.rect.height,
       bounds: {
@@ -447,11 +452,15 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       tryPosition();
     };
 
-    /** 槽位命中与进入消抖（消抖期间只记调度，计时走完才应用布局）。 */
-    const hitTest = (px: number, py: number) => {
+    /**
+     * 槽位命中与进入消抖（消抖期间只记调度，计时走完才应用布局）。
+     * 判定点一律取**卡片中心**（`curMidX/curMidY`），不取指针：卡片会被夹在内容区边界上，
+     * 那时的指针可能已经跑到区外，按指针判会变成「槽位外」、把占位框甩到末尾（所见非所得）。
+     */
+    const hitTest = () => {
       const d = dragRef.current;
       if (!d) return;
-      const idx = slotIndexAt(px, py, d.slots);
+      const idx = slotIndexAt(d.curMidX, d.curMidY, d.slots);
       if (idx < 0 && !d.everLeft) {
         // 还没离开过原位：忽略“槽位外=末尾”，并取消未生效的调度
         if (pendingSlotRef.current !== null) {
@@ -486,7 +495,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       d.lastX = px;
       d.lastY = py;
       positionOverlay(px, py);
-      hitTest(px, py);
+      hitTest();
     };
 
     /** 拖拽期间页面滚动：槽位矩形按滚动增量平移（不重新测量——布局动画挂在卡片上）。 */
@@ -545,8 +554,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       if (pos) {
         updateAt(pos.x, pos.y);
       } else if (scrolled && d.armed) {
-        // 纯滚动（没有新指针位置）：用最后位置重算命中，占位判定要跟着槽位走
-        hitTest(d.lastX, d.lastY);
+        // 纯滚动（没有新指针位置）：用卡片当前位置重算命中，占位判定要跟着槽位走
+        hitTest();
       }
       // 贴边就继续带着页面滚（指针不动也滚）
       if (d.armed) stepEdgeScroll(d);
