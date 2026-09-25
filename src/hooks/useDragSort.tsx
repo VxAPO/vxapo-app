@@ -11,6 +11,7 @@ import {
   FlyState,
   LAYOUT_ANIM_MS,
   LAYOUT_ANIM_OUTSIDE_MS,
+  LAYOUT_EASE,
   OUTSIDE_DIST,
   Slot,
   UseDragSortOptions,
@@ -61,6 +62,14 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   overlayContentRef.current = overlayContent;
   const optionsRef = useRef({ markDirty, commitOrder });
   optionsRef.current = { markDirty, commitOrder };
+  /**
+   * 跟手帧的合帧调度：一帧内的多次 pointermove / scroll 只结算一次。
+   * 高频指针（高刷触控板、游戏鼠标）一秒能发几百个 move，逐个处理等于同一帧里
+   * 反复写样式、反复测矩形；合帧后每帧只写一次最新位置、只测一次矩形。
+   */
+  const frameRef = useRef<number | undefined>(undefined);
+  const pendingPosRef = useRef<{ x: number; y: number } | null>(null);
+  const scrollDirtyRef = useRef(false);
 
   const revealDraggedCards = () => {
     // 兜底：无论 is-dragging 类是否被状态更新打断，落地动画期间原卡片内容都必须保持隐藏
@@ -78,7 +87,18 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     revealDraggedCards();
   };
 
+  /** 丢弃未决的合帧回调（拖拽结束/取消时调用，防止回调落到下一次拖拽上） */
+  const stopFrame = () => {
+    if (frameRef.current !== undefined) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = undefined;
+    }
+    pendingPosRef.current = null;
+    scrollDirtyRef.current = false;
+  };
+
   const removeListeners = () => {
+    stopFrame();
     const l = listenersRef.current;
     if (!l) return;
     window.removeEventListener("pointermove", l.move);
@@ -114,8 +134,14 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     // 以原始卡片位置为锚点，只对移动增量取整到像素网格：
     // 整条位置取整会让不同分数列（243 / 520.75 / 798.5…）的对齐结果不一，
     // 出现偶数列偏移、奇数列不偏移；锚点取原值保证抓取时完全覆盖原卡片。
-    el.style.left = `${d.originLeft + snapPx(x - d.startX)}px`;
-    el.style.top = `${d.originTop + snapPx(y - d.startY)}px`;
+    //
+    // 位移走 `transform: translate()`（`left`/`top` 留在 CSS 的 0 作静态基准）：
+    // 逐帧写 left/top 属于布局属性，每帧都要重新布局；transform 只改视觉位置。
+    // 刻意不用 translate3d / will-change —— 那是把悬浮层升成合成层，拖动停住时
+    // 文字栅格会与常规层不同（见 DragLayer 的「落地交接」注释），跟手过程中得不偿失。
+    const left = d.originLeft + snapPx(x - d.startX);
+    const top = d.originTop + snapPx(y - d.startY);
+    el.style.transform = `translate(${left}px, ${top}px)`;
   };
 
   const slotIndexAt = (x: number, y: number, slots: Slot[]): number => {
@@ -169,8 +195,15 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       ghostSlot = idx;
     }
     const duration = idx < 0 ? LAYOUT_ANIM_OUTSIDE_MS : LAYOUT_ANIM_MS;
-    const trans = `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-    const scope = cardScope();
+    const trans = `transform ${duration}ms ${LAYOUT_EASE}`;
+    // 一次收齐本组元素再逐卡写样式：原先每个 key 各做一次 querySelector，槽位多时是 O(卡数²)
+    const els = new Map<string, HTMLElement>();
+    cardScope()
+      .querySelectorAll<HTMLElement>(`[data-dnd-group="${group}"]`)
+      .forEach((el) => {
+        const id = el.dataset.dndId;
+        if (id) els.set(id, el);
+      });
     for (const [k, v] of d.virtual) {
       if (k === d.key) continue;
       const t = target.get(k);
@@ -179,14 +212,14 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       if (baseIdx == null) continue;
       const baseRect = d.slots[baseIdx].rect;
       const toRect = d.slots[t].rect;
-      const el = scope.querySelector<HTMLElement>(`[data-dnd-id="${k}"]`);
+      const el = els.get(k);
       if (el) {
         el.style.transition = trans;
         el.style.transform = `translate(${snapPx(toRect.left - baseRect.left)}px, ${snapPx(toRect.top - baseRect.top)}px)`;
       }
     }
     // 被拖卡自身就地占位：在网格流内移动它，避免出现第二张卡抢占槽位
-    const draggedEl = scope.querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
+    const draggedEl = els.get(d.key);
     const draggedBase = d.base.get(d.key);
     if (draggedEl && draggedBase != null) {
       const baseRect = d.slots[draggedBase].rect;
@@ -195,7 +228,9 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       draggedEl.style.transform = `translate(${snapPx(toRect.left - baseRect.left)}px, ${snapPx(toRect.top - baseRect.top)}px)`;
     }
     d.virtual = target;
-    animEndRef.current = performance.now() + LAYOUT_ANIM_MS + ANIM_SETTLE_BUFFER_MS;
+    // 记账要用**本次实际用的**时长：槽位外补位跑的是 OUTSIDE 时长，按 LAYOUT_ANIM_MS 记会让
+    // 动画早已停住、落地却还没开始（松手后白等一截）。
+    animEndRef.current = performance.now() + duration + ANIM_SETTLE_BUFFER_MS;
     setTick((t) => t + 1);
   };
 
@@ -349,6 +384,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       const originRect = d.slots[d.entered].rect;
       setDragSize({ width: originRect.width, height: originRect.height });
       const tryPosition = () => {
+        // 拖拽已结束（或已被新拖拽接管）就停止轮询，避免空转的 rAF 链
+        if (!dragRef.current || dragRef.current.key !== d.key) return;
         if (overlayRef.current) {
           positionOverlay(px, py);
         } else {
@@ -358,13 +395,10 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       tryPosition();
     };
 
-    /** 按指针位置更新悬浮层与占位命中（消抖后应用布局）。滚动时用最后位置重算。 */
-    const updateAt = (px: number, py: number) => {
+    /** 槽位命中与进入消抖（消抖期间只记调度，计时走完才应用布局）。 */
+    const hitTest = (px: number, py: number) => {
       const d = dragRef.current;
       if (!d) return;
-      d.lastX = px;
-      d.lastY = py;
-      positionOverlay(px, py);
       const idx = slotIndexAt(px, py, d.slots);
       if (idx < 0 && !d.everLeft) {
         // 还没离开过原位：忽略“槽位外=末尾”，并取消未生效的调度
@@ -393,6 +427,62 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       }, ENTER_DEBOUNCE_MS);
     };
 
+    /** 按指针位置更新悬浮层与占位命中（消抖后应用布局）。 */
+    const updateAt = (px: number, py: number) => {
+      const d = dragRef.current;
+      if (!d) return;
+      d.lastX = px;
+      d.lastY = py;
+      positionOverlay(px, py);
+      hitTest(px, py);
+    };
+
+    /** 拖拽期间页面滚动：槽位矩形按滚动增量平移（不重新测量——布局动画挂在卡片上）。 */
+    const syncScroll = (d: DragSession) => {
+      const scope = scopeEl().getBoundingClientRect();
+      const dx = scope.left - d.scopeLeft;
+      const dy = scope.top - d.scopeTop;
+      if (!dx && !dy) return;
+      d.scopeLeft = scope.left;
+      d.scopeTop = scope.top;
+      shiftSlots(d, dx, dy);
+    };
+
+    /**
+     * 合帧结算：一帧内攒下的指针位置与滚动只处理一次。
+     * 顺序固定「先平移槽位、再定位与命中」——命中要按平移后的槽位算。
+     */
+    const flushFrame = () => {
+      frameRef.current = undefined;
+      const d = dragRef.current;
+      if (!d) return;
+      const scrolled = scrollDirtyRef.current;
+      scrollDirtyRef.current = false;
+      if (scrolled) syncScroll(d);
+      const pos = pendingPosRef.current;
+      pendingPosRef.current = null;
+      if (pos) {
+        updateAt(pos.x, pos.y);
+      } else if (scrolled && d.armed) {
+        // 纯滚动（没有新指针位置）：用最后位置重算命中，占位判定要跟着槽位走
+        hitTest(d.lastX, d.lastY);
+      }
+    };
+
+    const scheduleFrame = () => {
+      // 已有未决回调就不再排——它读的是"最后写入"的位置，天然合帧
+      if (frameRef.current === undefined) frameRef.current = requestAnimationFrame(flushFrame);
+    };
+
+    /** 同步结算未决帧：松手前调用，量到的起点才是指针最后停下的位置 */
+    const flushFrameNow = () => {
+      if (frameRef.current !== undefined) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = undefined;
+      }
+      flushFrame();
+    };
+
     const onMove = (e: PointerEvent) => {
       if (dragTokenRef.current !== token) return;
       const d = dragRef.current;
@@ -401,30 +491,31 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
         if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 4) return;
         arm(d, e.clientX, e.clientY);
       }
-      updateAt(e.clientX, e.clientY);
+      // 只记录最新位置，真正的定位与命中交给下一帧统一做
+      d.lastX = e.clientX;
+      d.lastY = e.clientY;
+      pendingPosRef.current = { x: e.clientX, y: e.clientY };
+      scheduleFrame();
     };
 
     /**
      * 拖拽期间页面滚动（滚轮/触控板/自动滚动的都算）：拖着的卡在视口里跟手不动，
      * 但卡片区整体在动——槽位矩形必须同步平移，否则占位框与落点判定会按旧坐标算。
+     * 滚动事件比帧还密，量舞台矩形（强制布局）与写样式都合到帧里做。
      */
     const onScroll = () => {
-      const d = dragRef.current;
-      if (!d) return;
-      const scope = scopeEl().getBoundingClientRect();
-      const dx = scope.left - d.scopeLeft;
-      const dy = scope.top - d.scopeTop;
-      if (!dx && !dy) return;
-      d.scopeLeft = scope.left;
-      d.scopeTop = scope.top;
-      shiftSlots(d, dx, dy);
-      if (d.armed) updateAt(d.lastX, d.lastY);
+      if (!dragRef.current) return;
+      scrollDirtyRef.current = true;
+      scheduleFrame();
     };
 
     const onUp = (e: PointerEvent) => {
       if (dragTokenRef.current !== token) return;
       const d = dragRef.current;
       pointerDownRef.current = false;
+      // 先把未决的跟手帧结算掉：松手那一帧的位置可能还没写进样式，
+      // 从悬浮层量到的飞行起点必须是视觉上的当前位置
+      flushFrameNow();
       removeListeners();
       clearDragTimers();
       if (!d) return;
@@ -521,7 +612,12 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
    * 元素层级是 fixed（在滚动容器之外），所以只能用命令式补偿——顺便避免每滚一帧重渲染。
    */
   useEffect(() => {
-    const onScroll = () => {
+    let raf: number | undefined;
+    let dirty = false;
+    const apply = () => {
+      raf = undefined;
+      if (!dirty) return;
+      dirty = false;
       const el = flyElRef.current;
       const base = flyScopeRef.current;
       if (!el || !base) return;
@@ -532,8 +628,17 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       el.style.left = `${flyLandRef.current.left - dx}px`;
       el.style.top = `${flyLandRef.current.top - dy}px`;
     };
+    // 滚动事件比帧还密：测矩形（强制布局）与写样式合到帧里，一帧最多一次
+    const onScroll = () => {
+      if (!flyElRef.current || !flyScopeRef.current) return;
+      dirty = true;
+      if (raf === undefined) raf = requestAnimationFrame(apply);
+    };
     window.addEventListener("scroll", onScroll, true);
-    return () => window.removeEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      if (raf !== undefined) cancelAnimationFrame(raf);
+    };
   }, []);
 
   useEffect(() => {

@@ -1,19 +1,31 @@
 import type { ReactNode } from "react";
+import { EASE_OUT_SOFT } from "./motionEase";
 
-/** 稳定性约束：消抖必须长于所有拖拽动画，避免动画未结束又触发新一轮布局 */
+/** 稳定性约束：消抖必须长于所有拖拽动画（下界 = LAYOUT_ANIM_MS + ANIM_SETTLE_BUFFER_MS），
+    避免动画未结束又触发新一轮布局 */
 export const ENTER_DEBOUNCE_MS = 500;
 export const LAYOUT_ANIM_MS = 400;
 export const LAYOUT_ANIM_OUTSIDE_MS = 320;
-/** 松手时若布局动画未结束，多等这段缓冲再落地，避免动画被硬切 */
+/** 避让/占位布局动画曲线：与视图收窄（viewMotion.COLLAPSE_EASE）同一条「先快后慢」，
+    单源在 lib/motionEase.ts —— 两处必须一致，改这里等于同时改两处手感 */
+export const LAYOUT_EASE = EASE_OUT_SOFT;
+/** 松手时若布局动画未结束，多等这段缓冲再落地，避免动画被硬切。注意它与
+    LAYOUT_ANIM_MS / LAYOUT_ANIM_OUTSIDE_MS 的配对由 applyLayout 按实际用到的时长记账 */
 export const ANIM_SETTLE_BUFFER_MS = 80;
 /** 距离所有槽位超过该值才算真正离开卡片区 */
 export const OUTSIDE_DIST = 48;
-/** 落地动画总时长：0.3s 动画 + 0.1s 无阴影停顿 + 缓冲 */
-export const FLY_TOTAL_MS = 430;
-/** 弧线飞行（位置动画）时长：位置只跑这一段，之后交回 left/top 静态定位 */
-export const FLY_MOVE_MS = 216;
 /** 弧线与阴影的总时长（framer-motion 的 duration） */
 export const FLY_ANIM_MS = 300;
+/** 位置段占总时长的比例：位置跑完后的余量留给阴影收尾与「落定」停顿 */
+export const FLY_MOVE_RATIO = 0.72;
+/** 弧线飞行（位置动画）时长：framer 的 x/y times 由这个比例换算，位置只跑这一段，之后停住并交接 */
+export const FLY_MOVE_MS = Math.round(FLY_ANIM_MS * FLY_MOVE_RATIO);
+/** 位置到位的无阴影停顿：让「落定」看得见，之后才揭示原卡片 */
+export const FLY_HOLD_MS = 100;
+/** 副本卸载前的时序缓冲：吸收 framer 收尾与定时器抖动 */
+export const FLY_TAIL_MS = 30;
+/** 落地动画总时长：0.3s 动画 + 0.1s 无阴影停顿 + 缓冲 */
+export const FLY_TOTAL_MS = FLY_ANIM_MS + FLY_HOLD_MS + FLY_TAIL_MS;
 /** 位置动画结束到「交接」的余量：等 framer 最后一帧写完再改写样式，避免被它的缓存覆盖 */
 export const FLY_HANDOVER_MS = FLY_MOVE_MS + 40;
 

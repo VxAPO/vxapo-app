@@ -677,7 +677,7 @@
   100% { transform: translateX(0) rotate(0); }
 }
 
-/* ── 卡片拖拽（dnd-kit） ───────────────────────────────────── */
+/* ── 卡片拖拽（useDragSort 指针级引擎） ─────────────────────── */
 
 .drag-card {
   position: relative;
@@ -715,6 +715,8 @@
   min-width: 0;
 }
 
+/* 抓取悬浮层：top/left 恒为 0 作静态基准，跟手位移由 JS 写 transform（不触发布局）。
+   飞行副本的 left/top 则是落点基准，同样由 JS 写、位移走 framer 的 x/y。 */
 .drag-fly.overlay-fixed {
   position: fixed;
   top: 0;
@@ -774,10 +776,12 @@
   background: var(--text-secondary);
 }
 
-/* 落地：飞行副本的灰条从 hover 色过渡回常规灰 */
+/* 落地：飞行副本的灰条从 hover 色过渡回常规灰。
+   0.3s 与飞行动画时长 FLY_ANIM_MS 对齐（原先 0.45s 超过落地总时长 FLY_TOTAL_MS，
+   副本卸载时这段过渡跑不完，只剩个尾巴被硬切）。 */
 .drag-fly.fly-anim .drag-bar-line {
   background: var(--border-strong);
-  animation: drag-bar-land 0.45s ease-out forwards;
+  animation: drag-bar-land 0.3s ease-out forwards;
 }
 
 @keyframes drag-bar-land {

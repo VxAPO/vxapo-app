@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, type CSSProperties, type RefObject, type ReactNode } from "react";
-import { FLY_ANIM_MS, FLY_HANDOVER_MS, FLY_MOVE_MS, type FlyState } from "../lib/dragSortTypes";
+import { FLY_ANIM_MS, FLY_HANDOVER_MS, FLY_MOVE_RATIO, type FlyState } from "../lib/dragSortTypes";
 import { snapPx } from "../lib/snap";
 
 interface DragLayerProps {
@@ -28,6 +28,8 @@ export default function DragLayer({
   return (
     <>
       {activeKey && (
+        // 跟手位移由 useDragSort 的 positionOverlay 写 transform（left/top 固定为 0）：
+        // 逐帧写 left/top 会反复触发布局，是拖动掉帧的来源之一
         <div
           ref={overlayRef}
           className={`drag-fly overlay-fixed ${classForKey(activeKey)}`}
@@ -104,7 +106,8 @@ function FlyPath({
   const ys = pts.map((p) => snapPx(p.top) - landedTop);
   xs[xs.length - 1] = 0;
   ys[ys.length - 1] = 0;
-  const moveTimes = pts.map((_, i) => (i / (N - 1)) * (FLY_MOVE_MS / FLY_ANIM_MS));
+  // 位置段的 times 只铺到 FLY_MOVE_RATIO：位置先跑完，余下的时长留给阴影收尾与「落定」停顿
+  const moveTimes = pts.map((_, i) => (i / (N - 1)) * FLY_MOVE_RATIO);
   /**
    * 位置动画跑完（`FLY_MOVE_MS`）后做一次「交接」：撤掉 `transform` 与 `will-change`，
    * 让副本从合成层回到常规绘制（合成层的文字抗锯齿与栅格分辨率和常规层不同，
@@ -159,7 +162,12 @@ function FlyPath({
         duration: FLY_ANIM_MS / 1000,
         x: { duration: FLY_ANIM_MS / 1000, times: moveTimes, ease: "linear" },
         y: { duration: FLY_ANIM_MS / 1000, times: moveTimes, ease: "linear" },
-        boxShadow: { duration: FLY_ANIM_MS / 1000, times: [0, 0.8, 0.94, 1], ease: "easeOut" },
+        // 阴影从位置段结束的那一刻开始收（times 与 moveTimes 同源），而不是各记一套比例
+        boxShadow: {
+          duration: FLY_ANIM_MS / 1000,
+          times: [0, FLY_MOVE_RATIO, 0.94, 1],
+          ease: "easeOut",
+        },
       }}
     >
       {fly.content}

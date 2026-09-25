@@ -3,7 +3,10 @@
  *
  * 平移、高度收窄、滚动条长度变形三者必须同源：数值散落在各文件里迟早漂移，
  * 于是统一放这里。改这里的数字等于改时序契约（见 UI 设计规范 03/06）。
+ * 曲线本身单源在 lib/motionEase.ts —— 卡片拖拽避让共用同一条，改一处即三处生效。
  */
+
+import { EASE_OUT_SOFT, EASE_OUT_SOFT_P1, EASE_OUT_SOFT_P2 } from "./motionEase";
 
 /** 视图平移动画时长（ms）；stage 的 transition 与收窄启动时刻共用 */
 export const VIEW_SLIDE_MS = 320;
@@ -17,11 +20,11 @@ export const COLLAPSE_MS_MIN = 260;
 export const COLLAPSE_MS_PER_PX = 2;
 /** 小于这个高度差直接对齐、不播动画（这点位移肉眼看不出来） */
 export const COLLAPSE_SNAP_PX = 4;
-/** 收窄与滚动条变形共用曲线（先快后慢） */
-export const COLLAPSE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+/** 收窄与滚动条变形共用曲线（先快后慢）；与拖拽避让 LAYOUT_EASE 同源（lib/motionEase.ts） */
+export const COLLAPSE_EASE = EASE_OUT_SOFT;
 /** 上面那条曲线的控制点，供 JS 侧求值（两者必须一致） */
-const EASE_P1 = { x: 0.22, y: 1 };
-const EASE_P2 = { x: 0.36, y: 1 };
+const EASE_P1 = EASE_OUT_SOFT_P1;
+const EASE_P2 = EASE_OUT_SOFT_P2;
 
 /** 高度差 → 动画时长：夹在 [COLLAPSE_MS_MIN, VIEW_COLLAPSE_MS] 之间 */
 export function heightDeltaMs(deltaPx: number): number {
