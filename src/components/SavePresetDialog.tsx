@@ -91,7 +91,8 @@ function SavePresetDialog({
               </div>
             </div>
             <div className="vx-field">
-              <span className="vx-field-label">{t("preset.bandDesc")}</span>
+              {/* 分区标题用通用的「滤波器」（`filters`）；「语义描述」改到输入框做占位文字 */}
+              <span className="vx-field-label">{t("filters")}</span>
               <div className="preset-band-list os-scroll" ref={bandListRef}>
                 <OverlayScrollbar targetRef={bandListRef} thumbRight={-6} zIndex={65} />
                 {blocks.map((b, i) => {

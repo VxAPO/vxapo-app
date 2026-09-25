@@ -85,7 +85,7 @@ export const en: Record<string, string> = {
   "preset.name.placeholder": "Custom preset",
   "preset.desc.placeholder": "e.g. FPS footsteps and gunshots",
   "preset.color": "Color",
-  "preset.bandDesc": "Per-band description",
+  "preset.bandDesc": "Semantic description",
   "preset.saveTitle": "Save as custom preset",
   "import.title": "Import Config",
   "import.target": "Target device",

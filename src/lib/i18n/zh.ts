@@ -85,7 +85,7 @@ export const zh: Record<string, string> = {
   "preset.name.placeholder": "自定义预设",
   "preset.desc.placeholder": "例如：适合 FPS 的脚步与枪声增强",
   "preset.color": "配色",
-  "preset.bandDesc": "每段语义描述",
+  "preset.bandDesc": "语义描述",
   "preset.saveTitle": "保存为自定义预设",
   "import.title": "导入配置",
   "import.target": "目标设备",
