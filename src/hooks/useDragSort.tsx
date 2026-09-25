@@ -501,7 +501,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     /**
      * 拖拽期间页面滚动（滚轮/触控板/自动滚动的都算）：拖着的卡在视口里跟手不动，
      * 但卡片区整体在动——槽位矩形必须同步平移，否则占位框与落点判定会按旧坐标算。
-     * 滚动事件比帧还密，量舞台矩形（强制布局）与写样式都合到帧里做。
+     * 这里可以合帧：只影响「哪张卡让位」的判定，晚一帧肉眼看不出来。
+     * 飞行副本的滚动补偿则**不能**合帧——那是视觉补偿，晚一帧滚动那一下就偏了（见下方 effect）。
      */
     const onScroll = () => {
       if (!dragRef.current) return;
@@ -612,12 +613,13 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
    * 元素层级是 fixed（在滚动容器之外），所以只能用命令式补偿——顺便避免每滚一帧重渲染。
    */
   useEffect(() => {
-    let raf: number | undefined;
-    let dirty = false;
-    const apply = () => {
-      raf = undefined;
-      if (!dirty) return;
-      dirty = false;
+    /**
+     * 必须在 scroll 事件里**同步**补偿，不能合帧推到下一帧 rAF：
+     * 滚动位移在事件所在那一帧就参与绘制，补偿晚一帧 ＝ 滚动的那一帧副本仍被内容带偏，
+     * 看起来就是"滚一下动画抖一下"。滚动事件与帧对齐（一帧最多触发一次），
+     * 这里测一次舞台矩形（强制布局）的代价可以接受。
+     */
+    const onScroll = () => {
       const el = flyElRef.current;
       const base = flyScopeRef.current;
       if (!el || !base) return;
@@ -628,17 +630,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       el.style.left = `${flyLandRef.current.left - dx}px`;
       el.style.top = `${flyLandRef.current.top - dy}px`;
     };
-    // 滚动事件比帧还密：测矩形（强制布局）与写样式合到帧里，一帧最多一次
-    const onScroll = () => {
-      if (!flyElRef.current || !flyScopeRef.current) return;
-      dirty = true;
-      if (raf === undefined) raf = requestAnimationFrame(apply);
-    };
     window.addEventListener("scroll", onScroll, true);
-    return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      if (raf !== undefined) cancelAnimationFrame(raf);
-    };
+    return () => window.removeEventListener("scroll", onScroll, true);
   }, []);
 
   useEffect(() => {
