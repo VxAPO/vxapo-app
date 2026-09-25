@@ -36,13 +36,15 @@ const EASE_P2 = EASE_OUT_SOFT_P2;
  * 每单位权重的时间 = min(`STAGGER_STEP_MS`, 窗口 / 最大权重)。封顶那种写法会让超过窗口的
  * 卡片挤在同一个时刻冒出来，把「越远越晚」的顺序关系断掉（踩过）。
  */
-export const STAGGER_FADE_MS = 200;
+export const STAGGER_FADE_MS = 180;
 /** 每个权重单位的时间上限（张数少时用它，避免两三张就拉出 200ms 的跨度） */
 export const STAGGER_STEP_MS = 14;
 /** 错峰窗口：最后一张的延迟不超过它；张数多时步长自动变密 */
 export const STAGGER_WINDOW_MS = 200;
-/** 淡入同时的轻微上移（px）：0 = 纯淡入 */
-export const STAGGER_RISE_PX = 6;
+/** 落位前的起手位移（px）：卡片从上方这么远处落下来（配合 `EASE_OUT_BACK` 过冲回弹）。
+    注意方向——卡片起始在**上方**，是"往下展"；写成正值就成了"从下方往上收"（曾如此）。
+    0 = 纯淡入。 */
+export const STAGGER_DROP_PX = 6;
 /** 排序行容差：top 差在此以内视为同一行、行内按 left 排 */
 export const STAGGER_ROW_TOL_PX = 8;
 

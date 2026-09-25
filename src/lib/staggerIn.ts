@@ -1,6 +1,9 @@
 /**
  * 切换时卡片的错峰淡入（左上 → 右下）。
  *
+ * 出现手感：卡片从上方一点（`STAGGER_DROP_PX`）**往下落位**，靠 `EASE_OUT_BACK` 在落点轻轻
+ * 过冲再收回——「往下展一下再回弹」。位移千万别写成正值，那就成了「从下方往上收」。
+ *
  * 用 WAAPI 命令式播，不碰 React 状态、更不重挂载：两套视图常驻 DOM、31 张参数卡刻意不重建
  * （见 `ViewStage` 的注释），重建一次子树的首帧布局尖峰比这段动画本身贵得多。
  *
@@ -11,10 +14,10 @@
  * - 动画跑完自动回到正常状态（CSS 的 opacity 1），不需要清理，也不留内联样式。
  */
 
-import { EASE_OUT_SOFT } from "./motionEase";
+import { EASE_OUT_BACK } from "./motionEase";
 import {
+  STAGGER_DROP_PX,
   STAGGER_FADE_MS,
-  STAGGER_RISE_PX,
   STAGGER_ROW_TOL_PX,
   STAGGER_STEP_MS,
   STAGGER_WINDOW_MS,
@@ -53,13 +56,14 @@ export function playStaggerIn(root: ParentNode | null | undefined): void {
     rowEls.forEach((el, c) => {
       el.animate(
         [
-          { opacity: 0, transform: `translateY(${STAGGER_RISE_PX}px)` },
+          // 起手在**上方**（负值），往下落位；配 EASE_OUT_BACK 在落点轻轻过冲再收回
+          { opacity: 0, transform: `translateY(${-STAGGER_DROP_PX}px)` },
           { opacity: 1, transform: "translateY(0)" },
         ],
         {
           duration: STAGGER_FADE_MS,
           delay: (r * cols + c) * unit,
-          easing: EASE_OUT_SOFT,
+          easing: EASE_OUT_BACK,
           fill: "backwards",
         },
       );
