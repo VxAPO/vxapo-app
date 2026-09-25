@@ -336,6 +336,30 @@ describe("setChannelPreampMode", () => {
     useConfigStore.getState().setChannelPreampMode(false, ["L", "R"]);
     expect(useConfigStore.getState().effects).toBe(before);
   });
+
+  it("关闭通道选择器：块也一并合并到首声道（丢非首声道块、抹掉声道标识）", () => {
+    useConfigStore.setState({
+      blocks: [
+        block({ id: "l1", channel: "L" }),
+        block({ id: "r1", channel: "R" }),
+        block({ id: "free" }),
+      ],
+      effects: [],
+    });
+    useConfigStore.getState().setChannelPreampMode(true, ["L", "R"]);
+    const blocks = useConfigStore.getState().blocks;
+    expect(blocks.map((b) => b.id)).toEqual(["l1", "free"]);
+    expect(blocks.every((b) => b.channel === undefined)).toBe(true);
+  });
+
+  it("开启通道选择器不动块，且已是单链时关闭也是原引用（无谓重渲染）", () => {
+    const merged = [block({ id: "l1" }), block({ id: "free" })];
+    useConfigStore.setState({ blocks: merged, effects: [] });
+    useConfigStore.getState().setChannelPreampMode(false, ["L", "R"]);
+    expect(useConfigStore.getState().blocks).toBe(merged);
+    useConfigStore.getState().setChannelPreampMode(true, ["L", "R"]);
+    expect(useConfigStore.getState().blocks).toBe(merged);
+  });
 });
 
 describe("normalizeChainGain", () => {

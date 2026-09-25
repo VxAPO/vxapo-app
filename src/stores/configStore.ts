@@ -534,13 +534,23 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         }));
         return { effects: [...prev.effects.filter((e) => e.type !== "preamp"), ...perChannel] };
       }
-      // 关闭通道选择器：按第一声道合并，取消声道标识
+      // 关闭通道选择器：块与基准电平一起**合并到首声道**——只留无声道标识或首声道的块，并抹掉声道标识。
+      // 这条与 buildToml 在 mode=false 时的落盘口径完全相同（只写首声道的块、且不写 channels），于是
+      // 内存与文件同一步到位。若只合并 effects，别的声道的块会继续留在内存里、等 2s 轮询读到新文件才
+      // 消失——那期间语义视图会把它们画出来、随后又消失，表现为「关掉选择器后右声道的卡片显示一会再消失」
+      // （踩过）。代价是这些块连同它们的频段一起被丢弃，这是「关闭＝真合并」的既定语义。
+      const merged = prev.blocks.some((b) => b.channel)
+        ? prev.blocks
+            .filter((b) => !b.channel || b.channel === first)
+            .map((b) => (b.channel ? { ...b, channel: undefined } : b))
+        : prev.blocks;
       const firstPreamp = prev.effects.find(
         (e) => e.type === "preamp" && e.channels?.includes(first),
       );
-      if (!firstPreamp) return { effects: prev.effects };
+      if (!firstPreamp) return { blocks: merged, effects: prev.effects };
       const gain = typeof firstPreamp.params?.gain_db === "number" ? firstPreamp.params.gain_db : 0;
       return {
+        blocks: merged,
         effects: [
           ...prev.effects.filter((e) => e.type !== "preamp"),
           {

@@ -68,7 +68,6 @@ export const en: Record<string, string> = {
   "bands": "Bands",
   "filters": "Filters",
   "freqResponse": "Frequency Response",
-  "allChannels": "All channels",
   "aria.sidebarWidth": "Resize sidebar",
   "effects": "Effects",
   "channels": "Channels",

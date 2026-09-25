@@ -45,6 +45,8 @@ interface CurvePlotProps {
   yTop: number;
   yBottom?: number;
   preampGainDb?: number;
+  /** 与 blocks 同档的评估频点（App 的曲线快照里算好的）；缺省按 blocks 现算，单独用本组件时不必传 */
+  evalFreqs?: number[];
 }
 
 function CurvePlot({
@@ -54,12 +56,16 @@ function CurvePlot({
   yTop,
   yBottom = -16,
   preampGainDb = 0,
+  evalFreqs,
 }: CurvePlotProps) {
   // 曲线路径始终按当前 curveW/blocks 重算，保证与网格/viewBox 完全一致，
   // 拖拽改宽度时不会出现"旧宽度的线配当前宽度网格"导致的越界。
+  // 评估频点优先用调用方给的那一份：它与量程（yTop/yBottom）出自同一份快照，两者档位不会错开
+  // （见 App 里 liveCurve 的注释）；没给就按 blocks 现算，单独用本组件时行为不变。
   const curveD = useMemo(
-    () => freqPath(blocks, fs, curveW, yTop, preampGainDb, buildEvalFreqs(blocks), yBottom),
-    [blocks, fs, curveW, yTop, preampGainDb, yBottom],
+    () =>
+      freqPath(blocks, fs, curveW, yTop, preampGainDb, evalFreqs ?? buildEvalFreqs(blocks), yBottom),
+    [blocks, fs, curveW, yTop, preampGainDb, evalFreqs, yBottom],
   );
   const pathRef = useRef<SVGPathElement | null>(null);
   const morphAnimRef = useRef<Animation | null>(null);

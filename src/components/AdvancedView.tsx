@@ -4,7 +4,7 @@ import type { Block, EffectItem } from "../lib/model";
 import { accentStyle } from "../lib/blocks";
 import { channelLabel } from "../lib/channels";
 import type { DragApi } from "../lib/drag";
-import { visibleEffectsFor } from "../lib/filters";
+import { visibleBlockFor, visibleEffectsFor } from "../lib/filters";
 import { effectiveChannel } from "../stores/channelStore";
 import { useConfigStore } from "../stores/configStore";
 import DragCard from "./DragCard";
@@ -65,10 +65,8 @@ function AdvancedView({
   const showFilterEmptyHint = blocks.length === 0;
   const showEffectEmptyHint = visibleEffects.length === 0;
 
-  const visible = (b: Block) =>
-    channelOn
-      ? (b.channel ?? firstChannel) === effActiveChannel
-      : !b.channel || b.channel === firstChannel;
+  // 判据与语义视图、曲线、落盘口径同源（lib/filters.visibleBlockFor）
+  const visible = (b: Block) => visibleBlockFor(b, channelOn, firstChannel, effActiveChannel);
   let chOrdinal = 0;
 
   return (

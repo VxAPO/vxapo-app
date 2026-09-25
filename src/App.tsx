@@ -4,6 +4,7 @@ import "./App.css";
 import "./new.css";
 import type { Device } from "./lib/model";
 import { channelNamesFor } from "./lib/channels";
+import { visibleBlocksFor } from "./lib/filters";
 import { exportConfig, friendlyError, writeConfig } from "./lib/api";
 import { parseConfigWithTail } from "./lib/toml";
 import { snapPx } from "./lib/snap";
@@ -113,12 +114,12 @@ export default function App() {
   const { theme, setTheme } = useTheme();
   const { isMax, minimize, toggleMaximize, close } = useWindowControls();
 
-  // 峰值增益跟随当前可见调音链：通道模式只算当前选中声道，非通道模式算整条链
+  // 峰值增益、量程与曲线都跟随**同一个目标声道**：通道模式取当前选中声道，关闭选择器时回退首声道（左）。
+  // 判据与两个视图、与 buildToml 的落盘口径同源（lib/filters.visibleBlockFor）——非通道模式**不是**
+  // 「算整条链」：各声道的块各自带 channel、驱动侧分开作用，叠出来的那条响应在真实链路里并不存在，
+  // 关掉选择器那一瞬间会先画出一条叠加曲线、下一档才回正（踩过）。
   const visibleBlocks = useMemo(
-    () =>
-      channelOn
-        ? blocks.filter((b) => (b.channel ?? firstChannel) === effActiveChannel)
-        : blocks,
+    () => visibleBlocksFor(blocks, channelOn, firstChannel, effActiveChannel),
     [blocks, channelOn, firstChannel, effActiveChannel],
   );
   const preampGainDb = useMemo(() => {
@@ -133,29 +134,27 @@ export default function App() {
   }, [effects, channelOn, effActiveChannel]);
   // 通道过滤后的效果器列表已由两个视图各自订阅计算（决策 4 阶段 A-2b）。
   const fs = selected?.sample_rate ?? 48000;
-  // 峰值/谷值曲线计算较重（31 段 × 数百评估点），拖动滑块时固定间隔重算
-  //（默认 120ms），滑块 move 只重渲染被拖的卡片，保证拖动帧数。
-  const deferredCurve = useThrottledCompute(() => {
+  /**
+   * 频响图的一**份数据快照**：评估频点与峰值/谷值一次算完，量程（`yTop/yBottom`）与曲线路径
+   * **必须取自同一份**——`useThrottledCompute` 按设计让渲染侧滞后一档，而绘制侧原先按当前 blocks
+   * 现算评估点，两者档位就会不一致：关掉通道选择器那一帧里路径已是新目标、量程还是旧值，曲线于是
+   * 按错量程补间一档、下一档才回正——观感就是「过渡第一次取到错误值 / 坐标轴波动」（形状一直是对的，
+   * 错的是坐标轴，踩过）。曲线**宽度**仍每次现算（保证与网格/viewBox 一致，拖拽改宽度不越界）。
+   */
+  const liveCurve = useMemo(() => {
     const freqs = buildEvalFreqs(visibleBlocks);
     const range = curveRange(freqs, visibleBlocks, fs, preampGainDb);
-    return { freqs, peak: range.max, trough: range.min };
+    return { blocks: visibleBlocks, freqs, peak: range.max, trough: range.min };
   }, [visibleBlocks, fs, preampGainDb]);
-  const { peakGain, troughGain } = useMemo(() => {
-    if (deferredCurve) {
-      return { peakGain: deferredCurve.peak, troughGain: deferredCurve.trough };
-    }
-    const freqs = buildEvalFreqs(visibleBlocks);
-    const range = curveRange(freqs, visibleBlocks, fs, preampGainDb);
-    return {
-      peakGain: range.max,
-      troughGain: range.min,
-    };
-  }, [deferredCurve, visibleBlocks, fs, preampGainDb]);
+  // 曲线计算较重（31 段 × 数百评估点），按固定间隔节流；首帧 deferred 还是 null，直接用现算的这份
+  const deferredCurve = useThrottledCompute(() => liveCurve, [visibleBlocks, fs, preampGainDb]);
+  const curveSnap = deferredCurve ?? liveCurve;
+  const peakGain = curveSnap.peak;
   // 纵轴量程：峰值/谷值取整到 2dB 档，并对齐到刻度步长（否则网格首末两条压不住绘图区上下沿，
   // 表现为"虚线没贴住纵轴顶端、刻度数字整体偏移"，见 lib/curve.axisRange）
   const { top: yTop, bottom: yBottom } = useMemo(
-    () => axisRange(peakGain, troughGain),
-    [peakGain, troughGain],
+    () => axisRange(curveSnap.peak, curveSnap.trough),
+    [curveSnap],
   );
 
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -597,16 +596,18 @@ export default function App() {
                 />
               </div>
               <CurvePanel
-                blocks={blocks}
+                /* 交给绘制侧的是**快照里的那一份**：与 yTop/yBottom 同档，避免按当前 blocks 现算导致
+                   路径与量程错开一档（见上面 liveCurve 的注释） */
+                blocks={curveSnap.blocks}
+                evalFreqs={curveSnap.freqs}
                 fs={fs}
                 yTop={yTop}
                 yBottom={yBottom}
                 preampGainDb={preampGainDb}
-                curveChannel={channelOn ? effActiveChannel : "all"}
+                curveChannel={channelOn ? effActiveChannel : firstChannel}
                 onCurveChannelChange={handleCurveChannelChange}
                 channelOn={channelOn}
                 channelNames={channelNames}
-                firstChannel={channelNames[0] ?? "L"}
               />
             </div>
               </>

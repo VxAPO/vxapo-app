@@ -4,7 +4,7 @@ import type { Block, EffectItem } from "../lib/model";
 import { accentStyle } from "../lib/blocks";
 import { channelLabel } from "../lib/channels";
 import type { DragApi } from "../lib/drag";
-import { visibleEffectsFor } from "../lib/filters";
+import { visibleBlockFor, visibleEffectsFor } from "../lib/filters";
 import { effectiveChannel } from "../stores/channelStore";
 import { useConfigStore } from "../stores/configStore";
 import DragCard from "./DragCard";
@@ -63,10 +63,13 @@ function PresetView({
     () => visibleEffectsFor(effects, channelOn, effActive),
     [effects, channelOn, effActive],
   );
-  // 通道模式只显示当前声道的块（判据与 AdvancedView 一致）；非通道模式维持原样、全部显示。
+  // 显示哪些块由**共享判据**决定（与参数视图完全一致，见 lib/filters.visibleBlockFor）：通道模式看当前
+  // 声道，关闭选择器时回退首声道。**不再是**「非通道模式全部显示」——那样关掉选择器会把别的声道的卡
+  // 也画出来（关掉选择器时 store 已把块合并到首声道，这里再按同一判据过一遍，内存与文件不一致的那一瞬
+  // 也不会冒出别的声道的卡）。
   // 用 `blocks.map` + `return null` 过滤而不是先 filter 成数组：`bi` 必须是 store 里的**真实下标**，
   // `onPatchBlock` / `onRemoveBlock` / `patchBand` 都按下标寻址，错位会改到别的块。
-  const visible = (b: Block) => !channelOn || (b.channel ?? firstChannel) === effActive;
+  const visible = (b: Block) => visibleBlockFor(b, channelOn, firstChannel, effActive);
   const showFilterEmptyHint = !blocks.some(visible);
   const showEffectEmptyHint = visibleEffects.length === 0;
 

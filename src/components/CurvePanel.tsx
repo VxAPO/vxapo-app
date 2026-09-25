@@ -8,7 +8,13 @@ import CurvePlot from "./CurvePlot";
 import VxSelect from "./VxSelect";
 
 interface CurvePanelProps {
+  /**
+   * 要画的块：**已经**是目标声道的那一份（App 从曲线快照里给出，见 App 里 liveCurve 的注释）。
+   * 这里不再按声道过滤——快照按设计滞后一档，拿它跟当前声道现算比对，会在切声道的那一档把曲线滤空。
+   */
   blocks: Block[];
+  /** 与 blocks 同档的评估频点（同一份快照里算好的）；缺省由绘制侧按 blocks 自行生成 */
+  evalFreqs?: number[];
   fs: number;
   yTop: number;
   yBottom?: number;
@@ -17,11 +23,11 @@ interface CurvePanelProps {
   onCurveChannelChange: (v: string) => void;
   channelOn: boolean;
   channelNames: string[];
-  firstChannel: string;
 }
 
 function CurvePanel({
   blocks,
+  evalFreqs,
   fs,
   yTop,
   yBottom,
@@ -30,7 +36,6 @@ function CurvePanel({
   onCurveChannelChange,
   channelOn,
   channelNames,
-  firstChannel,
 }: CurvePanelProps) {
   const [curveW, setCurveW] = useState(() => {
     try {
@@ -43,19 +48,13 @@ function CurvePanel({
   const fxRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef(0);
   const latestWRef = useRef(0);
-  const visibleBlocks = useMemo(
-    () =>
-      channelOn
-        ? blocks.filter((b) => (b.channel ?? firstChannel) === curveChannel)
-        : blocks,
-    [blocks, channelOn, curveChannel, firstChannel],
-  );
+  // 画什么由 App 决定：传进来的 `blocks` 已经是曲线快照里目标声道的那一份（通道模式=选中声道，
+  // 关闭选择器=首声道）。**不要**在这里按 channelOn/curveChannel 再过一遍：快照滞后一档，
+  // 与当前声道现算比对会在切声道的那一档把整条曲线滤空（踩过）。
+  // 选项列表**始终**是各声道：关闭选择器时不再有「全部声道」这一档（曲线目标始终是单个声道）
   const channelOptions = useMemo(
-    () =>
-      channelOn
-        ? channelNames.map((c) => ({ value: c, label: channelLabel(c) }))
-        : [{ value: "all", label: t("allChannels") }],
-    [channelOn, channelNames],
+    () => channelNames.map((c) => ({ value: c, label: channelLabel(c) })),
+    [channelNames],
   );
 
   // 首帧就要把宽度量准：上面那个初值只是拿窗口宽度兜底的估算，若让它先按估算渲染、再等
@@ -102,10 +101,14 @@ function CurvePanel({
             options={channelOptions}
             onValueChange={onCurveChannelChange}
             ariaLabel={t("channels")}
+            // 关闭选择器时锁定在首声道（左）：换声道的入口在声道胶囊那侧，这里置灰，
+            // 否则它看着能选、选完又被 handleCurveChannelChange 忽略，是个"点了没反应"的死控件
+            disabled={!channelOn}
           />
         </div>
         <CurvePlot
-          blocks={visibleBlocks}
+          blocks={blocks}
+          evalFreqs={evalFreqs}
           fs={fs}
           curveW={curveW}
           yTop={yTop}

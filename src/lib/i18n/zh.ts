@@ -68,7 +68,6 @@ export const zh: Record<string, string> = {
   "bands": "段数",
   "filters": "滤波器",
   "freqResponse": "频响曲线",
-  "allChannels": "全部声道",
   "aria.sidebarWidth": "调整侧边栏宽度",
   "effects": "效果器",
   "channels": "声道",
