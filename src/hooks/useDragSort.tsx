@@ -41,6 +41,12 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const flyRef = useRef<FlyState | null>(null);
   const flyIdRef = useRef(0);
+  /** 飞行副本元素（DragLayer 侧挂同一个 ref）：滚动补偿要按它做命令式平移 */
+  const flyElRef = useRef<HTMLDivElement | null>(null);
+  /** 飞行副本创建那一刻，活动视图舞台的视口坐标（滚动增量基准） */
+  const flyScopeRef = useRef<{ left: number; top: number } | null>(null);
+  /** 飞行副本的落点（吸附后）：滚动补偿以它为基准平移 */
+  const flyLandRef = useRef({ left: 0, top: 0 });
   const dragRef = useRef<DragSession | null>(null);
   const entryTimerRef = useRef<number | undefined>(undefined);
   const settleTimerRef = useRef<number | undefined>(undefined);
@@ -141,19 +147,13 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     return bestDist <= OUTSIDE_DIST * OUTSIDE_DIST ? bestIdx : -1;
   };
 
-  /**
-   * 应用槽位布局（只改内联 transform/transition，卡片因此平滑让位）。
-   *
-   * `silent`：松手结算时用——那一下不需要驱动徽标数字（`settlingRef` 一置就把徽标冻结了），
-   * 但 `setTick` 会触发整页重渲染。拖动期间靠 500ms 防抖把这类渲染摊开，松手没有防抖，
-   * 紧跟着 `finalizeDrop` 还有两次同步提交，叠在一起就是松手那一下的卡顿。
-   */
-  const applyLayout = (idx: number, silent = false) => {
+  /** 应用槽位布局（只改内联 transform/transition，卡片因此平滑让位）。 */
+  const applyLayout = (idx: number) => {
     const d = dragRef.current;
     if (!d) return;
     if (idx >= 0 && idx !== d.base.get(d.key)) d.everLeft = true;
     d.entered = idx;
-    if (!silent) setOverlayNum(idx >= 0 ? idx + 1 : d.slots.length);
+    setOverlayNum(idx >= 0 ? idx + 1 : d.slots.length);
     const order = [...d.virtual.entries()].sort((a, b) => a[1] - b[1]).map(([k]) => k);
     const others = order.filter((k) => k !== d.key);
     let target: Map<string, number>;
@@ -196,7 +196,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     d.virtual = target;
     animEndRef.current = performance.now() + LAYOUT_ANIM_MS + ANIM_SETTLE_BUFFER_MS;
-    if (!silent) setTick((t) => t + 1);
+    setTick((t) => t + 1);
   };
 
   const commitDragOrder = (d: DragSession, target: number) => {
@@ -263,6 +263,9 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
           // 飞行副本保持原卡尺寸，只把落点坐标移过去，避免高低不同的卡互相拉伸
           to: { left: target.left, top: target.top, width: from.width, height: from.height },
         };
+        // 滚动补偿基准：副本属于内容，创建后用户一滚就要按内容位移把它带走
+        flyScopeRef.current = scopeEl().getBoundingClientRect();
+        flyLandRef.current = { left: snapPx(target.left), top: snapPx(target.top) };
         setFly(nextFly);
         flyRef.current = nextFly;
         return;
@@ -448,11 +451,10 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
         setTick((t) => t + 1);
         return;
       }
-      // 松手瞬间按当前指针位置结算，防止快速拖拽时防抖未触发导致落点滞后。
-      // 走 silent：该应用的布局照旧应用（占位仍平滑让位），但不额外触发整页重渲染——
-      // 紧接着的 finalizeDrop 会提交重排并渲染，徽标本来也在 settling 期间冻结。
-      const idx = slotIndexAt(e.clientX, e.clientY, d.slots);
-      if (idx !== d.entered && !(idx < 0 && !d.everLeft)) applyLayout(idx, true);
+      // 落点结算沿用**已生效的槽位**（`d.entered`），不再按松手瞬间的指针位置重算：
+      // 一按指针重算就等于给松手开了"零防抖"通道——占位框会在松手那一下突然跳到
+      // 尚未确认的槽位，紧接着还要等这记布局动画跑完才起飞行，串联起来就是松手卡一下。
+      // 现在占位框停在哪、卡片就落在哪（所见即所得），松手不再产生任何布局变更。
       // 松手到落地之间冻结徽标数字：让卡片先移动到目标位，数字再随到位一起更新
       settlingRef.current = true;
       const from = overlayRef.current?.getBoundingClientRect();
@@ -512,6 +514,28 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     setTick((t) => t + 1);
   }, []);
 
+  /**
+   * 飞行期间页面滚动：副本属于**内容**，不能停在视口坐标上。
+   * 落点是创建那一刻的视口坐标，用户一滚，整条弧线就被内容甩掉（看着就是"动画被滚动带偏"）。
+   * 这里按活动视图舞台的位移反向平移副本基准，弧线跟着内容走，终点始终压在目标槽位上。
+   * 元素层级是 fixed（在滚动容器之外），所以只能用命令式补偿——顺便避免每滚一帧重渲染。
+   */
+  useEffect(() => {
+    const onScroll = () => {
+      const el = flyElRef.current;
+      const base = flyScopeRef.current;
+      if (!el || !base) return;
+      const r = scopeEl().getBoundingClientRect();
+      const dx = r.left - base.left;
+      const dy = r.top - base.top;
+      if (!dx && !dy) return;
+      el.style.left = `${flyLandRef.current.left - dx}px`;
+      el.style.top = `${flyLandRef.current.top - dy}px`;
+    };
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancelDrag();
@@ -556,6 +580,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     overlayNum,
     fly,
     overlayRef,
+    flyElRef,
     startDrag,
     cancelDrag,
     completeFly,

@@ -25,6 +25,8 @@ interface DragSourceApi {
   dragSize: { width: number; height: number } | null;
   fly: FlyState | null;
   overlayRef: React.RefObject<HTMLDivElement | null>;
+  /** 飞行副本元素 ref：useDragSort 在滚动补偿里按它命令式平移 */
+  flyElRef: React.RefObject<HTMLDivElement | null>;
   overlayNum: number;
   renderOverlay: (key: string, num: number) => React.ReactNode;
 }
@@ -154,6 +156,7 @@ export default function AppOverlays({
         dragSize={blocksDrag.dragSize}
         fly={blocksDrag.fly}
         overlayRef={blocksDrag.overlayRef}
+        flyElRef={blocksDrag.flyElRef}
         activeContent={
           blocksDrag.activeKey
             ? blocksDrag.renderOverlay(blocksDrag.activeKey, blocksDrag.overlayNum)
@@ -167,6 +170,7 @@ export default function AppOverlays({
         dragSize={effectsDrag.dragSize}
         fly={effectsDrag.fly}
         overlayRef={effectsDrag.overlayRef}
+        flyElRef={effectsDrag.flyElRef}
         activeContent={
           effectsDrag.activeKey
             ? effectsDrag.renderOverlay(effectsDrag.activeKey, effectsDrag.overlayNum)

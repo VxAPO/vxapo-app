@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, type CSSProperties, type RefObject, type ReactNode } from "react";
+import { useEffect, type CSSProperties, type RefObject, type ReactNode } from "react";
 import { FLY_ANIM_MS, FLY_HANDOVER_MS, FLY_MOVE_MS, type FlyState } from "../lib/dragSortTypes";
 import { snapPx } from "../lib/snap";
 
@@ -8,6 +8,8 @@ interface DragLayerProps {
   dragSize: { width: number; height: number } | null;
   fly: FlyState | null;
   overlayRef: RefObject<HTMLDivElement | null>;
+  /** 飞行副本元素 ref：由 useDragSort 持有（滚动补偿要按它命令式平移） */
+  flyElRef: RefObject<HTMLDivElement | null>;
   activeContent: ReactNode;
   classForKey: (key: string) => string;
   styleForKey?: (key: string) => CSSProperties | undefined;
@@ -18,6 +20,7 @@ export default function DragLayer({
   dragSize,
   fly,
   overlayRef,
+  flyElRef,
   activeContent,
   classForKey,
   styleForKey,
@@ -37,7 +40,15 @@ export default function DragLayer({
         </div>
       )}
       <AnimatePresence>
-        {fly && <FlyPath key={fly.id} fly={fly} classForKey={classForKey} styleForKey={styleForKey} />}
+        {fly && (
+          <FlyPath
+            key={fly.id}
+            fly={fly}
+            elRef={flyElRef}
+            classForKey={classForKey}
+            styleForKey={styleForKey}
+          />
+        )}
       </AnimatePresence>
     </>
   );
@@ -46,10 +57,12 @@ export default function DragLayer({
 /** 松手飞行动画：二次贝塞尔弧线匀速飞行，到位后停顿并淡出阴影，体现悬浮落地 */
 function FlyPath({
   fly,
+  elRef,
   classForKey,
   styleForKey,
 }: {
   fly: FlyState;
+  elRef: RefObject<HTMLDivElement | null>;
   classForKey: (key: string) => string;
   styleForKey?: (key: string) => CSSProperties | undefined;
 }) {
@@ -92,7 +105,6 @@ function FlyPath({
   xs[xs.length - 1] = 0;
   ys[ys.length - 1] = 0;
   const moveTimes = pts.map((_, i) => (i / (N - 1)) * (FLY_MOVE_MS / FLY_ANIM_MS));
-  const elRef = useRef<HTMLDivElement | null>(null);
   /**
    * 位置动画跑完（`FLY_MOVE_MS`）后做一次「交接」：撤掉 `transform` 与 `will-change`，
    * 让副本从合成层回到常规绘制（合成层的文字抗锯齿与栅格分辨率和常规层不同，
