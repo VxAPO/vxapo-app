@@ -78,39 +78,39 @@ function FlyPath({
    * - 逐帧改 left/top 属于布局属性，浏览器无法合成，整张卡每帧重排 + 重绘
    *   （含文字重新折行、阴影重画）——卡片多时就是掉帧的来源。
    * - transform 只走合成：栅格内容重用，一帧只剩一次合成。
-   * 基准与每帧偏移都取到设备像素栅格上，末帧落在吸附后的落点，
-   * 保证合成偏移是整数设备像素——否则副本的文字栅格原点与静止卡片差几个像素。
+   *
+   * **基准放在落点、路径偏移相对落点算，末帧 x/y = 0**：
+   * 若反过来（基准在起点、末帧偏移 = 落点差），一旦 framer 在动画结束后用缓存再写一次
+   * transform，就会在落点上又叠一次偏移——表现为落点漂移、副本卸载时闪回原位。
+   * 末帧为 0 时，重写多少次都是原值。
+   * 基准与每帧偏移都吸附到设备像素栅格，合成偏移才是整数设备像素，文字栅格才与静止卡片一致。
    */
-  const baseLeft = snapPx(fly.from.left);
-  const baseTop = snapPx(fly.from.top);
-  const xs = pts.map((p) => snapPx(p.left) - baseLeft);
-  const ys = pts.map((p) => snapPx(p.top) - baseTop);
-  // 末帧精确落在吸附后的落点（不再取“路径点”的最后一项，避免差半个像素）
-  xs[xs.length - 1] = snapPx(fly.to.left) - baseLeft;
-  ys[ys.length - 1] = snapPx(fly.to.top) - baseTop;
-  const moveTimes = pts.map((_, i) => (i / (N - 1)) * (FLY_MOVE_MS / FLY_ANIM_MS));
   const landedLeft = snapPx(fly.to.left);
   const landedTop = snapPx(fly.to.top);
+  const xs = pts.map((p) => snapPx(p.left) - landedLeft);
+  const ys = pts.map((p) => snapPx(p.top) - landedTop);
+  xs[xs.length - 1] = 0;
+  ys[ys.length - 1] = 0;
+  const moveTimes = pts.map((_, i) => (i / (N - 1)) * (FLY_MOVE_MS / FLY_ANIM_MS));
   const elRef = useRef<HTMLDivElement | null>(null);
   /**
-   * 位置动画跑完（`FLY_MOVE_MS`）后做一次「交接」：把已经到达的落点写回 `left`/`top`，
-   * 撤掉 `transform` 与 `will-change`，让副本从合成层回到常规绘制。
+   * 位置动画跑完（`FLY_MOVE_MS`）后做一次「交接」：撤掉 `transform` 与 `will-change`，
+   * 让副本从合成层回到常规绘制（合成层的文字抗锯齿与栅格分辨率和常规层不同，
+   * 整段停在合成层上、落地静止时看着发虚，飞行中则被运动掩盖）。
    *
-   * 为什么必须切回来：合成层的文字抗锯齿与栅格分辨率和常规层不同，整段停在合成层上
-   * 落地静止时看着发虚（飞行中由运动掩盖）。交接点选在位置动画最后一帧之后 40ms，
-   * 避免被 framer 的 transform 缓存覆盖；此时左上是精确落点，位置零跳变。
+   * 交接是**幂等**的：元素基准本来就是落点，末帧偏移为 0，所以这里不需要再改坐标——
+   * 即便 framer 之后用缓存重写一次 transform，写回的也是 0 偏移。落点漂移的 bug 正是
+   * "基准在起点 + 末帧偏移 = 落点差" 造成的。
    */
   useEffect(() => {
     const t = window.setTimeout(() => {
       const el = elRef.current;
       if (!el) return;
-      el.style.left = `${landedLeft}px`;
-      el.style.top = `${landedTop}px`;
       el.style.transform = "none";
       el.style.willChange = "auto";
     }, FLY_HANDOVER_MS);
     return () => window.clearTimeout(t);
-  }, [landedLeft, landedTop]);
+  }, []);
   const strong = "0 10px 28px rgba(0, 0, 0, 0.18)";
   // 阴影淡出：只收扩散（模糊/偏移缩到 0），透明度保持不变，
   // 最后是 0 半径的不可见阴影，看起来像“收缩消失”而非“褪色”
@@ -124,14 +124,15 @@ function FlyPath({
       className={`drag-fly fly-anim ${classForKey(fly.key)}`}
       style={{
         ...(styleForKey?.(fly.key) ?? {}),
-        left: baseLeft,
-        top: baseTop,
+        // 基准就是落点：路径偏移相对它算，末帧回到 0（见上方注释）
+        left: landedLeft,
+        top: landedTop,
         width: fly.from.width,
         height: fly.from.height,
         // 飞行段升为合成层：只做合成，不重排/重绘卡片内容（落地后由交接撤掉）
         willChange: "transform",
       }}
-      initial={{ x: 0, y: 0, opacity: 1, boxShadow: strong }}
+      initial={{ x: xs[0], y: ys[0], opacity: 1, boxShadow: strong }}
       animate={{
         x: xs,
         y: ys,
