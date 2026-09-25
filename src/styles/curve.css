@@ -777,11 +777,11 @@
 }
 
 /* 落地：飞行副本的灰条从 hover 色过渡回常规灰。
-   0.3s 与飞行动画时长 FLY_ANIM_MS 对齐（原先 0.45s 超过落地总时长 FLY_TOTAL_MS，
+   0.4s 与飞行动画时长 FLY_ANIM_MS 对齐（原先 0.45s 超过落地总时长 FLY_TOTAL_MS，
    副本卸载时这段过渡跑不完，只剩个尾巴被硬切）。 */
 .drag-fly.fly-anim .drag-bar-line {
   background: var(--border-strong);
-  animation: drag-bar-land 0.3s ease-out forwards;
+  animation: drag-bar-land 0.4s ease-out forwards;
 }
 
 @keyframes drag-bar-land {

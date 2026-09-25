@@ -14,8 +14,8 @@ export const LAYOUT_EASE = EASE_OUT_SOFT;
 export const ANIM_SETTLE_BUFFER_MS = 80;
 /** 距离所有槽位超过该值才算真正离开卡片区 */
 export const OUTSIDE_DIST = 48;
-/** 弧线与阴影的总时长（framer-motion 的 duration） */
-export const FLY_ANIM_MS = 300;
+/** 弧线与阴影的总时长（framer-motion 的 duration）：位置段跑完 288ms，余下留给阴影收尾 */
+export const FLY_ANIM_MS = 400;
 /** 位置段占总时长的比例：位置跑完后的余量留给阴影收尾与「落定」停顿 */
 export const FLY_MOVE_RATIO = 0.72;
 /** 弧线飞行（位置动画）时长：framer 的 x/y times 由这个比例换算，位置只跑这一段，之后停住并交接 */
@@ -24,7 +24,7 @@ export const FLY_MOVE_MS = Math.round(FLY_ANIM_MS * FLY_MOVE_RATIO);
 export const FLY_HOLD_MS = 100;
 /** 副本卸载前的时序缓冲：吸收 framer 收尾与定时器抖动 */
 export const FLY_TAIL_MS = 30;
-/** 落地动画总时长：0.3s 动画 + 0.1s 无阴影停顿 + 缓冲 */
+/** 落地动画总时长：0.4s 动画 + 0.1s 无阴影停顿 + 缓冲 */
 export const FLY_TOTAL_MS = FLY_ANIM_MS + FLY_HOLD_MS + FLY_TAIL_MS;
 /** 位置动画结束到「交接」的余量：等 framer 最后一帧写完再改写样式，避免被它的缓存覆盖 */
 export const FLY_HANDOVER_MS = FLY_MOVE_MS + 40;
