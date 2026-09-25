@@ -168,6 +168,27 @@
   background: var(--preset-accent-dark, var(--preset-accent, var(--brand)));
 }
 
+/* 侧栏预设 pill（预设区 / 自定义区共用）同样要走深色映射：色点、描边、组名三处原先只写了
+   浅色的 `--preset-accent`，深色下就停在亮色上、与调音卡片的组色口径不一致
+   （`presetCardStyle()` 早就把 `--preset-accent-dark` 注入了，是 CSS 没取用）。
+   选择器带 `:not(.disabled)`：`.preset-pill.disabled` 那几条灰色态是浅/深共用的，
+   这里特异性一旦盖过它们，禁用态就会重新染上彩色。 */
+:root[data-theme="dark"] .preset-pill:not(.disabled) .preset-dot {
+  background: var(--preset-accent-dark, var(--preset-accent, var(--brand-deep)));
+}
+
+:root[data-theme="dark"] .adv-pill.preset-pill:not(.disabled) {
+  border-color: color-mix(
+    in srgb,
+    var(--preset-accent-dark, var(--preset-accent, var(--brand))) 55%,
+    var(--border)
+  );
+}
+
+:root[data-theme="dark"] .preset-pill:not(.disabled) .p-group {
+  color: var(--preset-accent-dark, var(--preset-accent, var(--brand-deep)));
+}
+
 :root[data-theme="dark"] .group-card.enabled.sem-group {
   border-color: color-mix(in srgb, var(--card-accent-dark, var(--card-accent, var(--brand))) 55%, transparent);
 }
