@@ -75,8 +75,14 @@
 }
 
 .preset-swatch.active {
-  border-color: var(--swatch-hover, var(--text-primary));
-  box-shadow: 0 0 0 2px var(--card);
+  /* 选中环画在**盘面之外**（外圈 `box-shadow`），不要点亮 `border-color`：
+     色块是 `<button>`，UA 默认 `box-sizing: border-box`，而 `border: 2px solid transparent`
+     那 2px 是画在 24px 盒**内**的——透明时背景铺满整 24px，一旦点亮成不透明就把底下的颜色
+     吃掉一圈，盘面直径 24 → 20，看起来就是"选中之后圆圈变小了"。改外圈后盘面尺寸不变。
+     顺带撤掉原来那圈 `box-shadow: 0 0 0 2px var(--card)` 的隔离环：它与弹窗底色同色，
+     本来就不起分离作用（浅色 #f7f9fc、深色 #1d1f22 都等于各自的主题底）。 */
+  --swatch-ring: var(--swatch-hover, var(--text-primary));
+  box-shadow: 0 0 0 2px var(--swatch-ring);
 }
 
 .p-name {
