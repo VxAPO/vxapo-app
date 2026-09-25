@@ -4,6 +4,10 @@
  * 出现手感：卡片从上方一点（`STAGGER_DROP_PX`）**往下落位**，靠 `EASE_OUT_BACK` 在落点轻轻
  * 过冲再收回——「往下展一下再回弹」。位移千万别写成正值，那就成了「从下方往上收」。
  *
+ * 距离同时作用于**时长**：越靠左上的卡落位越慢（`STAGGER_FADE_NEAR_MS`），越靠右下越快
+ * （`STAGGER_FADE_FAR_MS`），和延迟的疏密一样递减——尾部是"快而密"地收束，
+ * 而不是和前几张一样拖着走。
+ *
  * 用 WAAPI 命令式播，不碰 React 状态、更不重挂载：两套视图常驻 DOM、31 张参数卡刻意不重建
  * （见 `ViewStage` 的注释），重建一次子树的首帧布局尖峰比这段动画本身贵得多。
  *
@@ -17,7 +21,8 @@
 import { EASE_OUT_BACK } from "./motionEase";
 import {
   STAGGER_DROP_PX,
-  STAGGER_FADE_MS,
+  STAGGER_FADE_FAR_MS,
+  STAGGER_FADE_NEAR_MS,
   STAGGER_ROW_TOL_PX,
   STAGGER_STEP_MS,
   STAGGER_WINDOW_MS,
@@ -55,6 +60,9 @@ export function playStaggerIn(root: ParentNode | null | undefined): void {
   const windowMs = Math.min(STAGGER_WINDOW_MS, maxWeight * STAGGER_STEP_MS);
   rows.forEach((rowEls, r) => {
     rowEls.forEach((el, c) => {
+      // 同一条 √ 曲线同时决定「什么时候起跑」和「跑多久」：越靠后起跑越晚（且间隔越来越密），
+      // 单张位移也越短——尾部是"快而密"地收束，不是和前几张一样拖着走。
+      const t = maxWeight > 0 ? Math.sqrt((r + c) / maxWeight) : 0;
       el.animate(
         [
           // 起手在**上方**（负值），往下落位；配 EASE_OUT_BACK 在落点轻轻过冲再收回
@@ -62,8 +70,8 @@ export function playStaggerIn(root: ParentNode | null | undefined): void {
           { opacity: 1, transform: "translateY(0)" },
         ],
         {
-          duration: STAGGER_FADE_MS,
-          delay: maxWeight > 0 ? windowMs * Math.sqrt((r + c) / maxWeight) : 0,
+          duration: STAGGER_FADE_NEAR_MS + (STAGGER_FADE_FAR_MS - STAGGER_FADE_NEAR_MS) * t,
+          delay: windowMs * t,
           easing: EASE_OUT_BACK,
           fill: "backwards",
         },

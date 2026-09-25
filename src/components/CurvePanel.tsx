@@ -96,7 +96,6 @@ function CurvePanel({
         </div>
         <CurvePlot
           blocks={visibleBlocks}
-          morphKey={curveChannel}
           fs={fs}
           curveW={curveW}
           yTop={yTop}

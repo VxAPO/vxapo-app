@@ -41,7 +41,10 @@ const EASE_P2 = EASE_OUT_SOFT_P2;
  * 张数多时靠 `STAGGER_WINDOW_MS` + `STAGGER_STEP_MS` 自适应窗口（见下），
  * 而不是「延迟封顶」：封顶会把超出窗口的卡片挤到同一时刻，断掉「越远越晚」的顺序（踩过）。
  */
-export const STAGGER_FADE_MS = 180;
+/** 最近（左上角）那张的单张落位时长：最长，位移看得最完整 */
+export const STAGGER_FADE_NEAR_MS = 260;
+/** 最远那张的单张落位时长：最短，尾部收束时短促带过 */
+export const STAGGER_FADE_FAR_MS = 150;
 /** 权重单位的时间上限：窗口 = min(`STAGGER_WINDOW_MS`, 最大权重 × 它)，张数少时窗口跟着小 */
 export const STAGGER_STEP_MS = 14;
 /** 错峰窗口上限：最后一张的延迟不超过它 */

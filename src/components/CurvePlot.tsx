@@ -1,8 +1,9 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
+import { alignPaths } from "../lib/pathMorph";
 import { useCurveHover } from "../hooks/useCurveHover";
 import CurveGrid from "./CurveGrid";
 
@@ -44,10 +45,6 @@ interface CurvePlotProps {
   yTop: number;
   yBottom?: number;
   preampGainDb?: number;
-  /** 声道标识：值变化时把曲线**补间**过去，而不是直接换 d。
-      页面切换之所以不闪，是因为它只平移、曲线本身不重算；切声道必然重算，
-      所以这里补上平滑变形，避免两条完全不同形状的曲线之间"跳"一下。 */
-  morphKey?: string;
 }
 
 function CurvePlot({
@@ -57,7 +54,6 @@ function CurvePlot({
   yTop,
   yBottom = -16,
   preampGainDb = 0,
-  morphKey,
 }: CurvePlotProps) {
   // 曲线路径始终按当前 curveW/blocks 重算，保证与网格/viewBox 完全一致，
   // 拖拽改宽度时不会出现"旧宽度的线配当前宽度网格"导致的越界。
@@ -66,23 +62,35 @@ function CurvePlot({
     [blocks, fs, curveW, yTop, preampGainDb, yBottom],
   );
   const pathRef = useRef<SVGPathElement | null>(null);
-  const prevDRef = useRef<string | null>(null);
-  const morphKeyRef = useRef(morphKey);
-  useEffect(() => {
+  const morphAnimRef = useRef<Animation | null>(null);
+  // 用 layout effect：必须在浏览器绘制**之前**接管，否则新 d 会先画一帧再被动画拉回去（闪一下）
+  useLayoutEffect(() => {
     const el = pathRef.current;
-    const prev = prevDRef.current;
-    const switched = morphKeyRef.current !== morphKey;
-    morphKeyRef.current = morphKey;
-    prevDRef.current = curveD;
-    // 只在**声道切换**时补间。拖参数时 d 每帧都在变，补间会变成橡皮筋式滞后。
-    if (!el || !prev || !switched || prev === curveD) return;
-    // 320ms 与 curve.css 里 stroke 过渡的 0.32s 对齐（同一条 `cubic-bezier(0.4,0,0.2,1)`）。
-    // d 的插值要求两侧命令序列一致：本组件固定 241 个采样点，点与结构都相同。
-    el.animate([{ d: `path("${prev}")` }, { d: `path("${curveD}")` }], {
+    if (!el) return;
+    /**
+     * 曲线自己会变形：只要路径变了就平滑补间过去，不区分场景——切声道、开关/增删滤波器、
+     * 拖频段参数、切设备全走这一条路，调用方不必再特判「该不该动画」。
+     *
+     * 起点取**当前实际渲染**的 d（含上一条动画的中间值），不是「上一次的 d」：这样变形途中
+     * 目标又变时会从当前位置接着跑，不会跳回旧值。连续变更（拖滑块）因此表现为指数式平滑
+     * 跟随，松手后自然收敛到准确值。
+     *
+     * 采样点数量随滤波器集合变化（`buildEvalFreqs` 会追加中心频率与高 Q 细化点），
+     * 直接补间两条点数不同的路径会画出乱线；点数对齐交给 `alignPaths`，两侧 x 跨度不一致
+     * （改宽度/换量程）时它返回 null，此时宁可不动画。
+     */
+    const shown = getComputedStyle(el).getPropertyValue("d");
+    const from = shown && shown !== "none" ? shown : curveD;
+    const pair = alignPaths(from, curveD);
+    if (!pair) return;
+    // 只取消我们自己起的动画：curve.css 里 stroke 的 CSS 过渡别动
+    morphAnimRef.current?.cancel();
+    morphAnimRef.current = el.animate([{ d: pair[0] }, { d: pair[1] }], {
+      // 320ms 与 stroke 过渡的 0.32s 对齐；不设 fill，结束后回到 React 写入的 d
       duration: 320,
       easing: "cubic-bezier(0.4, 0, 0.2, 1)",
     });
-  }, [curveD, morphKey]);
+  }, [curveD]);
 
   const plotTop = dbY(yTop, yTop, yBottom);
   const plotBottom = dbY(yBottom, yTop, yBottom);
