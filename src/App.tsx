@@ -607,6 +607,7 @@ export default function App() {
         onInstalled={handleInstalled}
         blocksDrag={blocksDragApi}
         effectsDrag={effectsDragApi}
+        flyHost={bodyNode}
         classForKey={overlayClassForKey}
         styleForKey={overlayStyleForKey}
         effectClassForKey={effectOverlayClassForKey}

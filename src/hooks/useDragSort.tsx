@@ -32,6 +32,15 @@ function scopeEl(): HTMLElement {
   return document.querySelector<HTMLElement>(".view-stage.is-active") ?? document.documentElement;
 }
 
+/**
+ * 滚动内容容器（`.tuning-scroll`）：飞行副本的挂载父级，也是**内容坐标**的基准。
+ * 副本 portal 进这里、按内容坐标定位，滚动跟随就由浏览器负责（合成线程，零延迟）；
+ * 留在容器外只能靠 JS 逐帧补偿，而补偿天然晚一帧，滚动快时看得见滞后。
+ */
+function scrollHost(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".tuning-scroll");
+}
+
 export function useDragSort({ group, markDirty, overlayContent, commitOrder }: UseDragSortOptions) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [dragSize, setDragSize] = useState<{ width: number; height: number } | null>(null);
@@ -42,12 +51,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const flyRef = useRef<FlyState | null>(null);
   const flyIdRef = useRef(0);
-  /** 飞行副本元素（DragLayer 侧挂同一个 ref）：滚动补偿要按它做命令式平移 */
+  /** 飞行副本元素（DragLayer 侧挂同一个 ref）：交接时按它撤掉 transform / will-change */
   const flyElRef = useRef<HTMLDivElement | null>(null);
-  /** 飞行副本创建那一刻，活动视图舞台的视口坐标（滚动增量基准） */
-  const flyScopeRef = useRef<{ left: number; top: number } | null>(null);
-  /** 飞行副本的落点（吸附后）：滚动补偿以它为基准平移 */
-  const flyLandRef = useRef({ left: 0, top: 0 });
   const dragRef = useRef<DragSession | null>(null);
   const entryTimerRef = useRef<number | undefined>(undefined);
   const settleTimerRef = useRef<number | undefined>(undefined);
@@ -139,8 +144,12 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     // 逐帧写 left/top 属于布局属性，每帧都要重新布局；transform 只改视觉位置。
     // 刻意不用 translate3d / will-change —— 那是把悬浮层升成合成层，拖动停住时
     // 文字栅格会与常规层不同（见 DragLayer 的「落地交接」注释），跟手过程中得不偿失。
-    const left = d.originLeft + snapPx(x - d.startX);
-    const top = d.originTop + snapPx(y - d.startY);
+    //
+    // 坐标基准是**滚动内容容器的 padding box**（悬浮层被 portal 进 `.tuning-scroll`，
+    // 而它带 transform 使 fixed 以它为包含块——这样悬浮层才会被容器边界裁掉），
+    // 所以减掉容器自身的视口偏移；容器不滚动位移，这个偏移拖拽期间不变。
+    const left = d.originLeft - d.hostLeft + snapPx(x - d.startX);
+    const top = d.originTop - d.hostTop + snapPx(y - d.startY);
     el.style.transform = `translate(${left}px, ${top}px)`;
   };
 
@@ -264,14 +273,19 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       if (landed) target = landed.getBoundingClientRect();
     }
     // ③ 再同步提交“隐藏原卡 + 起飞行副本”：同样不跨帧，避免中间出现既无悬浮层也无副本的空档。
+    // 副本挂进滚动内容层，坐标要换成**内容坐标**：此刻量一次容器矩形与 scrollTop 就够，
+    // 之后内容怎么滚副本都跟着（浏览器在合成线程处理），不再需要逐帧补偿。
+    // from（悬浮层矩形）与 target（落点）用同一套换算，路径差值不受影响。
+    const host = scrollHost();
+    const hostRect = host ? host.getBoundingClientRect() : null;
+    const box = (r: { left: number; top: number; width: number; height: number }) => ({
+      left: host && hostRect ? r.left - hostRect.left + host.scrollLeft : r.left,
+      top: host && hostRect ? r.top - hostRect.top + host.scrollTop : r.top,
+      width: r.width,
+      height: r.height,
+    });
     flushSync(() => {
       if (from) {
-        const box = (r: { left: number; top: number; width: number; height: number }) => ({
-          left: r.left,
-          top: r.top,
-          width: r.width,
-          height: r.height,
-        });
         // 显式锁定原卡片内容隐藏，避免任何渲染时序让它在飞行动画中闪现
         const draggedEl = cardScope().querySelector<HTMLElement>(`[data-dnd-id="${d.key}"]`);
         if (draggedEl) draggedEl.setAttribute("data-fly-hidden", "1");
@@ -290,17 +304,17 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
             return null;
           });
         }, FLY_TOTAL_MS);
+        const toBox = box(target);
         const nextFly = {
           id: ++flyIdRef.current,
           key: d.key,
           content,
+          // 起点与终点都在内容坐标系里（同一套换算，路径差值不变）
           from: box(from),
           // 飞行副本保持原卡尺寸，只把落点坐标移过去，避免高低不同的卡互相拉伸
-          to: { left: target.left, top: target.top, width: from.width, height: from.height },
+          to: { left: toBox.left, top: toBox.top, width: from.width, height: from.height },
         };
-        // 滚动补偿基准：副本属于内容，创建后用户一滚就要按内容位移把它带走
-        flyScopeRef.current = scopeEl().getBoundingClientRect();
-        flyLandRef.current = { left: snapPx(target.left), top: snapPx(target.top) };
+        setFly(nextFly);
         setFly(nextFly);
         flyRef.current = nextFly;
         return;
@@ -352,6 +366,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     const originEl = cardScope().querySelector<HTMLElement>(`[data-dnd-id="${key}"]`);
     const scope = scopeEl().getBoundingClientRect();
+    // 悬浮层的坐标基准是滚动内容容器的 padding box（它被 portal 进那个容器）
+    const host = scrollHost()?.getBoundingClientRect();
     dragRef.current = {
       key,
       slots,
@@ -367,6 +383,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       lastY: y,
       scopeLeft: scope.left,
       scopeTop: scope.top,
+      hostLeft: host?.left ?? 0,
+      hostTop: host?.top ?? 0,
       originLeft: origin.rect.left,
       originTop: origin.rect.top,
       armed: false,
@@ -604,40 +622,6 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     setFly(null);
     flyRef.current = null;
     setTick((t) => t + 1);
-  }, []);
-
-  /**
-   * 飞行期间页面滚动：副本属于**内容**，不能停在视口坐标上。
-   * 落点是创建那一刻的视口坐标，用户一滚，整条弧线就被内容甩掉（看着就是"动画被滚动带偏"）。
-   * 这里按活动视图舞台的位移**同向**平移副本基准：内容移动多少，落点基准就跟着挪多少，
-   * 弧线跟着内容走，终点始终压在目标槽位上。
-   *
-   * 方向不能写反（曾经写反过）：落点与槽位一样是视口坐标，内容位移 `dy` 之后同一位置的新视口
-   * 坐标是「落点 + dy」；取相反号会让副本朝滚动的反方向跑，与目标槽位差出两倍滚动量。
-   * 拖拽中的槽位平移（shiftSlots）用的是同一个符号约定，两处必须一致。
-   *
-   * 元素层级是 fixed（在滚动容器之外），所以只能用命令式补偿——顺便避免每滚一帧重渲染。
-   */
-  useEffect(() => {
-    /**
-     * 必须在 scroll 事件里**同步**补偿，不能合帧推到下一帧 rAF：
-     * 滚动位移在事件所在那一帧就参与绘制，补偿晚一帧 ＝ 滚动的那一帧副本仍被内容带偏，
-     * 看起来就是"滚一下动画抖一下"。滚动事件与帧对齐（一帧最多触发一次），
-     * 这里测一次舞台矩形（强制布局）的代价可以接受。
-     */
-    const onScroll = () => {
-      const el = flyElRef.current;
-      const base = flyScopeRef.current;
-      if (!el || !base) return;
-      const r = scopeEl().getBoundingClientRect();
-      const dx = r.left - base.left;
-      const dy = r.top - base.top;
-      if (!dx && !dy) return;
-      el.style.left = `${flyLandRef.current.left + dx}px`;
-      el.style.top = `${flyLandRef.current.top + dy}px`;
-    };
-    window.addEventListener("scroll", onScroll, true);
-    return () => window.removeEventListener("scroll", onScroll, true);
   }, []);
 
   useEffect(() => {

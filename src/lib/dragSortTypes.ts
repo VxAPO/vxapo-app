@@ -63,6 +63,11 @@ export interface DragSession {
       （卡片上可能挂着布局动画的 transform，不能直接拿卡片量） */
   scopeLeft: number;
   scopeTop: number;
+  /** 抓取时滚动内容容器（`.tuning-scroll`）的视口坐标：悬浮层被 portal 进那个容器、
+      又是它的 fixed 后代（容器带 transform），所以坐标基准要减掉这个偏移。
+      容器自己不会滚动位移，拖拽期间测一次就够。 */
+  hostLeft: number;
+  hostTop: number;
   /** 原始卡片位置（悬浮层对齐锚点，保证抓取时完全覆盖原卡片） */
   originLeft: number;
   originTop: number;

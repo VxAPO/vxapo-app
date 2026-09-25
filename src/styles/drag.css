@@ -27,7 +27,8 @@
 }
 
 .drag-fly.fly-anim.effect-card {
-  position: fixed;
+  /* 与 .drag-fly.fly-anim 一致：副本在滚动内容层里，不能退回 fixed */
+  position: absolute;
 }
 
 .effect-card.disabled .effect-name,

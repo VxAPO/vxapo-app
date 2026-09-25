@@ -109,6 +109,12 @@
   flex: 1;
   min-height: 0;
   position: relative;
+  /* transform: translateZ(0) 只为一件事：让拖拽那两层（portal 进来的悬浮层与飞行副本）
+     的 `fixed` 以此容器为包含块，从而被它的 overflow **裁在内容区边界**（标签栏上方那节不再漏）。
+     容器自身不滚动位移，所以「指针不动时悬浮层在视口里也不动」的跟手语义不变。
+     ⚠️ 副作用：它内部任何 `position: fixed` 后代从此都相对这个容器定位（目前只有拖拽悬浮层）。
+     ⚠️ 悬浮层的坐标要减掉本容器的视口偏移（见 useDragSort 的 hostLeft/hostTop）。 */
+  transform: translateZ(0);
   overflow-y: auto;
   overflow-x: hidden;
   will-change: scroll-position;

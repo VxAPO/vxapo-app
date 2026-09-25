@@ -17,6 +17,7 @@ import {
 } from "./dragSortTypes";
 import { EASE_OUT_SOFT } from "./motionEase";
 import { COLLAPSE_EASE } from "./viewMotion";
+import { Z_TOOL_SHADE } from "./edgetint/geometry";
 
 /**
  * 拖拽时序契约的机械断言：这些关系散落在注释里，靠人记迟早漂移，
@@ -57,5 +58,27 @@ describe("拖拽时序契约", () => {
     const cssMs = Number(m![1]) * 1000;
     expect(cssMs).toBeLessThanOrEqual(FLY_ANIM_MS);
     expect(cssMs).toBeLessThanOrEqual(FLY_TOTAL_MS);
+  });
+
+  it("飞行副本的层级：压过染色层，并被设备标签栏遮住", () => {
+    const read = (p: string) =>
+      readFileSync(fileURLToPath(new URL(p, import.meta.url)), "utf8");
+
+    // 副本要压过染色 canvas，否则会被当成背景染色蒙住
+    const flyZ = Number(/\.drag-fly\.fly-anim\s*\{[^}]*?z-index:\s*(\d+)/.exec(read("../styles/curve.css"))?.[1]);
+    expect(flyZ).toBeGreaterThan(Z_TOOL_SHADE);
+
+    // 副本挂进滚动内容层后，层级只在 .device-body 这个层叠上下文内比较；
+    // 该上下文必须低于标签栏（.tab-bar），这才是「副本被标签栏遮住」的机制。
+    // 一旦 .device-body 丢了 z-index: 0，副本的 z-index 就会拿到根上下文去比，直接盖住标签栏。
+    const bodyBlock = /\.device-body\s*\{[^}]*\}/.exec(read("../styles/device.css"))?.[0] ?? "";
+    expect(bodyBlock).toMatch(/position:\s*relative/);
+    const bodyZ = Number(/z-index:\s*(\d+)/.exec(bodyBlock)?.[1]);
+    const tabZ = Number(/\.tab-bar\s*\{[^}]*?z-index:\s*(\d+)/.exec(read("../styles/tabs.css"))?.[1]);
+    expect(bodyZ).toBeLessThan(tabZ);
+
+    // 滚动容器上这个 transform 是「悬浮层被内容区边界裁掉、同时不随滚动位移」的前提，别顺手删掉
+    const scrollBlock = /\.tuning-scroll\s*\{[^}]*\}/.exec(read("../styles/device.css"))?.[0] ?? "";
+    expect(scrollBlock).toMatch(/transform:\s*translateZ\(0\)/);
   });
 });

@@ -716,7 +716,12 @@
 }
 
 /* 抓取悬浮层：top/left 恒为 0 作静态基准，跟手位移由 JS 写 transform（不触发布局）。
-   飞行副本的 left/top 则是落点基准，同样由 JS 写、位移走 framer 的 x/y。 */
+   它和飞行副本一样被 portal 进滚动内容层（DragLayer），所以这个 z-index 只在 `.device-body`
+   的层叠上下文里比较——两者都会被设备标签栏挡住，不再浮在标签栏上面。
+   `position` 仍是 fixed（相对视口）：跟手语义要求「指针不动时悬浮层在视口里也不动」；
+   若改成 absolute + 内容坐标，滚动时它会跟着内容跑、与指针错位。
+   ⚠️ 这条 fixed 依赖「祖先链上没有 transform」：一旦 .device-body/.tuning-scroll 或更外层被加上
+   transform，包含块会变成那个祖先，坐标基准随之偏移。 */
 .drag-fly.overlay-fixed {
   position: fixed;
   top: 0;
@@ -737,9 +742,15 @@
   }
 }
 
+/* 飞行副本挂进滚动内容层（portal 到 .tuning-scroll）：absolute + **内容坐标**。
+   滚动跟随由此交给浏览器（合成线程），不再需要 JS 逐帧补偿——这才是「相对内容静止」，
+   JS 补偿天然晚一帧，滚动快时就是肉眼可见的抖。
+   代价（有意）：越出内容区（标签栏/侧栏那一带）的部分会被裁剪。
+   层级 70 只在 .device-body 这个 stacking context 内比较（它 z-index: 0，整块被标签栏的 40 压住），
+   求的是压过卡片(1)、框选盒(40) 与染色层(25/26/35/36)。 */
 .drag-fly.fly-anim {
-  position: fixed;
-  z-index: 80;
+  position: absolute;
+  z-index: 70;
   pointer-events: none;
 }
 

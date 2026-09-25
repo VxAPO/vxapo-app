@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, type CSSProperties, type RefObject, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { FLY_ANIM_MS, FLY_HANDOVER_MS, FLY_MOVE_RATIO, type FlyState } from "../lib/dragSortTypes";
 import { snapPx } from "../lib/snap";
 
@@ -8,8 +9,10 @@ interface DragLayerProps {
   dragSize: { width: number; height: number } | null;
   fly: FlyState | null;
   overlayRef: RefObject<HTMLDivElement | null>;
-  /** 飞行副本元素 ref：由 useDragSort 持有（滚动补偿要按它命令式平移） */
+  /** 飞行副本元素 ref：由 useDragSort 持有（交接时命令式撤掉合成层提示） */
   flyElRef: RefObject<HTMLDivElement | null>;
+  /** 飞行副本的挂载容器（滚动内容层 `.tuning-scroll`）：副本挂进去才能随内容滚 */
+  flyHost: HTMLElement | null;
   activeContent: ReactNode;
   classForKey: (key: string) => string;
   styleForKey?: (key: string) => CSSProperties | undefined;
@@ -21,32 +24,41 @@ export default function DragLayer({
   fly,
   overlayRef,
   flyElRef,
+  flyHost,
   activeContent,
   classForKey,
   styleForKey,
 }: DragLayerProps) {
   return (
     <>
-      {activeKey && (
-        // 跟手位移由 useDragSort 的 positionOverlay 写 transform（left/top 固定为 0）：
-        // 逐帧写 left/top 会反复触发布局，是拖动掉帧的来源之一
-        <div
-          ref={overlayRef}
-          className={`drag-fly overlay-fixed ${classForKey(activeKey)}`}
-          style={{
-            ...(styleForKey?.(activeKey) ?? {}),
-            ...(dragSize ? { width: dragSize.width, height: dragSize.height } : {}),
-          }}
-        >
-          {activeContent}
-        </div>
-      )}
+      {activeKey &&
+        flyHost &&
+        createPortal(
+          // 跟手位移由 useDragSort 的 positionOverlay 写 transform（left/top 固定为 0）：
+          // 逐帧写 left/top 会反复触发布局，是拖动掉帧的来源之一。
+          //
+          // portal 进滚动内容层只为**层级归属**：进了（被标签栏压住的）device-body 层叠上下文，
+          // 悬浮层才会和飞行副本一样被设备标签栏挡住、而不是浮在它上面。
+          // `position` 仍是 fixed（相对视口），所以「指针不动时悬浮层在视口里也不动」的跟手语义不变。
+          <div
+            ref={overlayRef}
+            className={`drag-fly overlay-fixed ${classForKey(activeKey)}`}
+            style={{
+              ...(styleForKey?.(activeKey) ?? {}),
+              ...(dragSize ? { width: dragSize.width, height: dragSize.height } : {}),
+            }}
+          >
+            {activeContent}
+          </div>,
+          flyHost,
+        )}
       <AnimatePresence>
         {fly && (
           <FlyPath
             key={fly.id}
             fly={fly}
             elRef={flyElRef}
+            host={flyHost}
             classForKey={classForKey}
             styleForKey={styleForKey}
           />
@@ -60,11 +72,14 @@ export default function DragLayer({
 function FlyPath({
   fly,
   elRef,
+  host,
   classForKey,
   styleForKey,
 }: {
   fly: FlyState;
   elRef: RefObject<HTMLDivElement | null>;
+  /** 挂载容器（滚动内容层）：非空时 portal 进去，副本因此随内容滚 */
+  host: HTMLElement | null;
   classForKey: (key: string) => string;
   styleForKey?: (key: string) => CSSProperties | undefined;
 }) {
@@ -133,13 +148,15 @@ function FlyPath({
   const none = "0 0 0px rgba(0, 0, 0, 0.18)";
   // 尺寸全程等于原卡尺寸（落点尺寸即原尺寸），静态设定即可：
   // 逐帧写 width/height 会让卡片文字每帧重新折行，是另一处掉帧来源。
-  return (
+  const node = (
     <motion.div
       ref={elRef}
       className={`drag-fly fly-anim ${classForKey(fly.key)}`}
       style={{
         ...(styleForKey?.(fly.key) ?? {}),
         // 基准就是落点：路径偏移相对它算，末帧回到 0（见上方注释）
+        // 坐标系是**滚动内容坐标**（.tuning-scroll 的包含块），不是视口坐标：
+        // 副本因此随内容一起滚，滚动跟随由浏览器合成线程完成、零延迟
         left: landedLeft,
         top: landedTop,
         width: fly.from.width,
@@ -173,4 +190,10 @@ function FlyPath({
       {fly.content}
     </motion.div>
   );
+  // 必须 portal 进滚动内容层：副本在容器内才会被浏览器的滚动一起带走（合成线程，零延迟）。
+  // 留在容器外就只能靠 JS 逐帧补偿——补偿天然晚一帧，滚动快时就是肉眼可见的抖。
+  // PresenceContext 穿透 portal，AnimatePresence 的退场淡出照常生效。
+  // 容器还没就绪（首帧/设备页重建中）就不渲染：以内容坐标画在视口层会错位，宁可这一轮没有副本。
+  if (!host) return null;
+  return createPortal(node, host);
 }

@@ -52,6 +52,8 @@ interface AppOverlaysProps {
   // 拖拽层
   blocksDrag: DragSourceApi;
   effectsDrag: DragSourceApi;
+  /** 飞行副本的挂载容器（滚动内容层 `.tuning-scroll`）：副本必须挂进容器才随内容滚 */
+  flyHost: HTMLElement | null;
   classForKey: (key: string) => string;
   styleForKey: (key: string) => React.CSSProperties | undefined;
   effectClassForKey: (key: string) => string;
@@ -72,6 +74,7 @@ export default function AppOverlays({
   onInstalled,
   blocksDrag,
   effectsDrag,
+  flyHost,
   classForKey,
   styleForKey,
   effectClassForKey,
@@ -157,6 +160,7 @@ export default function AppOverlays({
         fly={blocksDrag.fly}
         overlayRef={blocksDrag.overlayRef}
         flyElRef={blocksDrag.flyElRef}
+        flyHost={flyHost}
         activeContent={
           blocksDrag.activeKey
             ? blocksDrag.renderOverlay(blocksDrag.activeKey, blocksDrag.overlayNum)
@@ -171,6 +175,7 @@ export default function AppOverlays({
         fly={effectsDrag.fly}
         overlayRef={effectsDrag.overlayRef}
         flyElRef={effectsDrag.flyElRef}
+        flyHost={flyHost}
         activeContent={
           effectsDrag.activeKey
             ? effectsDrag.renderOverlay(effectsDrag.activeKey, effectsDrag.overlayNum)
