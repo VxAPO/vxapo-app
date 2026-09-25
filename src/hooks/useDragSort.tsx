@@ -141,12 +141,19 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     return bestDist <= OUTSIDE_DIST * OUTSIDE_DIST ? bestIdx : -1;
   };
 
-  const applyLayout = (idx: number) => {
+  /**
+   * 应用槽位布局（只改内联 transform/transition，卡片因此平滑让位）。
+   *
+   * `silent`：松手结算时用——那一下不需要驱动徽标数字（`settlingRef` 一置就把徽标冻结了），
+   * 但 `setTick` 会触发整页重渲染。拖动期间靠 500ms 防抖把这类渲染摊开，松手没有防抖，
+   * 紧跟着 `finalizeDrop` 还有两次同步提交，叠在一起就是松手那一下的卡顿。
+   */
+  const applyLayout = (idx: number, silent = false) => {
     const d = dragRef.current;
     if (!d) return;
     if (idx >= 0 && idx !== d.base.get(d.key)) d.everLeft = true;
     d.entered = idx;
-    setOverlayNum(idx >= 0 ? idx + 1 : d.slots.length);
+    if (!silent) setOverlayNum(idx >= 0 ? idx + 1 : d.slots.length);
     const order = [...d.virtual.entries()].sort((a, b) => a[1] - b[1]).map(([k]) => k);
     const others = order.filter((k) => k !== d.key);
     let target: Map<string, number>;
@@ -189,7 +196,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     d.virtual = target;
     animEndRef.current = performance.now() + LAYOUT_ANIM_MS + ANIM_SETTLE_BUFFER_MS;
-    setTick((t) => t + 1);
+    if (!silent) setTick((t) => t + 1);
   };
 
   const commitDragOrder = (d: DragSession, target: number) => {
@@ -441,26 +448,30 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
         setTick((t) => t + 1);
         return;
       }
-      // 松手瞬间按当前指针位置结算，防止快速拖拽时防抖未触发导致落点滞后
+      // 松手瞬间按当前指针位置结算，防止快速拖拽时防抖未触发导致落点滞后。
+      // 走 silent：该应用的布局照旧应用（占位仍平滑让位），但不额外触发整页重渲染——
+      // 紧接着的 finalizeDrop 会提交重排并渲染，徽标本来也在 settling 期间冻结。
       const idx = slotIndexAt(e.clientX, e.clientY, d.slots);
-      if (idx !== d.entered && !(idx < 0 && !d.everLeft)) applyLayout(idx);
+      if (idx !== d.entered && !(idx < 0 && !d.everLeft)) applyLayout(idx, true);
       // 松手到落地之间冻结徽标数字：让卡片先移动到目标位，数字再随到位一起更新
       settlingRef.current = true;
       const from = overlayRef.current?.getBoundingClientRect();
       const num = d.entered >= 0 ? d.entered + 1 : d.slots.length;
       const content = renderOverlay(d.key, num);
-      // 若布局动画仍在进行，等它走完再落地，占位先停到最终槽位
+      // 若布局动画仍在进行，等它走完再落地，占位先停到最终槽位。
+      // 布局动画已结束时也不在 pointerup 里同步做：finalizeDrop 要提交重排 + 量落点 +
+      // 两次 flushSync 渲染，塞在输入回调里会拖住输入管线（手感上就是"松手卡一下"）。
+      // 用 0ms 定时器推到当前任务之后、绘制之前，位置与视觉结果不变。
       const remaining = Math.max(0, animEndRef.current - performance.now());
-      if (remaining > 0) {
-        const settleToken = token;
-        settleTimerRef.current = window.setTimeout(() => {
+      const settleToken = token;
+      settleTimerRef.current = window.setTimeout(
+        () => {
           settleTimerRef.current = undefined;
           if (dragTokenRef.current !== settleToken || dragRef.current !== d) return;
           finalizeDrop(d, from, content);
-        }, remaining);
-      } else {
-        finalizeDrop(d, from, content);
-      }
+        },
+        remaining > 0 ? remaining : 0,
+      );
     };
 
     const onCancel = () => {
