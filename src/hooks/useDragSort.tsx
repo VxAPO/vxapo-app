@@ -609,7 +609,13 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
   /**
    * 飞行期间页面滚动：副本属于**内容**，不能停在视口坐标上。
    * 落点是创建那一刻的视口坐标，用户一滚，整条弧线就被内容甩掉（看着就是"动画被滚动带偏"）。
-   * 这里按活动视图舞台的位移反向平移副本基准，弧线跟着内容走，终点始终压在目标槽位上。
+   * 这里按活动视图舞台的位移**同向**平移副本基准：内容移动多少，落点基准就跟着挪多少，
+   * 弧线跟着内容走，终点始终压在目标槽位上。
+   *
+   * 方向不能写反（曾经写反过）：落点与槽位一样是视口坐标，内容位移 `dy` 之后同一位置的新视口
+   * 坐标是「落点 + dy」；取相反号会让副本朝滚动的反方向跑，与目标槽位差出两倍滚动量。
+   * 拖拽中的槽位平移（shiftSlots）用的是同一个符号约定，两处必须一致。
+   *
    * 元素层级是 fixed（在滚动容器之外），所以只能用命令式补偿——顺便避免每滚一帧重渲染。
    */
   useEffect(() => {
@@ -627,8 +633,8 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       const dx = r.left - base.left;
       const dy = r.top - base.top;
       if (!dx && !dy) return;
-      el.style.left = `${flyLandRef.current.left - dx}px`;
-      el.style.top = `${flyLandRef.current.top - dy}px`;
+      el.style.left = `${flyLandRef.current.left + dx}px`;
+      el.style.top = `${flyLandRef.current.top + dy}px`;
     };
     window.addEventListener("scroll", onScroll, true);
     return () => window.removeEventListener("scroll", onScroll, true);
