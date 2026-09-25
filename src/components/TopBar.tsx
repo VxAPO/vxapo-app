@@ -49,7 +49,9 @@ function TopBar({
       <span className="view-seg-zone">
         <div className="seg view-seg" data-dir={segDir} role="radiogroup" aria-label={t("view.switch")}>
           <span className={`seg-thumb ${view === "advanced" ? "right" : ""}`} />
-          <button type="button" disabled={channelOn || noDevices} aria-pressed={view === "preset"} onClick={() => onViewChange("preset")}>
+          {/* 打开通道选择器不再禁用语义视图：语义视图同样按声道过滤内容（PresetView 的 visible），
+              声道切换入口是曲线卡上的选择器，两个视图都能用 */}
+          <button type="button" disabled={noDevices} aria-pressed={view === "preset"} onClick={() => onViewChange("preset")}>
             <Tags size={13} />
             {t("view.semantic")}
           </button>

@@ -53,11 +53,17 @@ function PresetView({
   const patchBlock = useConfigStore((s) => s.patchBlock);
   const patchBand = useConfigStore((s) => s.patchBand);
 
+  const effActive = effectiveChannel(channelNames, activeChannel);
+  const firstChannel = channelNames[0] ?? "L";
   const visibleEffects = useMemo(
-    () => visibleEffectsFor(effects, channelOn, effectiveChannel(channelNames, activeChannel)),
-    [effects, channelOn, channelNames, activeChannel],
+    () => visibleEffectsFor(effects, channelOn, effActive),
+    [effects, channelOn, effActive],
   );
-  const showFilterEmptyHint = blocks.length === 0;
+  // 通道模式只显示当前声道的块（判据与 AdvancedView 一致）；非通道模式维持原样、全部显示。
+  // 用 `blocks.map` + `return null` 过滤而不是先 filter 成数组：`bi` 必须是 store 里的**真实下标**，
+  // `onPatchBlock` / `onRemoveBlock` / `patchBand` 都按下标寻址，错位会改到别的块。
+  const visible = (b: Block) => !channelOn || (b.channel ?? firstChannel) === effActive;
+  const showFilterEmptyHint = !blocks.some(visible);
   const showEffectEmptyHint = visibleEffects.length === 0;
 
   return (
@@ -74,6 +80,7 @@ function PresetView({
         )}
         <div className="cards device-cards">
           {blocks.map((b, bi) => {
+            if (!visible(b)) return null;
             const elementKey = b.id ?? String(bi);
             const isGroup = !!b.group;
             const active = blocksDrag.activeKey === elementKey || blocksDrag.fly?.key === elementKey;

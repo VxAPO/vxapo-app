@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../lib/model";
 import { channelLabel } from "../lib/channels";
 import { t } from "../lib/i18n/core";
@@ -57,6 +57,16 @@ function CurvePanel({
         : [{ value: "all", label: t("allChannels") }],
     [channelOn, channelNames],
   );
+
+  // 首帧就要把宽度量准：上面那个初值只是拿窗口宽度兜底的估算，若让它先按估算渲染、再等
+  // ResizeObserver 修正，SVG 的 viewBox 会横向跳一下（设备页每次重挂载都跳一次）。
+  // layout effect 里 setState 会在绘制前同步重渲，这一跳就看不见了。
+  useLayoutEffect(() => {
+    const el = curveRef.current;
+    if (!el) return;
+    const w = el.getBoundingClientRect().width;
+    if (w > 0) setCurveW(Math.max(660, Math.floor(w + 20)));
+  }, []);
 
   useEffect(() => {
     const el = curveRef.current;

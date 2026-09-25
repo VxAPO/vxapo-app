@@ -202,9 +202,7 @@ export default function App() {
     view,
     side,
     setSide,
-    setView,
     segDir,
-    setSegDir,
     toolbarHidden,
     viewTransitionH,
     viewCollapsing,
@@ -214,7 +212,6 @@ export default function App() {
     viewAnimating,
     viewAnimatingRef,
     switchView,
-    beginViewAnim,
     blocksDragApi,
     effectsDragApi,
     overlayClassForKey,
@@ -243,15 +240,12 @@ export default function App() {
 
   // 通道选择器开关跟随磁盘配置：重启/切换设备后从 per-channel 数据还原，
   // 避免界面停在“关”而配置实际是分通道的（还会在保存时丢掉非首通道块）。
-  // 通道模式下必须落在参数视图（通道选择器只存在于参数视图，preset 按钮此时也禁用）。
+  // 从磁盘配置读出的通道模式同步到 store。**不再强制切到参数视图**：语义视图同样按声道过滤内容
+  // （`PresetView` 的 `visible`），声道切换入口是曲线卡上的选择器——它在两个视图里都在。
   useEffect(() => {
     if (!loaded) return;
     setChannelOn(configChannelMode);
-    if (configChannelMode) {
-      setSegDir("right");
-      setView("advanced");
-    }
-  }, [loaded, configChannelMode, setChannelOn, setSegDir, setView]);
+  }, [loaded, configChannelMode, setChannelOn]);
 
   const {
     selectedIds,
@@ -392,27 +386,20 @@ export default function App() {
   }, [selectedGuid]);
 
   const toggleChannel = useCallback(() => {
-    // 只有通道切换会伴随视图切到 advanced 时才需要 view-stage 动画；
-    // 已处于 advanced 时直接清空选择即可，不触发视图退场/进场。
-    if (view !== "advanced") beginViewAnim();
     setCopyOpen(false);
     setSelectedIds([]);
     // 基准电平的拆分/合并（配置域逻辑）在 configStore 内完成；传入切换前的 channelOn。
     setChannelPreampMode(channelOn, channelNames);
     setChannelOn((v) => !v);
-    setView("advanced");
-    setSegDir("right");
+    // 不再强制切到参数视图：语义视图也按声道过滤（`PresetView` 的 `visible`），
+    // 声道切换入口是曲线卡上的选择器，两个视图都能用。
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();
   }, [
     channelOn,
     channelNames,
-    view,
     setChannelPreampMode,
-    beginViewAnim,
     setChannelOn,
-    setView,
-    setSegDir,
     blocksDragApi.cancelDrag,
     effectsDragApi.cancelDrag,
   ]);
