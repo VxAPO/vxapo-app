@@ -51,14 +51,7 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "default": 0.354331
       },
       {
-        "key": "air_side",
-        "step": 0.01,
-        "min": 0,
-        "max": 1,
-        "default": 0
-      },
-      {
-        "key": "mix",
+        "key": "side_itd",
         "step": 0.01,
         "min": 0,
         "max": 1,

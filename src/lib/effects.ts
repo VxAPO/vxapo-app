@@ -58,8 +58,7 @@ const PARAM_LABELS: Record<string, string> = {
   "preamp.gain_db": "增益",
   "wide.gain": "高频补偿",
   "wide.air": "中置空气",
-  "wide.air_side": "侧向空气",
-  "wide.mix": "干湿混合",
+  "wide.side_itd": "侧向时间差",
   "wide.crossover_hz": "分频点",
   "aural.tune_hz": "中心频率",
   "aural.drive": "驱动",
@@ -116,7 +115,7 @@ export function effectParams(type: string): EffectParamDef[] {
  */
 const UI_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
   preamp: { gain_db: 0 },
-  wide: { gain: 0.05, air: 0.3543, air_side: 0, mix: 0.6, crossover_hz: 200 },
+  wide: { gain: 0.05, air: 0.3543, side_itd: 0.6, crossover_hz: 200 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
   // reverb 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
@@ -189,9 +188,10 @@ export function applySemanticStrength(
   const s = clamp01(strength);
   switch (type) {
     case "wide":
-      // 语义强度即空气吸收深度（0→1，无死区）；
-      // 高频补偿由参数视图手动微调，语义滑块不碰。
+      // 语义强度同时驱动「中置空气」与「侧向时间差」（0→1，无死区）；
+      // 高频补偿（低频深度）由参数视图手动微调，语义滑块不碰。
       next.air = Math.round(s * 10000) / 10000;
+      next.side_itd = Math.round(s * 10000) / 10000;
       break;
     case "aural": {
       // 干湿交叉淡化：wet 上限 0.9、dry=1-wet，避免干湿和 >1 削波。

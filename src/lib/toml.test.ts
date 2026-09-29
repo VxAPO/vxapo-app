@@ -8,7 +8,7 @@ const blocks: Block[] = [
   { id: "b2", enabled: false, bands: [{ fc: 8000, gain_db: -2, q: 0.7, kind: "high_shelf" }] },
 ];
 const effects: EffectItem[] = [
-  { id: "wide:all", type: "wide", enabled: true, params: { mix: 0.55 } },
+  { id: "wide:all", type: "wide", enabled: true, params: { side_itd: 0.55 } },
 ];
 
 describe("buildToml ↔ parseConfigWithTail", () => {
@@ -25,7 +25,7 @@ describe("buildToml ↔ parseConfigWithTail", () => {
     expect(parsed.blocks[1].enabled).toBe(false);
     expect(parsed.blocks[1].bands[0].kind).toBe("high_shelf");
     expect(parsed.effects[0]).toMatchObject({ type: "wide", enabled: true });
-    expect(parsed.effects[0].params?.mix).toBe(0.55);
+    expect(parsed.effects[0].params?.side_itd).toBe(0.55);
     expect(parsed.tail).toBe("");
   });
 
