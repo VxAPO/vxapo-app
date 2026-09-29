@@ -235,7 +235,7 @@
     inset 0 0 0 1px var(--dsw-alias-border-inverted),
     0 0 1px 0 rgba(0, 0, 0, 0.2),
     0 0 4px 0 rgba(0, 0, 0, 0.02),
-    0 12px 32px 0 rgba(0, 0, 0, 0.08);
+    0 8px 20px 0 rgba(0, 0, 0, 0.08);
   --scrollbar: #d9dce4;
   --scrollbar-hover: #c2c7d1;
   --disabled-fill: #b8bec9;
@@ -286,7 +286,7 @@
     inset 0 0 0 1px var(--dsw-alias-border-inverted),
     0 0 1px 0 rgba(var(--shadow-ink), 0.6),
     0 0 4px 0 rgba(var(--shadow-ink), 0.12),
-    0 12px 32px 0 rgba(var(--shadow-ink), 0.5);
+    0 8px 20px 0 rgba(var(--shadow-ink), 0.5);
   --scrollbar: #3f4348;
   --scrollbar-hover: #4f5358;
   --disabled-fill: #32363b;
@@ -396,7 +396,7 @@
     inset 0 0 0 1px transparent,
     0 0 1px 0 rgba(0, 0, 0, 0),
     0 0 4px 0 rgba(0, 0, 0, 0),
-    0 12px 32px 0 rgba(0, 0, 0, 0) !important;
+    0 8px 20px 0 rgba(0, 0, 0, 0) !important;
   transition: box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
