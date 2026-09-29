@@ -49,10 +49,6 @@ export const STAGGER_FADE_FAR_MS = 150;
 export const STAGGER_STEP_MS = 14;
 /** 错峰窗口上限：最后一张的延迟不超过它 */
 export const STAGGER_WINDOW_MS = 200;
-/** 落位前的起手位移（px）：卡片从上方这么远处落下来（配合 `EASE_OUT_BACK` 过冲回弹）。
-    注意方向——卡片起始在**上方**，是"往下展"；写成正值就成了"从下方往上收"（曾如此）。
-    0 = 纯淡入。 */
-export const STAGGER_DROP_PX = 6;
 /** 排序行容差：top 差在此以内视为同一行、行内按 left 排 */
 export const STAGGER_ROW_TOL_PX = 8;
 

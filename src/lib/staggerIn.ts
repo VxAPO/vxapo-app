@@ -1,10 +1,10 @@
 /**
- * 切换时卡片的错峰淡入（左上 → 右下）。
+ * 切换时卡片的错峰**淡入**（左上 → 右下）——只有透明度，不带位移。
  *
- * 出现手感：卡片从上方一点（`STAGGER_DROP_PX`）**往下落位**，靠 `EASE_OUT_BACK` 在落点轻轻
- * 过冲再收回——「往下展一下再回弹」。位移千万别写成正值，那就成了「从下方往上收」。
+ * 曾经是「从上方 6px 落位 + `EASE_OUT_BACK` 过冲回弹」，试过之后撤掉了：过冲在大卡片上读起来
+ * 像抖一下，而这点"落位感"的收益不值得。现在纯 `opacity 0 → 1`。
  *
- * 距离同时作用于**时长**：越靠左上的卡落位越慢（`STAGGER_FADE_NEAR_MS`），越靠右下越快
+ * 距离只作用于**时长**：越靠左上的卡淡入越慢（`STAGGER_FADE_NEAR_MS`），越靠右下越快
  * （`STAGGER_FADE_FAR_MS`），和延迟的疏密一样递减——尾部是"快而密"地收束，
  * 而不是和前几张一样拖着走。
  *
@@ -18,9 +18,8 @@
  * - 动画跑完自动回到正常状态（CSS 的 opacity 1），不需要清理，也不留内联样式。
  */
 
-import { EASE_OUT_BACK } from "./motionEase";
+import { EASE_OUT_SOFT } from "./motionEase";
 import {
-  STAGGER_DROP_PX,
   STAGGER_FADE_FAR_MS,
   STAGGER_FADE_NEAR_MS,
   STAGGER_ROW_TOL_PX,
@@ -31,8 +30,8 @@ import {
 /**
  * 参加错峰的元素：**只有网格子级**（`.device-cards` 是 grid，子级就是卡片本体）。
  *
- * 底部双卡（设备卡 / 曲线卡）**不参加**：它们不是内容卡片，跟着卡片去「下落 + 过冲」会像抖一下。
- * 它们由 `.bottom-row` 自己那段**纯淡入**负责（见 curve.css，时长对齐 `DEVICE_FADE_MS`）。
+ * 底部双卡（设备卡 / 曲线卡）**不参加**：它们不是内容卡片，不该排在内容队里等一档才出现；
+ * 由 `.bottom-row` 自己那段淡入负责（见 curve.css，时长对齐 `DEVICE_FADE_MS`）。
  */
 const STAGGER_SELECTOR = ".device-cards > *";
 
@@ -66,21 +65,15 @@ export function playStaggerIn(root: ParentNode | null | undefined): void {
   rows.forEach((rowEls, r) => {
     rowEls.forEach((el, c) => {
       // 同一条 √ 曲线同时决定「什么时候起跑」和「跑多久」：越靠后起跑越晚（且间隔越来越密），
-      // 单张位移也越短——尾部是"快而密"地收束，不是和前几张一样拖着走。
+      // 单张时长也越短——尾部是"快而密"地收束，不是和前几张一样拖着走。
       const t = maxWeight > 0 ? Math.sqrt((r + c) / maxWeight) : 0;
-      el.animate(
-        [
-          // 起手在**上方**（负值），往下落位；配 EASE_OUT_BACK 在落点轻轻过冲再收回
-          { opacity: 0, transform: `translateY(${-STAGGER_DROP_PX}px)` },
-          { opacity: 1, transform: "translateY(0)" },
-        ],
-        {
-          duration: STAGGER_FADE_NEAR_MS + (STAGGER_FADE_FAR_MS - STAGGER_FADE_NEAR_MS) * t,
-          delay: windowMs * t,
-          easing: EASE_OUT_BACK,
-          fill: "backwards",
-        },
-      );
+      el.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: STAGGER_FADE_NEAR_MS + (STAGGER_FADE_FAR_MS - STAGGER_FADE_NEAR_MS) * t,
+        delay: windowMs * t,
+        // 不用 EASE_OUT_BACK（那是给"落位"配的过冲曲线）：纯淡入取同族的非过冲版
+        easing: EASE_OUT_SOFT,
+        fill: "backwards",
+      });
     });
   });
 }
