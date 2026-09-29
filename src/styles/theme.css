@@ -225,6 +225,17 @@
   --gs-thumb-disabled: #ffffff;
   --ring-hover: rgba(15, 23, 42, 0.14);
   --hover-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 4px 10px rgba(15, 23, 42, 0.08);
+  /* 模态窗（Radix Dialog）阴影。设计稿里写的是
+     `inset 1px solid var(--dsw-alias-border-inverted), …`——`solid` 是 border 的语法，
+     box-shadow 里没有它，等效写法是 `inset 0 0 0 1px <color>`（当前 token 值为 transparent，
+     所以那一圈不显形，留着是为了跟设计稿的 token 对齐、将来改 token 就能显出来）。
+     三个外阴影自内向外：1px 描边感 / 4px 近场 / 32px 抬升。 */
+  --dsw-alias-border-inverted: transparent;
+  --modal-shadow:
+    inset 0 0 0 1px var(--dsw-alias-border-inverted),
+    0 0 1px 0 rgba(0, 0, 0, 0.2),
+    0 0 4px 0 rgba(0, 0, 0, 0.02),
+    0 12px 32px 0 rgba(0, 0, 0, 0.08);
   --scrollbar: #d9dce4;
   --scrollbar-hover: #c2c7d1;
   --disabled-fill: #b8bec9;
@@ -270,6 +281,12 @@
   --gs-thumb-disabled: #6d7279;
   --ring-hover: rgba(255, 255, 255, 0.14);
   --hover-shadow: 0 4px 10px rgba(var(--shadow-ink), 0.8), 0 6px 16px rgba(var(--shadow-ink), 0.55);
+  /* 同一套几何，墨色换成 --shadow-ink 并提权：浅色的 0.08 黑在深底上基本看不见 */
+  --modal-shadow:
+    inset 0 0 0 1px var(--dsw-alias-border-inverted),
+    0 0 1px 0 rgba(var(--shadow-ink), 0.6),
+    0 0 4px 0 rgba(var(--shadow-ink), 0.12),
+    0 12px 32px 0 rgba(var(--shadow-ink), 0.5);
   --scrollbar: #3f4348;
   --scrollbar-hover: #4f5358;
   --disabled-fill: #32363b;
@@ -371,9 +388,15 @@
   box-shadow: none !important;
 }
 
-/* 主题过渡期间这三个阴影淡出（同结构透明），结束后靠自身 box-shadow 过渡淡入 */
+/* 主题过渡期间这三个阴影淡出（同结构透明），结束后靠自身 box-shadow 过渡淡入。
+   透明版必须与 --modal-shadow **逐层同构**（层数、偏移、模糊都一样，只有颜色透明），
+   否则 box-shadow 无法插值，会直接跳变。 */
 .theme-transition .vx-dialog-content {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0) !important;
+  box-shadow:
+    inset 0 0 0 1px transparent,
+    0 0 1px 0 rgba(0, 0, 0, 0),
+    0 0 4px 0 rgba(0, 0, 0, 0),
+    0 12px 32px 0 rgba(0, 0, 0, 0) !important;
   transition: box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 

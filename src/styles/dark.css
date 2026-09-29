@@ -94,7 +94,7 @@
 }
 
 :root[data-theme="dark"] .vx-dialog-content {
-  box-shadow: 0 12px 40px rgba(var(--shadow-ink), 0.45);
+  box-shadow: var(--modal-shadow); /* 四层几何的深色取值在 theme.css 的 :root[data-theme="dark"]，这里沿用 token */
 }
 
 :root[data-theme="dark"] .vx-toast {
