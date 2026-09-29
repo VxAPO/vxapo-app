@@ -50,6 +50,9 @@ interface ConfigStore {
   effects: EffectItem[];
   tuningMap: Record<string, boolean>;
   loaded: boolean;
+  /** `loaded` 的那份数据属于哪台设备。切设备时 `load()` 先把这里清成 null、解析完成后才写回，
+      用于判断「配置是否已经属于当前设备」（切设备后有一小段 store 里还是上一台的 blocks）。 */
+  loadedGuid: string | null;
   /** 磁盘 config 编码的通道模式：存在任意带 channels 的 EQ 块或效果器即为开启。 */
   configChannelMode: boolean;
   /** 窗口不可见（最小化/遮挡）时轮询暂停。 */
@@ -118,6 +121,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   effects: [],
   tuningMap: {},
   loaded: false,
+  loadedGuid: null,
   configChannelMode: false,
   pollPaused: false,
   reloadNonce: 0,
@@ -184,7 +188,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     const guid = get().inputs.selectedGuid;
     if (!guid) return;
     const seq = get().loadSeq + 1;
-    set({ loadSeq: seq, loaded: false });
+    set({ loadSeq: seq, loaded: false, loadedGuid: null });
     get().configRevisionRef.current = null;
     try {
       const text = await readConfig(guid);
@@ -208,13 +212,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         get().tailRef.current = "";
       }
       get().errorSink?.("");
-      set({ loaded: true });
+      set({ loaded: true, loadedGuid: guid });
     } catch (e: unknown) {
       if (get().loadSeq !== seq) return;
       set({ blocks: [], configChannelMode: false });
       get().tailRef.current = "";
       get().errorSink?.(friendlyError(e));
-      set({ loaded: true });
+      set({ loaded: true, loadedGuid: guid });
     }
   },
 

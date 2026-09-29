@@ -143,7 +143,16 @@ export default function App() {
   const liveCurve = useMemo(() => {
     const freqs = buildEvalFreqs(visibleBlocks);
     const range = curveRange(freqs, visibleBlocks, fs, preampGainDb);
-    return { blocks: visibleBlocks, freqs, peak: range.max, trough: range.min };
+    // 基准电平（preamp）也**收进快照**：它是曲线路径的纵向偏移，量程同样按它算。
+    // 只把 blocks/freqs 快照化、preamp 仍按实时值传给绘制侧，切设备（尤其「关通道 → 开通道」）那一档
+    // 会画出「旧设备的链 + 新设备的基准电平」这条并不存在的曲线，过渡中间就是错的（踩过）。
+    return {
+      blocks: visibleBlocks,
+      freqs,
+      preamp: preampGainDb,
+      peak: range.max,
+      trough: range.min,
+    };
   }, [visibleBlocks, fs, preampGainDb]);
   // 曲线计算较重（31 段 × 数百评估点），按固定间隔节流；首帧 deferred 还是 null，直接用现算的这份
   const deferredCurve = useThrottledCompute(() => liveCurve, [visibleBlocks, fs, preampGainDb]);
@@ -239,7 +248,11 @@ export default function App() {
   // 避免界面停在“关”而配置实际是分通道的（还会在保存时丢掉非首通道块）。
   // 从磁盘配置读出的通道模式同步到 store。**不再强制切到参数视图**：语义视图同样按声道过滤内容
   // （`PresetView` 的 `visible`），声道切换入口是曲线卡上的选择器——它在两个视图里都在。
-  useEffect(() => {
+  // 用 useLayoutEffect（绘制前）而不是 useEffect：`load()` 解析完成的那一次提交里，`blocks`/`effects`
+  // 已经换成新设备的，而 `channelOn` 还是上一台的值 —— 若在绘制后才改，会先画出一帧「新设备的链按旧
+  // 通道过滤」（关着通道时就是左声道那一份），下一帧才回正：现象是切设备时**闪一下左声道的坐标轴**
+  // （硬切之后没有淡入遮挡，这一帧就露出来了，踩过）。
+  useLayoutEffect(() => {
     if (!loaded) return;
     setChannelOn(configChannelMode);
   }, [loaded, configChannelMode, setChannelOn]);
@@ -567,7 +580,8 @@ export default function App() {
                 fs={fs}
                 yTop={yTop}
                 yBottom={yBottom}
-                preampGainDb={preampGainDb}
+                /* 同快照：基准电平必须与 blocks/freqs/量程同档（见上面 liveCurve 的注释） */
+                preampGainDb={curveSnap.preamp}
                 curveChannel={channelOn ? effActiveChannel : firstChannel}
                 onCurveChannelChange={handleCurveChannelChange}
                 channelOn={channelOn}

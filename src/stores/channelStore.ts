@@ -39,10 +39,14 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
         activeByGuid: { ...s.activeByGuid, [prevGuid]: activeChannel },
       }));
     }
+    // 新设备**没有记忆**时保持当前值，不要回落成「关 + 左声道」：`load()` 是异步的，新设备的
+    // `configChannelMode` 要晚一点才到，而在那之前 `blocks` 还是上一台的——回落会画出「上一台的链
+    // 按左声道过滤」，观感就是切设备时闪一下左声道的坐标轴（踩过）。磁盘值随后在绘制前校正
+    // （App 里同步 `configChannelMode` 的那条 useLayoutEffect）。
     set((s) => ({
       prevGuid: guid,
-      channelOn: guid ? (s.modeByGuid[guid] ?? false) : false,
-      activeChannel: guid ? (s.activeByGuid[guid] ?? "L") : "L",
+      channelOn: guid ? (s.modeByGuid[guid] ?? channelOn) : false,
+      activeChannel: guid ? (s.activeByGuid[guid] ?? activeChannel) : "L",
     }));
   },
 
