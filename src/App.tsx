@@ -317,9 +317,11 @@ export default function App() {
   }, [selectedGuid]);
 
   // 染色 canvas 在设备页过渡期间要持续重绘：过渡由 framer-motion 驱动 DOM，canvas 不感知，
-  // 得显式开一段重绘窗口（两段淡出淡入 + 余量）。
+  // 得显式开一段重绘窗口（两段淡出淡入 + 余量）。用 useLayoutEffect（绘制前）而不是 useEffect：
+  // 画布是独立图层（`mix-blend-mode: screen` 压在内容之上），晚一帧开窗口就是「新页面已经在淡入、
+  // 画布还停在上一轮的染色」——薄元素（分区标题、1px 描边）上最容易看出来，读起来就是闪一下（踩过）。
   // 滚动位置不必显式复位：`.device-page` 仍按设备重挂载，`.tuning-scroll` 在它内部，天然回顶。
-  useEffect(() => {
+  useLayoutEffect(() => {
     driveFor(DEVICE_FADE_MS * 2 + 120, "full");
   }, [selectedGuid]);
 
