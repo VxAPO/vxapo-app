@@ -80,13 +80,8 @@ export default function ViewStage({
               active ? { x: 0, opacity: 1 } : { x: v === "preset" ? "-100%" : "100%", opacity: 0 }
             }
             onAnimationComplete={() => onStageAnimationComplete(v)}
-            transition={
-              active
-                ? // 进场只做 x 平移，opacity 立即到 1：淡入交给卡片错峰（playStaggerIn）。
-                  // 整体再淡一层会和卡片自己的淡入相乘，卡片永远亮不满、观感发灰。
-                  { duration: VIEW_SLIDE_MS / 1000, ease: "easeInOut", opacity: { duration: 0 } }
-                : { duration: VIEW_SLIDE_MS / 1000, ease: "easeInOut" }
-            }
+            // 进场与退场都是「平移 + 淡入淡出」：错峰已删除，不再把进场 opacity 设成 0 时长
+            transition={{ duration: VIEW_SLIDE_MS / 1000, ease: "easeInOut" }}
           >
             {v === "preset" ? (
               <PresetView

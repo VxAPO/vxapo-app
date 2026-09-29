@@ -26,32 +26,6 @@ export const COLLAPSE_EASE = EASE_OUT_SOFT;
 const EASE_P1 = EASE_OUT_SOFT_P1;
 const EASE_P2 = EASE_OUT_SOFT_P2;
 
-/**
- * 切换时卡片的错峰淡入（左上 → 右下）。
- *
- * 延迟在**开播前**一次算好（不是「等上一张跑完再跑下一张」——那是串行，卡片会一个一个地
- * 往外蹦）。全部延迟先布好、动画互相重叠，只有起跑时刻错开。
- *
- * 排序按**对角线**：权重 = 行号 + 列号，同一反对角线上的卡片同时刻起跑，所以推进方向是
- * 沿对角线从左上扫到右下（行主序会让第二行第一列排在第一行最后一列之后，方向就不对了）。
- *
- * 间隔**前疏后密**：延迟 = 窗口 × √(权重 / 最大权重)（开方曲线，斜率递减）。越靠后越晚起跑，
- * 但两点之间的间隔越来越小——头几张拉得开、尾段快速收束。用线性会让整队匀速铺开，观感偏"排队"。
- *
- * 张数多时靠 `STAGGER_WINDOW_MS` + `STAGGER_STEP_MS` 自适应窗口（见下），
- * 而不是「延迟封顶」：封顶会把超出窗口的卡片挤到同一时刻，断掉「越远越晚」的顺序（踩过）。
- */
-/** 最近（左上角）那张的单张落位时长：最长，位移看得最完整 */
-export const STAGGER_FADE_NEAR_MS = 260;
-/** 最远那张的单张落位时长：最短，尾部收束时短促带过 */
-export const STAGGER_FADE_FAR_MS = 150;
-/** 权重单位的时间上限：窗口 = min(`STAGGER_WINDOW_MS`, 最大权重 × 它)，张数少时窗口跟着小 */
-export const STAGGER_STEP_MS = 14;
-/** 错峰窗口上限：最后一张的延迟不超过它 */
-export const STAGGER_WINDOW_MS = 200;
-/** 排序行容差：top 差在此以内视为同一行、行内按 left 排 */
-export const STAGGER_ROW_TOL_PX = 8;
-
 /** 高度差 → 动画时长：夹在 [COLLAPSE_MS_MIN, VIEW_COLLAPSE_MS] 之间 */
 export function heightDeltaMs(deltaPx: number): number {
   return Math.round(
