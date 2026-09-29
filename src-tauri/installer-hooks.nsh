@@ -1,11 +1,36 @@
 ; VxAPO NSIS installer hooks
-; 安装/卸载前先停音频服务并结束残留 CLI（保证 DLL/exe 可覆盖），
-; 安装完成后注册随包 driver DLL 的 CLSID 绑定并恢复音频服务；
-; 同时把安装时选择的界面语言写入 C:\ProgramData\VxAPO\lang.txt（与 config 同目录约定，
-; 注意 NSIS 没有 $COMMONAPPDATA 变量，路径需硬编码），作为应用首次启动的默认语言。
+; 安装/卸载前先释放被 audiodg 映射的 driver DLL 映像（结束进程 + 轮询等待 + 可写打开校验，
+; 全部 NSIS 原生指令，安装包自给自足——不依赖也不调用 CLI），再停音频服务；
+; 安装完成后恢复音频服务，并把安装时选择的界面语言写入 C:\ProgramData\VxAPO\lang.txt
+; （与 config 同目录约定，注意 NSIS 没有 $COMMONAPPDATA 变量，路径需硬编码）。
+;
+; 全局 COM 注册（HKCR\CLSID\* 与 AudioEngine\AudioProcessingObjects\*）**不在此处做**：
+; 应用的设备安装流程会经 auto_register_driver() 写同一批键，且该注册幂等，
+; 安装期重复一遍没有收益，只会把安装器绑到 CLI 上。
+
+; 释放 driver DLL 映像：先结束 audiodg，再最多等约 5s（12 × 400ms），
+; 每轮用「可写打开」验证映像确实已释放（文件仍被映射时打开必然失败）。
+; ${tag} 只用于给标签去重（同一宏会被展开多次）。
+!macro VBX_RELEASE_DRIVER_IMAGE tag
+  nsExec::Exec 'taskkill /F /IM audiodg.exe'
+  StrCpy $2 0
+  vbx_retry_${tag}:
+    IntOp $2 $2 + 1
+    Sleep 400
+    IfFileExists "$INSTDIR\resources\vxapo_driver.dll" 0 vbx_done_${tag}
+    ClearErrors
+    FileOpen $3 "$INSTDIR\resources\vxapo_driver.dll" "a"
+    IfErrors 0 vbx_close_${tag}
+    IntCmp $2 12 vbx_done_${tag} vbx_retry_${tag} vbx_retry_${tag}
+  vbx_close_${tag}:
+    FileClose $3
+  vbx_done_${tag}:
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
   nsExec::Exec 'taskkill /F /IM vxapo-cli.exe'
   nsExec::Exec 'net stop audiosrv'
+  !insertmacro VBX_RELEASE_DRIVER_IMAGE preinstall
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -17,14 +42,13 @@
   FileOpen $1 "C:\ProgramData\VxAPO\lang.txt" w
   FileWrite $1 $0
   FileClose $1
-  nsExec::ExecToStack '"$INSTDIR\resources\vxapo-cli.exe" register'
-  Pop $0
   nsExec::Exec 'net start audiosrv'
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
   nsExec::Exec 'taskkill /F /IM vxapo-cli.exe'
   nsExec::Exec 'net stop audiosrv'
+  !insertmacro VBX_RELEASE_DRIVER_IMAGE preuninstall
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
