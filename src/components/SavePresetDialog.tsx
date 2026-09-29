@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { accentHoverColor, presetAccent } from "../lib/blocks";
 import { t } from "../lib/i18n/core";
+import { fmtDb1 } from "../lib/format";
 import OverlayScrollbar from "./OverlayScrollbar";
 
 interface SavePresetDialogProps {
@@ -26,7 +27,7 @@ function fmtFc(fc: number): string {
 }
 
 function fmtDb(db: number): string {
-  return `${db >= 0 ? "+" : ""}${db.toFixed(1)} dB`;
+  return `${fmtDb1(db)} dB`;
 }
 
 /** 保存自定义预设：可编辑整体名称与每段 PEAK 的语义描述 */

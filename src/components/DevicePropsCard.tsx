@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { Device } from "../lib/model";
 import { t } from "../lib/i18n/core";
+import { fmtDb1 } from "../lib/format";
 
 interface DevicePropsCardProps {
   device: Device | null;
@@ -32,7 +33,7 @@ function DevicePropsCard({
       <div className="dev-prop">
         <span>{t("peakGain")}</span>
         <span className="dev-prop-right">
-          <b>{peakGain > 0 ? "+" : ""}{peakGain.toFixed(1)} dB</b>
+          <b>{fmtDb1(peakGain)} dB</b>
           <button
             className="dev-prop-btn"
             type="button"

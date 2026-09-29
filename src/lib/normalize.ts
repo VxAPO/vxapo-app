@@ -44,11 +44,13 @@ export function planNormalize(
     const freqs = buildEvalFreqs(chBlocks);
     const filterPeak = curveMax(freqs, chBlocks, fs, 0);
     const totalPeak = currentPreamp + filterPeak;
+    // 压在 0 附近时 `Math.round(-0.4) / 10` 会得到 **`-0`**：它会一路传到数字输入框（显示 "-0"）
+    // 与文案（"-0.0 dB"）。下面 `+ 0` 把 -0 归一成 0，双保险见 lib/format 的 fmtDb1。
     if (Math.abs(totalPeak) < 0.05) continue;
     updates.push(
       channelOn
-        ? { id: `preamp:${ch}`, channels: [ch], gain_db: Math.round(-filterPeak * 10) / 10 }
-        : { id: "preamp:all", gain_db: Math.round(-filterPeak * 10) / 10 },
+        ? { id: `preamp:${ch}`, channels: [ch], gain_db: Math.round(-filterPeak * 10) / 10 + 0 }
+        : { id: "preamp:all", gain_db: Math.round(-filterPeak * 10) / 10 + 0 },
     );
   }
   return { updates, channeled: channelOn };

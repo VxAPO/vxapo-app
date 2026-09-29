@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
+import { fmtDb1 } from "../lib/format";
 import { buildEvalFreqs, dbY, logX } from "../lib/curve";
 import { bandDbCached } from "../lib/rbj";
 import { alignPaths } from "../lib/pathMorph";
@@ -35,7 +36,7 @@ function fmtFreq(f: number): string {
 }
 
 function fmtDb(db: number): string {
-  return `${db >= 0 ? "+" : ""}${db.toFixed(1)} dB`;
+  return `${fmtDb1(db)} dB`;
 }
 
 interface CurvePlotProps {

@@ -23,6 +23,7 @@ import {
 } from "../lib/blocks";
 import { getLang, t } from "../lib/i18n/core";
 import { planNormalize } from "../lib/normalize";
+import { fmtDb1 } from "../lib/format";
 
 function effectId(e: EffectItem): string {
   return e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`;
@@ -589,13 +590,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     });
     if (channelOn) {
       const summary = updates
-        .map((u) => `${u.channels?.[0]} ${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)} dB`)
+        .map((u) => `${u.channels?.[0]} ${fmtDb1(u.gain_db)} dB`)
         .join("，");
       s.notifySink?.(t("notify.normalizedByChannel", { summary }));
     } else {
       const u = updates[0];
       s.notifySink?.(
-        t("notify.normalized", { db: `${u.gain_db > 0 ? "+" : ""}${u.gain_db.toFixed(1)}` }),
+        t("notify.normalized", { db: fmtDb1(u.gain_db) }),
       );
     }
   },
