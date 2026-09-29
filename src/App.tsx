@@ -490,11 +490,14 @@ export default function App() {
                   transition: { duration: DEVICE_FADE_MS / 1000, ease: "easeInOut" },
                 }}
                 transition={{
-                  // 进场与退场都按 DEVICE_FADE_MS 补间（AnimatePresence mode="wait" 两段串行）。
-                  // 曾经把进场 opacity 设成 0 时长、淡入交给卡片错峰——错峰已整体删除，
-                  // 页面自己淡，双卡与内容跟着一起淡。
+                  // 进场**不补间 opacity**（硬切，同拆分前口径），只保留退场的 180ms 淡出（在 exit 里）。
+                  // 原因：进场淡入会把整棵子树提升为**合成图层**，图层上的文字丢掉次级像素（LCD）抗锯齿、
+                  // 1px 描边的栅格落点也变了 —— 薄元素（章节标题的字形、卡片组色描边）上表现为闪一下，
+                  // 而实心填充的控件（滑杆/开关/数值）看不出差别（实机确认：只有标题与卡片描边闪）。
+                  // 退场淡出时反正整页在离场，观感不受这条影响。
                   duration: DEVICE_FADE_MS / 1000,
                   ease: "easeInOut",
+                  opacity: { duration: 0 },
                 }}
               >
             {installedDevices.length === 0 ? (
