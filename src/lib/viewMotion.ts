@@ -10,9 +10,11 @@ import { EASE_OUT_SOFT, EASE_OUT_SOFT_P1, EASE_OUT_SOFT_P2 } from "./motionEase"
 
 /** 视图平移动画时长（ms）；stage 的 transition 与收窄启动时刻共用 */
 export const VIEW_SLIDE_MS = 320;
-/** 设备页切换的淡出/淡入时长（ms，两段各自；AnimatePresence mode="wait" 先退后进）。
-    0.18s 是拆分前一直用的值（两段合计 0.36s，观感自然不拖），改它等于改切换手感。 */
-export const DEVICE_FADE_MS = 180;
+/** 设备页切换后给染色画布的收尾窗口（ms）。
+    换页是**硬切**（不补间 opacity，见 App 里设备页的注释）：瞬时换页只产生一次 childList 变更，
+    MutationObserver 已会排一次全量重绘；这段窗口是保险——新页面首帧的几何/配色若晚一两帧才稳定，
+    画布不至于停在上一轮的染色上（它是独立图层，不跟着 DOM 走）。 */
+export const DEVICE_SETTLE_MS = 200;
 /** 高度收窄动画时长上限（ms） */
 export const VIEW_COLLAPSE_MS = 800;
 /** 收窄时长的下限（ms）与按高度差的换算：差值越小收得越快 */

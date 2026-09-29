@@ -31,7 +31,7 @@ import {
   useViewAnimation,
 } from "./hooks/useViewAnimation";
 import { useThrottledCompute } from "./hooks/useThrottledCompute";
-import { DEVICE_FADE_MS } from "./lib/viewMotion";
+import { DEVICE_SETTLE_MS } from "./lib/viewMotion";
 import { driveFor } from "./lib/edgetint/renderLoop";
 
 /**
@@ -316,13 +316,13 @@ export default function App() {
     setCopyOpen(false);
   }, [selectedGuid]);
 
-  // 染色 canvas 在设备页过渡期间要持续重绘：过渡由 framer-motion 驱动 DOM，canvas 不感知，
-  // 得显式开一段重绘窗口（两段淡出淡入 + 余量）。用 useLayoutEffect（绘制前）而不是 useEffect：
-  // 画布是独立图层（`mix-blend-mode: screen` 压在内容之上），晚一帧开窗口就是「新页面已经在淡入、
-  // 画布还停在上一轮的染色」——薄元素（分区标题、1px 描边）上最容易看出来，读起来就是闪一下（踩过）。
+  // 设备页是**硬切**（不补间），换页只产生一次 childList 变更，MutationObserver 已会排一次全量重绘；
+  // 这段窗口是保险：新页面首帧的几何/配色若晚一两帧才稳定，画布不至于停在上一轮的染色上。
+  // 画布是独立图层（`mix-blend-mode: screen` 压在内容之上），晚一帧就是「页面已经换掉、画布还在显示旧染色」。
+  // 用 useLayoutEffect（绘制前）而不是 useEffect：rAF 仍在这一帧绘制前跑，画布与换页同帧对齐（踩过）。
   // 滚动位置不必显式复位：`.device-page` 仍按设备重挂载，`.tuning-scroll` 在它内部，天然回顶。
   useLayoutEffect(() => {
-    driveFor(DEVICE_FADE_MS * 2 + 120, "full");
+    driveFor(DEVICE_SETTLE_MS, "full");
   }, [selectedGuid]);
 
   const handleChannelChange = useCallback((ch: string) => {
@@ -483,22 +483,15 @@ export default function App() {
               <motion.div
                 key={selectedGuid ?? "none"}
                 className="device-page"
+                /* 设备页切换是**硬切**：进出都不补间 opacity（`duration: 0`）。
+                   只要补间过，整棵子树就被提升为**合成图层** —— 图层上的文字丢掉次级像素（LCD）抗锯齿、
+                   1px 描边的栅格落点也变了；薄元素（章节标题的字形、卡片组色描边）会闪一下，而实心填充的
+                   控件（滑杆/开关/数值）看不出差别。实机确认：进场淡入闪一次、退场淡出又闪一次 —— 所以两边
+                   都不给调音卡片加淡入淡出。`AnimatePresence mode="wait"` 仍负责「先退旧页、再挂新页」的次序。 */
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{
-                  opacity: 0,
-                  transition: { duration: DEVICE_FADE_MS / 1000, ease: "easeInOut" },
-                }}
-                transition={{
-                  // 进场**不补间 opacity**（硬切，同拆分前口径），只保留退场的 180ms 淡出（在 exit 里）。
-                  // 原因：进场淡入会把整棵子树提升为**合成图层**，图层上的文字丢掉次级像素（LCD）抗锯齿、
-                  // 1px 描边的栅格落点也变了 —— 薄元素（章节标题的字形、卡片组色描边）上表现为闪一下，
-                  // 而实心填充的控件（滑杆/开关/数值）看不出差别（实机确认：只有标题与卡片描边闪）。
-                  // 退场淡出时反正整页在离场，观感不受这条影响。
-                  duration: DEVICE_FADE_MS / 1000,
-                  ease: "easeInOut",
-                  opacity: { duration: 0 },
-                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0 }}
               >
             {installedDevices.length === 0 ? (
               <NoDeviceHint />
