@@ -426,6 +426,29 @@ describe("load", () => {
     expect(s.errorSink).toBeNull();
   });
 
+  it("loadedGuid 跟随数据归属：开始读盘时清空、成功后写回当前设备", async () => {
+    let resolve!: (v: string) => void;
+    vi.mocked(api.readConfig).mockReturnValueOnce(new Promise<string>((r) => (resolve = r)));
+    // 先假装上一台的数据还在（"A"），再切到 B 读盘
+    useConfigStore.setState({ loaded: true, loadedGuid: "A" });
+    setInputs({ selectedGuid: "B" });
+    const p = useConfigStore.getState().load();
+    // 读盘期间：store 里的数据还不属于 B（通道态据此推迟恢复）
+    expect(useConfigStore.getState().loadedGuid).toBeNull();
+    expect(useConfigStore.getState().loaded).toBe(false);
+    resolve(cfgText(200, false));
+    await p;
+    expect(useConfigStore.getState().loadedGuid).toBe("B");
+  });
+
+  it("读取失败也写回 loadedGuid，界面不会一直等下去", async () => {
+    vi.mocked(api.readConfig).mockRejectedValue(new Error("boom"));
+    useConfigStore.setState({ errorSink: vi.fn() });
+    setInputs({ selectedGuid: "C" });
+    await useConfigStore.getState().load();
+    expect(useConfigStore.getState().loadedGuid).toBe("C");
+  });
+
   it("读取失败：清空块、报错、仍置 loaded", async () => {
     const err = vi.fn();
     vi.mocked(api.readConfig).mockRejectedValue(new Error("boom"));
