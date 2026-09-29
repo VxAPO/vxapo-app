@@ -26,7 +26,12 @@ function CurveGrid({ curveW, yTop, yBottom }: CurveGridProps) {
   const plotTop = dbY(yTop, yTop, yBottom);
   const plotBottom = dbY(yBottom, yTop, yBottom);
   const xGrid = useMemo(
-    () => [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].map((f) => logX(f, curveW)),
+    () =>
+      [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].map((f) =>
+        // 与纵轴同一口径：竖线也 snap 到设备像素。`curveW` 一变映射就整体缩放，未 snap 时线条落在
+        // 亚像素上、由渲染器自行取整，相邻两档取整结果不同就抖一下（同上面纵轴那条注释）。
+        snapPx(logX(f, curveW)),
+      ),
     [curveW],
   );
   const xLabels = ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"];

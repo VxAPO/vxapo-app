@@ -25,6 +25,19 @@ interface CurvePanelProps {
   channelNames: string[];
 }
 
+/**
+ * `curveW`（→ `<svg viewBox>` 的宽度）的**唯一来源**：`.curve-wrap` 的**内容盒**宽度 + 20。
+ *
+ * 必须和 ResizeObserver 报的 `contentRect.width` 同一个盒模型。踩过：布局 effect 曾经用
+ * `getBoundingClientRect().width`（**含 padding**，而 `.curve-wrap` 左右各 18px），RO 用 content box，
+ * 两者差 36px —— 每次设备页重挂载都是「先按 border box 渲染一帧 → RO 报回 content box → viewBox
+ * 宽度变 36 → 所有 x 坐标整体重新缩放」，表现为坐标轴（尤其是 x=40 那条纵轴与刻度）**细微水平抖动**。
+ *
+ * 那个 +20 与 `<svg>` 的 CSS 宽度 `calc(100% + 28px)` 有 8px 出入，只影响整体缩放约 1%，与稳定性无关；
+ * 要动它得同时改 `logX` 的 40px 边距，别单改一边。
+ */
+const widthFor = (contentW: number) => Math.max(660, Math.floor(contentW + 20));
+
 function CurvePanel({
   blocks,
   evalFreqs,
@@ -60,11 +73,16 @@ function CurvePanel({
   // 首帧就要把宽度量准：上面那个初值只是拿窗口宽度兜底的估算，若让它先按估算渲染、再等
   // ResizeObserver 修正，SVG 的 viewBox 会横向跳一下（设备页每次重挂载都跳一次）。
   // layout effect 里 setState 会在绘制前同步重渲，这一跳就看不见了。
+  // 但「量准」的前提是**和 RO 量同一个盒模型**：这里必须换算成内容盒（见 widthFor 的注释）。
   useLayoutEffect(() => {
     const el = curveRef.current;
     if (!el) return;
-    const w = el.getBoundingClientRect().width;
-    if (w > 0) setCurveW(Math.max(660, Math.floor(w + 20)));
+    const cs = getComputedStyle(el);
+    const w =
+      el.getBoundingClientRect().width -
+      parseFloat(cs.paddingLeft) -
+      parseFloat(cs.paddingRight);
+    if (w > 0) setCurveW(widthFor(w));
   }, []);
 
   useEffect(() => {
@@ -77,7 +95,7 @@ function CurvePanel({
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = 0;
         // 跟随窗口收窄，低于 660px 才进入遮挡；读最新宽度而非回调闭包的旧值
-        const next = Math.max(660, Math.floor(latestWRef.current + 20));
+        const next = widthFor(latestWRef.current);
         setCurveW((prev) => (prev === next ? prev : next));
       });
     });
