@@ -71,6 +71,15 @@
   align-items: stretch;
   padding: 10px 12px 12px;
   pointer-events: none;
+  /* 设备页切换时底部双卡**只淡入**：它们不是内容卡片，跟着卡片错峰去「下落 + 过冲」会像抖一下。
+     页面自身的进场 opacity 是 0 时长（淡入交给卡片错峰），所以这里必须自己补一段。
+     0.18s 与 `DEVICE_FADE_MS` 对齐（改那边记得同步）；视图切换不重挂载，自然不会重播。 */
+  animation: vx-bottom-fade 0.18s ease-out;
+}
+
+@keyframes vx-bottom-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .dev-props-card {

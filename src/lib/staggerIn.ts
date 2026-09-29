@@ -29,14 +29,12 @@ import {
 } from "./viewMotion";
 
 /**
- * 参加错峰的元素：网格子级（`.device-cards` 是 grid，子级就是卡片本体）**加上底部双卡**
- * （设备卡 / 曲线卡）。
+ * 参加错峰的元素：**只有网格子级**（`.device-cards` 是 grid，子级就是卡片本体）。
  *
- * 底部双卡不是网格子级，但设备页切换时页面自身的进场 `opacity` 是 0 时长（淡入全交给错峰，
- * 见 App 的 `.device-page`），漏掉它们就是「底部双卡先蹦出来、卡片随后才扫过去」——节奏断开。
- * 放进同一套排序即可：按矩形它们落在最后一档（最下、最右），延迟最大、单张最短，自然接在队尾。
+ * 底部双卡（设备卡 / 曲线卡）**不参加**：它们不是内容卡片，跟着卡片去「下落 + 过冲」会像抖一下。
+ * 它们由 `.bottom-row` 自己那段**纯淡入**负责（见 curve.css，时长对齐 `DEVICE_FADE_MS`）。
  */
-const STAGGER_SELECTOR = ".device-cards > *, .bottom-row > *";
+const STAGGER_SELECTOR = ".device-cards > *";
 
 export function playStaggerIn(root: ParentNode | null | undefined): void {
   if (!root || typeof Element === "undefined") return;
