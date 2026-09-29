@@ -3,7 +3,7 @@
 // 设备相关的数据与动作（设备表、残留、卸载目标、刷新）在组件内直接订阅 deviceStore；
 // 其余仍需外部传入（主题、预设流程、导入流程、拖拽 API）。
 import { AnimatePresence } from "framer-motion";
-import type { ComponentProps } from "react";
+import { useRef, type ComponentProps } from "react";
 import { t } from "../lib/i18n/core";
 import { isInstalled } from "../lib/api";
 import type { Block, PresetLibraryEntry } from "../lib/model";
@@ -61,6 +61,18 @@ interface AppOverlaysProps {
   effectClassForKey: (key: string) => string;
 }
 
+/**
+ * 退场动画期间的值不能跟着被清空：Radix 的 Presence 会把元素多留一个动画时长（0.15s），
+ * 而父级/Store 通常在这一刻就把目标对象置 null 了——内容会先变成空值或回退文案、窗口才开始淡出，
+ * 观感是「设备名先消失、窗口再退出」。开着的时候跟着实时值走，关掉之后保持最后一次的值，
+ * 等元素真正卸载（`open` 再变 true 时会立刻跟上新值）。
+ */
+function useLatchedWhileOpen<T>(value: T, open: boolean): T {
+  const ref = useRef(value);
+  if (open) ref.current = value;
+  return open ? value : ref.current;
+}
+
 export default function AppOverlays({
   theme,
   onThemeChange,
@@ -103,6 +115,9 @@ export default function AppOverlays({
   const uninstallTarget = useDeviceStore((s) => s.uninstallTarget);
   const uninstalling = useDeviceStore((s) => s.uninstalling);
   const setUninstallTarget = useDeviceStore((s) => s.setUninstallTarget);
+  // 这两个目标在关闭时会被置 null，退场动画期间要沿用最后一次的值（见 useLatchedWhileOpen）
+  const uninstallDevice = useLatchedWhileOpen(uninstallTarget, uninstallTarget !== null);
+  const deleteTarget = useLatchedWhileOpen(deletePresetTarget, deletePresetTarget !== null);
   const confirmUninstall = useDeviceStore((s) => s.confirmUninstall);
 
   return (
@@ -128,7 +143,7 @@ export default function AppOverlays({
         onOpenChange={onCloseDeletePreset}
         title={t("notify.presetDeleted")}
         message={
-          deletePresetTarget ? t("confirm.deletePreset", { name: deletePresetTarget.name }) : ""
+          deleteTarget ? t("confirm.deletePreset", { name: deleteTarget.name }) : ""
         }
         onConfirm={onConfirmDeletePreset}
       />
@@ -149,7 +164,7 @@ export default function AppOverlays({
         onBusyChange={onInstallBusyChange}
       />
       <UninstallDialog
-        device={uninstallTarget}
+        device={uninstallDevice}
         open={uninstallTarget !== null}
         busy={uninstalling}
         onOpenChange={(open: boolean) => {
