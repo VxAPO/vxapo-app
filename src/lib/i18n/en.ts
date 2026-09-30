@@ -177,7 +177,7 @@ export const en: Record<string, string> = {
   "高频补偿": "HF Comp",
   "中置空气": "Center Air",
   "分频点": "Crossover",
-  "侧向时间差": "Side ITD",
+  "侧向去相关": "Side ITD",
   "增益提升": "Gain Boost",
   "输出上限": "Ceiling",
   "释放时间": "Release",

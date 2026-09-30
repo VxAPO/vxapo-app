@@ -48,14 +48,14 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "step": 0.01,
         "min": 0,
         "max": 1,
-        "default": 0.354331
+        "default": 0.2
       },
       {
         "key": "side_itd",
         "step": 0.01,
         "min": 0,
         "max": 1,
-        "default": 0.6
+        "default": 0.2
       },
       {
         "key": "crossover_hz",

@@ -58,7 +58,7 @@ const PARAM_LABELS: Record<string, string> = {
   "preamp.gain_db": "增益",
   "wide.gain": "高频补偿",
   "wide.air": "中置空气",
-  "wide.side_itd": "侧向时间差",
+  "wide.side_itd": "侧向去相关",
   "wide.crossover_hz": "分频点",
   "aural.tune_hz": "中心频率",
   "aural.drive": "驱动",
@@ -115,7 +115,7 @@ export function effectParams(type: string): EffectParamDef[] {
  */
 const UI_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
   preamp: { gain_db: 0 },
-  wide: { gain: 0.05, air: 0.3543, side_itd: 0.6, crossover_hz: 200 },
+  wide: { gain: 0.05, air: 0.2, side_itd: 0.2, crossover_hz: 200 },
   aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
   // reverb 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
