@@ -41,7 +41,7 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "step": 0.01,
         "min": 0,
         "max": 1,
-        "default": 0
+        "default": 0.05
       },
       {
         "key": "air",
