@@ -217,7 +217,8 @@ npm run sync:driver-schema   # 用 driver 参数表重新生成 src/lib/effects.
 
 - 项目文档见 [`../vxapo-docs`](../vxapo-docs)，App 引用规范见
   [`../vxapo-docs/app`](../vxapo-docs/app)。
-- 许可证：GPL-3.0-or-later。
+- 许可证：GPL-3.0-or-later（全文见 [`LICENSE`](LICENSE)）。
+  Copyright (C) 2026 VxAPO。本程序**不提供任何担保**，详见 GPL-3.0 第 15、16 条。
 
 ---
 
@@ -471,4 +472,6 @@ Equalizer APO © Jonas Thedering, GPL-2.0.
 
 - Project documentation: [`../vxapo-docs`](../vxapo-docs). App reference:
   [`../vxapo-docs/app`](../vxapo-docs/app).
-- License: GPL-3.0-or-later.
+- License: GPL-3.0-or-later (full text in [`LICENSE`](LICENSE)).
+  Copyright (C) 2026 VxAPO. This program comes with **absolutely no warranty**; see
+  sections 15 and 16 of GPL-3.0.
