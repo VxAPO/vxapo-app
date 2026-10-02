@@ -10,6 +10,10 @@ VxAPO App 是 VxAPO 的桌面调音端，技术栈为 Rust（Tauri 2）与 React
 阅读顺序：定位与边界 → 两种调音视图 → 调音交互 → 预设卡组 → 界面、主题与视觉语言 →
 前端架构 → 与 Driver 的边界 → 上手与开发 → 实现约定 → 参考。
 
+> **在本仓工作前先读 [`AGENTS.md`](AGENTS.md)**（面向人与 AI）：Rust 侧在 `src-tauri/`
+> （cargo 命令须带 `--manifest-path`）、格式由 `cargo fmt` 单一权威决定、提交前须
+> `git config core.hooksPath .githooks`、以及本仓 `.gitignore` 是 GBK 编码这一注意点。
+
 ## 1 · 定位与边界
 
 | App 负责 | App 不负责 |
@@ -233,6 +237,11 @@ change takes effect immediately.
 Reading order: scope and boundaries → two tuning views → tuning interaction → preset groups →
 interface, themes and visual language → frontend architecture → boundaries with the Driver →
 getting started and development → implementation conventions → references.
+
+> **Read [`AGENTS.md`](AGENTS.md) before working in this repository** (for humans and AI):
+> the Rust side lives in `src-tauri/` (cargo commands need `--manifest-path`), formatting is
+> decided solely by `cargo fmt`, run `git config core.hooksPath .githooks` once per clone,
+> and note that this repo's `.gitignore` is GBK-encoded.
 
 ## 1 · Scope and boundaries
 
