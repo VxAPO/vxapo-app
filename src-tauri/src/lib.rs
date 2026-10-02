@@ -3,8 +3,8 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
-use tauri::Manager;
 use tauri::Emitter;
+use tauri::Manager;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -68,7 +68,10 @@ fn cli_path() -> &'static str {
         #[cfg(not(debug_assertions))]
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
-                let candidates = [dir.join("vxapo-cli.exe"), dir.join("resources").join("vxapo-cli.exe")];
+                let candidates = [
+                    dir.join("vxapo-cli.exe"),
+                    dir.join("resources").join("vxapo-cli.exe"),
+                ];
                 for cli in candidates {
                     if cli.exists() {
                         return cli.display().to_string();
@@ -80,7 +83,9 @@ fn cli_path() -> &'static str {
         // debug（tauri dev）：使用随源码打包的 resources 副本。
         #[cfg(debug_assertions)]
         {
-            let manifest_cli = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("vxapo-cli.exe");
+            let manifest_cli = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("resources")
+                .join("vxapo-cli.exe");
             if manifest_cli.exists() {
                 return manifest_cli.display().to_string();
             }
@@ -137,10 +142,7 @@ fn config_revision(bytes: &[u8]) -> String {
 
 /// 读取 per-device config.toml；内容与 known_revision 相同则不回传文本。
 #[tauri::command]
-fn read_config_checked(
-    guid: String,
-    known_revision: Option<String>,
-) -> Result<ConfigRead, String> {
+fn read_config_checked(guid: String, known_revision: Option<String>) -> Result<ConfigRead, String> {
     let path = device_config_path(&guid);
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
@@ -213,21 +215,28 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         } else {
             (0xf0u8, 0xf3u8, 0xf6u8)
         };
-        
+
         // 先设置背景色
         let _ = win.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
-        
+
         // 再注入 JS 确保 WebView 使用正确的颜色
-        let color_hex = if system_uses_dark_mode() { "#16181b" } else { "#f0f3f6" };
-        let _ = win.eval(&format!("
+        let color_hex = if system_uses_dark_mode() {
+            "#16181b"
+        } else {
+            "#f0f3f6"
+        };
+        let _ = win.eval(&format!(
+            "
             document.documentElement.style.backgroundColor = '{}';
             document.body.style.backgroundColor = '{}';
             document.getElementById('root').style.backgroundColor = '{}';
-        ", color_hex, color_hex, color_hex));
-        
+        ",
+            color_hex, color_hex, color_hex
+        ));
+
         // 最后显示窗口
         win.show().map_err(|e| e.to_string())?;
-        
+
         // 如果需要最大化
         win.maximize().map_err(|e| e.to_string())?;
     }
@@ -370,7 +379,14 @@ impl ElevationFiles {
 
     /// 清掉上一轮残留（启动前）。
     fn reset(&self) {
-        for p in [&self.ps1, &self.vbs, &self.err, &self.done, &self.outer, &self.log] {
+        for p in [
+            &self.ps1,
+            &self.vbs,
+            &self.err,
+            &self.done,
+            &self.outer,
+            &self.log,
+        ] {
             let _ = std::fs::remove_file(p);
         }
     }
@@ -388,7 +404,10 @@ impl ElevationFiles {
 
     /// CLI 的标准错误（已 trim）。
     fn stderr(&self) -> String {
-        std::fs::read_to_string(&self.err).unwrap_or_default().trim().to_string()
+        std::fs::read_to_string(&self.err)
+            .unwrap_or_default()
+            .trim()
+            .to_string()
     }
 
     /// 完成标记里的退出码（未完成时返回 None）。
@@ -434,7 +453,10 @@ fn build_elevation_scripts(
     f: &ElevationFiles,
     stdout_to: Option<&Path>,
 ) -> Result<(), String> {
-    let quoted: Vec<String> = args.iter().map(|a| format!("'{}'", a.replace('\'', "''"))).collect();
+    let quoted: Vec<String> = args
+        .iter()
+        .map(|a| format!("'{}'", a.replace('\'', "''")))
+        .collect();
     let stdout = match stdout_to {
         Some(p) => format!("'{}'", p.display().to_string().replace('\'', "''")),
         None => "$null".to_string(),
@@ -565,8 +587,7 @@ fn run_cli(cli: &str, args: &[&str], tag: &str) -> Result<String, String> {
         return Ok(out);
     }
     let msg = if err.is_empty() { out } else { err };
-    if msg.contains("需要管理员权限")
-        || msg.to_lowercase().contains("administrator privileges")
+    if msg.contains("需要管理员权限") || msg.to_lowercase().contains("administrator privileges")
     {
         return run_cli_elevated(cli, args, tag);
     }
@@ -589,9 +610,7 @@ fn run_cli_with_events(
     on_event: &mut dyn FnMut(serde_json::Value),
 ) -> Result<String, String> {
     let mut cmd = Command::new(cli);
-    cmd.args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     let mut child = cmd.spawn().map_err(|e| coded(E_CLI_SPAWN, e))?;
@@ -631,8 +650,7 @@ fn run_cli_with_events(
     } else {
         err_trim.clone()
     };
-    if msg.contains("需要管理员权限")
-        || msg.to_lowercase().contains("administrator privileges")
+    if msg.contains("需要管理员权限") || msg.to_lowercase().contains("administrator privileges")
     {
         let progress = std::env::temp_dir().join(format!("vxapo_{tag}.progress"));
         return run_cli_elevated_stream(cli, args, tag, &progress, on_event);
@@ -692,11 +710,7 @@ fn run_cli_elevated_stream(
 }
 
 /// 增量读取 progress 文件：只推进到最后一个完整行（含换行），避免切半行丢事件。
-fn drain_progress(
-    path: &Path,
-    offset: &mut u64,
-    on_event: &mut dyn FnMut(serde_json::Value),
-) {
+fn drain_progress(path: &Path, offset: &mut u64, on_event: &mut dyn FnMut(serde_json::Value)) {
     use std::io::{Read, Seek, SeekFrom};
     let Ok(mut f) = std::fs::File::open(path) else {
         return;
@@ -709,7 +723,11 @@ fn drain_progress(
         return;
     }
     let bytes = s.as_bytes();
-    let last_nl = bytes.iter().rposition(|&b| b == b'\n').map(|p| p + 1).unwrap_or(0);
+    let last_nl = bytes
+        .iter()
+        .rposition(|&b| b == b'\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
     if last_nl == 0 {
         return;
     }
@@ -726,7 +744,10 @@ fn install_result_from_event(v: &serde_json::Value) -> InstallResult {
     let get_u32 = |k: &str| v.get(k).and_then(|x| x.as_u64()).map(|n| n as u32);
     InstallResult {
         success: v.get("success").and_then(|s| s.as_bool()).unwrap_or(false),
-        mode: v.get("mode").and_then(|m| m.as_str()).map(|s| s.to_string()),
+        mode: v
+            .get("mode")
+            .and_then(|m| m.as_str())
+            .map(|s| s.to_string()),
         score: get_u32("score"),
         attempts: get_u32("attempts").unwrap_or(0),
         best_mode: v
@@ -783,7 +804,11 @@ async fn install_device(app: tauri::AppHandle, guid: String) -> Result<InstallRe
 
     if let Some(complete) = last_complete.lock().unwrap().clone() {
         // 成功：清理临时进度文件；失败保留，供诊断（trace 步骤在 progress 里）。
-        if complete.get("success").and_then(|s| s.as_bool()).unwrap_or(false) {
+        if complete
+            .get("success")
+            .and_then(|s| s.as_bool())
+            .unwrap_or(false)
+        {
             let _ = std::fs::remove_file(&progress_path);
         }
         return Ok(install_result_from_event(&complete));
