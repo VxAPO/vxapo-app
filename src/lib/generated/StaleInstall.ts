@@ -9,4 +9,10 @@ export type StaleInstall = { guid: string, device_instance_id: string, display_n
 /**
  * 命中来源；未命中为 `null`。
  */
-matched_by: StaleMatchedBy | null, config_path: string | null, config_mtime_ms: number, snapshot_path: string | null, snapshot_mtime_ms: number, premix_slot: string | null, postmix_slot: string | null, inferred_mode: string, has_child_backup: boolean, has_sysfx_backup: boolean, target_guid: string | null, target_name: string | null, target_state: StaleTargetState, };
+matched_by: StaleMatchedBy | null, config_path: string | null, config_mtime_ms: number, snapshot_path: string | null, snapshot_mtime_ms: number, premix_slot: string | null, postmix_slot: string | null, inferred_mode: string, has_child_backup: boolean, has_sysfx_backup: boolean, target_guid: string | null, target_name: string | null, target_state: StaleTargetState, 
+/**
+ * 可自动修复（App 启动时无需询问即可执行 `stale migrate`）：
+ * 目标唯一命中 + 旧记录配置有意义 + 目标目录没有有意义的配置。
+ * 判据由 driver 给出（单一事实源）；false 时交横幅由用户决定。
+ */
+auto_repairable: boolean, };

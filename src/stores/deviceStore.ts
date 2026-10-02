@@ -14,6 +14,9 @@ import {
   uninstallDevice,
 } from "../lib/api";
 import type { Device, MigrationReport, StaleInstall } from "../lib/model";
+import { t } from "../lib/i18n/core";
+import { pickAutoRepairTargets } from "../lib/staleAuto";
+import { useUiStore } from "./uiStore";
 
 /** 逐项浅比较，避免轮询无变化时替换数组引用。 */
 function staleListsEqual(a: StaleInstall[], b: StaleInstall[]): boolean {
@@ -81,8 +84,43 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
   async load(first) {
     if (first) set({ loading: true });
     try {
-      const [devRes, staleRes] = await Promise.allSettled([listDevices(), listStaleInstalls()]);
+      let [devRes, staleRes] = await Promise.allSettled([listDevices(), listStaleInstalls()]);
       if (devRes.status === "rejected") throw devRes.reason;
+
+      // ── 启动自动修复（横幅降级为兜底）──────────────────────────────────
+      // 只在**首次**加载尝试，一次启动最多一次：driver 已判定 auto_repairable
+      // （目标唯一命中 + 旧记录配置有意义 + 目标目录没有有意义的配置），
+      // 这里逐条执行迁移（提权 CLI；UAC 由用户点一下即可）。
+      // 取消/失败即停（避免连续弹 UAC），余下记录继续由横幅手动处理。
+      if (first && staleRes.status === "fulfilled") {
+        const targets = pickAutoRepairTargets(staleRes.value);
+        if (targets.length > 0) {
+          const restored: string[] = [];
+          for (const item of targets) {
+            try {
+              await migrateStaleInstall(item.guid, item.target_guid as string, null, null);
+              restored.push(item.target_name ?? item.display_name);
+            } catch {
+              break;
+            }
+          }
+          if (restored.length > 0) {
+            useUiStore
+              .getState()
+              .notify(
+                restored.length === 1
+                  ? t("stale.auto.done", { name: restored[0] })
+                  : t("stale.auto.doneMany", { count: restored.length }),
+              );
+            // 迁移后重拉，拿到已归并/清理的列表
+            [devRes, staleRes] = await Promise.allSettled([listDevices(), listStaleInstalls()]);
+            if (devRes.status === "rejected") throw devRes.reason;
+          } else {
+            useUiStore.getState().notify(t("stale.auto.skipped"));
+          }
+        }
+      }
+
       const ds = devRes.value;
       set((s) => ({ devices: deviceListsEqual(s.devices, ds) ? s.devices : ds }));
       const nextStale = staleRes.status === "fulfilled" ? staleRes.value : [];
