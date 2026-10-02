@@ -108,3 +108,20 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings  
 pre-fmt 与 post-fmt 的错误集合完全一致，格式化未引入任何新 lint。
 
 因此：**不要**把 clippy 通过当作本仓提交门槛；也不要在格式化任务里顺手大规模清理它。
+
+---
+
+## 8. 与 driver / cli 的关系
+
+本仓 Rust 侧（`src-tauri/`）**不依赖** `vxapo-driver` 或 `vxapo-cli`——依赖只有
+`tauri` / `tauri-plugin-*` / `serde` / `serde_json`。
+
+三个仓库之间只通过**约定的数据契约**耦合（由 `vxapo-cli` 的 `protocol/` 子 crate
+`vxapo-protocol` 定义，即 `--json` 输出结构）。
+
+**这点对格式有实际影响**：因为本仓没有跨仓 path 依赖，
+`cargo fmt --manifest-path src-tauri/Cargo.toml` **不会**越界改到别的仓库
+（`vxapo-cli` 仓有这个坑，见其 AGENTS.md §2；本仓没有）。
+
+> 若将来需要消费 driver/cli 的类型，**不要**直接加 path 依赖——那会把
+> 「格式化越界」与「编译顺序耦合」一并引入。应经 `vxapo-protocol` 的契约。
