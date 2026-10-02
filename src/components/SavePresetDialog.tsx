@@ -2,8 +2,8 @@ import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
-import { accentHoverColor, presetAccent } from "../lib/blocks";
-import { t } from "../lib/i18n/core";
+import { accentHoverColor, perceptualName, presetAccent } from "../lib/blocks";
+import { displayBandName, t } from "../lib/i18n/core";
 import { fmtDb1 } from "../lib/format";
 import OverlayScrollbar from "./OverlayScrollbar";
 
@@ -47,7 +47,9 @@ function SavePresetDialog({
     if (open) {
       setName(defaultName);
       setColor(presetAccent(blocks.map((b) => b.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 })));
-      setDescs(blocks.map(() => ""));
+      // 预填语义视图的默认映射（＝该段在语义视图里不带自定义名时显示的名字），
+      // 用户可直接改；不改的行保存时成对入库，语言切换仍能反查（见 customBandNameFields）。
+      setDescs(blocks.map((b) => displayBandName(perceptualName(b))));
     }
   }, [open, blocks, defaultName]);
 

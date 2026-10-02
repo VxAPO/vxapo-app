@@ -4,7 +4,7 @@
 // 其余仍需外部传入（主题、预设流程、导入流程、拖拽 API）。
 import { AnimatePresence } from "framer-motion";
 import { useRef, type ComponentProps } from "react";
-import { t } from "../lib/i18n/core";
+import { displayPresetName, t } from "../lib/i18n/core";
 import { isInstalled } from "../lib/api";
 import type { Block, PresetLibraryEntry } from "../lib/model";
 import type { FlyState } from "../lib/dragSortTypes";
@@ -143,7 +143,9 @@ export default function AppOverlays({
         onOpenChange={onCloseDeletePreset}
         title={t("notify.presetDeleted")}
         message={
-          deleteTarget ? t("confirm.deletePreset", { name: deleteTarget.name }) : ""
+          deleteTarget
+            ? t("confirm.deletePreset", { name: displayPresetName(deleteTarget) })
+            : ""
         }
         onConfirm={onConfirmDeletePreset}
       />

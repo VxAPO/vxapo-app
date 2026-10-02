@@ -17,6 +17,10 @@ export const PERCEPTUAL_RANGES: [number, number, string][] = [
   [16000, 20000, "极高频延伸感"],
 ];
 
+/** 感知标签全集：与 PERCEPTUAL_RANGES 同源（i18n 反查表按它并入，避免手抄第二份）。
+ *  ≥20k 归入最高档，故末尾那档在这里一并出现，供反查与“默认映射”成对使用。 */
+export const PERCEPTUAL_LABELS: string[] = PERCEPTUAL_RANGES.map(([, , label]) => label);
+
 export function perceptualLabel(fc: number): string {
   for (const [lo, hi, label] of PERCEPTUAL_RANGES) {
     if (fc >= lo && fc < hi) return label;
@@ -31,6 +35,16 @@ export function semanticName(block: Block): string {
     return block.bands[0] ? perceptualLabel(block.bands[0].fc) : n || "未命名";
   }
   return n;
+}
+
+/**
+ * 语义视图的「默认映射」：只按首段中心频率取感知标签，不看自定义名。
+ * 保存自定义预设时用它预填每段语义描述（＝语义视图按默认映射会显示的名字）。
+ * 无有效频段 / 频率落在区间外（`perceptualLabel` 的占位符）时返回空串，让输入框留空。
+ */
+export function perceptualName(block: Block): string {
+  const label = block.bands[0] ? perceptualLabel(block.bands[0].fc) : "—";
+  return label === "—" ? "" : label;
 }
 
 /** 预设感知配色：按频段平均频率映射（与 24 色调色盘同源） */

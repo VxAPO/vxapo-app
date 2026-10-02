@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Block, PresetLibraryEntry } from "../lib/model";
 import { presetAccent } from "../lib/blocks";
 import { loadCustomPresets, loadPresetMeta, saveStored } from "../lib/storage";
-import { t } from "../lib/i18n/core";
+import {
+  customBandNameFields,
+  customPresetDefaultName,
+  getLang,
+  isDefaultPresetName,
+  t,
+} from "../lib/i18n/core";
 
 interface UsePresetActionsOptions {
   blocks: Block[];
@@ -60,9 +66,10 @@ export function usePresetActions({
     const picked = blocks.filter((b) => selectedIds.includes(b.id ?? ""));
     if (!picked.length) return;
     setSavePresetBlocks(picked);
-    setSavePresetDefaultName(
-      `${t("preset.name.placeholder")} ${customPresets.length + 1}`,
-    );
+    // 默认名与 handleSavePreset 用同一处文案源：两边都调 customPresetDefaultName，
+    // 保存时按值比对即可判断「这名字是默认的还是用户改过的」。
+    const def = customPresetDefaultName(customPresets.length + 1);
+    setSavePresetDefaultName(getLang() === "en" ? def.en : def.zh);
     setSavePresetOpen(true);
   }, [blocks, selectedIds, customPresets]);
 
@@ -90,15 +97,24 @@ export function usePresetActions({
       color: string,
       descriptions: string[],
     ) => {
+      const seq = customPresets.length + 1;
+      const def = customPresetDefaultName(seq);
+      const nameText = name.trim();
+      // 默认名（未编辑，含清空后回退的占位名）按当前序号成对入库，切语言能反查；
+      // 用户自己写的原名保留，不补译名。
+      const isDefaultName = isDefaultPresetName(nameText);
       const entry: PresetLibraryEntry = {
         id: `custom-${Date.now()}`,
         group: t("custom"),
-        name,
+        name: isDefaultName ? def.zh : nameText,
+        ...(isDefaultName ? { name_en: def.en } : {}),
         desc,
         color,
         bands: savePresetBlocks.map((b, i) => ({
           ...(b.bands[0] ?? { fc: 1000, gain_db: 0, q: 1 }),
-          name: descriptions[i] || undefined,
+          // 语义描述：没改过的默认映射成对入库（语言切换可反查），
+          // 用户自己写的原样保留、不补译名。
+          ...customBandNameFields(descriptions[i] ?? ""),
         })),
       };
       setCustomPresets((prev) => [...prev, entry]);
@@ -106,7 +122,7 @@ export function usePresetActions({
       clearSelection();
       notify(t("notify.presetSaved"));
     },
-    [savePresetBlocks, notify, clearSelection],
+    [customPresets, savePresetBlocks, notify, clearSelection],
   );
 
   const confirmDeletePreset = useCallback(() => {

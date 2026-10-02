@@ -10,6 +10,7 @@ import {
   mergeBlockIds,
   nextGroupName,
   perceptualLabel,
+  perceptualName,
   semanticName,
 } from "./blocks";
 import type { Band, Block } from "./model";
@@ -53,6 +54,20 @@ describe("semanticName", () => {
 
   it("没有频段也没有名字时回退「未命名」", () => {
     expect(semanticName(blk({ bands: [] }))).toBe("未命名");
+  });
+});
+
+describe("perceptualName（语义视图的默认映射）", () => {
+  it("只按首段频率取感知标签，忽略自定义名", () => {
+    expect(perceptualName(blk({ name: "我的低音", bands: [band({ fc: 1000 })] }))).toBe(
+      "中频临场感",
+    );
+    expect(perceptualName(blk({ bands: [band({ fc: 50 })] }))).toBe("低频冲击感");
+  });
+
+  it("无频段 / 频率落在区间外时返回空串（输入框留空）", () => {
+    expect(perceptualName(blk({ bands: [] }))).toBe("");
+    expect(perceptualName(blk({ bands: [band({ fc: 10 })] }))).toBe("");
   });
 });
 

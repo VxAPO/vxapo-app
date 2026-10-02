@@ -364,21 +364,27 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     }
     const lang = getLang();
     const groupBase = lang === "en" ? (p.group_en ?? p.group) : p.group;
-    const nameBase = lang === "en" ? (p.name_en ?? p.name) : p.name;
     const groups = new Set(blocks.map((b) => b.group).filter((g): g is string => !!g));
     const group = nextGroupName(groupBase, groups);
     get().markDirty();
     set((prev) => ({
       blocks: [
         ...prev.blocks,
-        ...p.bands.map((b) => ({
-          id: crypto.randomUUID(),
-          group,
-          name: (lang === "en" ? (b.name_en ?? b.name) : b.name) ?? nameBase,
-          enabled: true,
-          channel: ctx.mode ? ctx.active : undefined,
-          bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q, ...(b.kind ? { kind: b.kind } : {}) }],
-        })),
+        ...p.bands.map((b) => {
+          const name = lang === "en" ? (b.name_en ?? b.name) : b.name;
+          return {
+            id: crypto.randomUUID(),
+            group,
+            // 段名缺省**就留缺省**——不拿预设名兜底：`semanticName` 会回退到按 fc 推出的
+            // 感知标签（语义视图的默认映射），那条路径与语言无关，切语言时由
+            // `displayBandName` 翻成当前语言，所以「留空」的段同样能反查。
+            // 若这里兜底成预设名，段卡会显示预设名（既不是默认映射、也无从翻译）。
+            ...(name ? { name } : {}),
+            enabled: true,
+            channel: ctx.mode ? ctx.active : undefined,
+            bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q, ...(b.kind ? { kind: b.kind } : {}) }],
+          };
+        }),
       ],
     }));
     return group;

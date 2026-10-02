@@ -7,6 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, Band, EffectItem, PresetLibraryEntry } from "../lib/model";
 import { defaultEffectParams } from "../lib/effects";
+import { semanticName } from "../lib/blocks";
+import { displayBandName, setLang } from "../lib/i18n/core";
 
 // 后端 IO 全部经 ../lib/api，mock 掉以免碰 Tauri invoke。
 vi.mock("../lib/api", () => ({
@@ -276,8 +278,34 @@ describe("applyPreset", () => {
     expect(group).toBe("低音 2");
     const added = useConfigStore.getState().blocks.slice(1);
     expect(added).toHaveLength(2);
-    expect(added[0]).toMatchObject({ group: "低音 2", name: "低频增强", channel: undefined });
+    // 段名缺省就留缺省：**不**拿预设名兜底，否则留空的段卡会显示预设名，
+    // 既不是语义视图的默认映射、也无从反查（切语言不变）。留空段由 `semanticName`
+    // 回退到按 fc 推出的感知标签，那条路径才能反查。
+    expect(added[0]).toMatchObject({ group: "低音 2", channel: undefined });
+    expect(added[0].name).toBeUndefined();
     expect(added[0].bands).toEqual([{ fc: 60, gain_db: 4, q: 0.8 }]);
+  });
+
+  it("预设段自带名字时沿用（不被留空逻辑吞掉）", () => {
+    useConfigStore.getState().applyPreset({
+      ...preset,
+      bands: [{ fc: 60, gain_db: 4, q: 0.8, name: "低频饱满", name_en: "Full Bass" }],
+    });
+    expect(useConfigStore.getState().blocks[0].name).toBe("低频饱满");
+  });
+
+  // 「留空也得反查」：留空段进 config 后没有 name，语义视图靠 semanticName→感知标签，
+  // 再由 displayBandName 翻成当前语言。这条钉住留空段的标签确实能双向反查。
+  it("留空段落的语义标签双向可反查（切语言不残留旧语言）", () => {
+    useConfigStore.getState().applyPreset(preset);
+    const seg = useConfigStore.getState().blocks[0];
+    expect(seg.name).toBeUndefined();
+    setLang("zh");
+    expect(semanticName(seg)).toBe("低频冲击感");
+    expect(displayBandName(semanticName(seg))).toBe("低频冲击感");
+    setLang("en");
+    expect(displayBandName(semanticName(seg))).toBe("Bass Impact");
+    setLang("zh");
   });
 
   it("通道模式下挂到 active 声道", () => {
