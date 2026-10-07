@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import "./App.css";
 import "./new.css";
 import type { Device } from "./lib/model";
@@ -71,9 +71,10 @@ export default function App() {
     cleanupStaleSafe,
   } = useDevices(installBusy);
 
-  // 设备页过渡走 AnimatePresence mode="wait"（见下方 JSX）：退出的是**旧的元素实例**，
-  // 它带着旧设备的 props 淡出，新元素带新数据淡入——两段天然串行、不重叠。数据侧因此
-  // 即时跟随选中设备即可：不同设备的曲线本来就不同，跟着页面一起换才是对的观感。
+  // 设备页换页是 keyed 单提交硬切（见下方 JSX 注释）：同一 commit 里卸旧页、挂新页，
+  // 没有跨帧空档，也没有「带着旧 props 淡出的退场实例」。数据侧即时跟随选中设备即可：
+  // 不同设备的曲线本来就不同，跟着页面一起换才是对的观感；「换数据与换页同帧」由
+  // configStore.displayGuid 保证（与 blocks 同一步写入）。
   const channelNames = useMemo(() => channelNamesFor(selected?.channels), [selected?.channels]);
   const { channelOn, setChannelOn, setActiveChannel, effActiveChannel, firstChannel } =
     useChannelState(selectedGuid, channelNames);
@@ -507,25 +508,21 @@ export default function App() {
           />
 
           <div className="device-body" ref={setDevBodyNode}>
-            {/* 设备页过渡（拆分前原实现）：AnimatePresence mode="wait" + key=pageGuid（数据归属，
-                配置到位才换页，见上方 pageGuid 注释）。退出的旧元素实例带着旧数据淡出，
-                新元素带新数据淡入，两段串行、不重叠。 */}
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={pageGuid ?? "none"}
-                className="device-page"
-                /* 设备页切换是**硬切**：进出都不补间 opacity（`duration: 0`）。
-                   只要补间过，整棵子树就被提升为**合成图层** —— 图层上的文字丢掉次级像素（LCD）抗锯齿、
-                   1px 描边的栅格落点也变了；薄元素（章节标题的字形、卡片组色描边）会闪一下，而实心填充的
-                   控件（滑杆/开关/数值）看不出差别。实机确认：进场淡入闪一次、退场淡出又闪一次 —— 所以两边
-                   都不给调音卡片加淡入淡出。`AnimatePresence mode="wait"` 仍负责「先退旧页、再挂新页」的次序。
-                   初始 opacity 必须是 1：写 0 的话新页首帧是整页透明，要等下一帧才被 animate 拉回来——
-                   逐帧实测正好一帧空白（GPU 被占时更久），观感就是设备卡/曲线卡闪没了（踩过）。 */
-                initial={{ opacity: 1 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0 }}
-              >
+            {/* 设备页是**单提交硬切**：key=pageGuid（数据归属，配置到位才换页，见上方注释），
+                直接 keyed 替换——React 在同一次 commit 里卸旧页、挂新页，浏览器等两者都完成后
+                才绘制一次，**不存在「旧页已消失、新页未挂上」的中间帧**。
+                这里刻意不用 AnimatePresence mode="wait"：它把退场/进场拆成两个 commit、要等
+                exit 动画结束回调才挂新页，中间必然隔着空帧——换页前后内容差异越大越显眼，
+                观感就是设备卡/曲线卡闪没了几帧（踩过）；退场 opacity 补间还会先把旧页整页画成
+                透明，同样是一帧空窗。
+                这棵子树上也永远不要给 opacity 加补间：一旦补间，整棵子树被提升为**合成图层**——
+                图层上的文字丢掉次级像素（LCD）抗锯齿、1px 描边的栅格落点也变了；薄元素
+                （章节标题的字形、卡片组色描边）会闪一下，实心填充的控件（滑杆/开关/数值）
+                看不出差别（实机确认：淡入淡出各闪一次）。 */}
+            <div
+              key={pageGuid ?? "none"}
+              className="device-page"
+            >
             {installedDevices.length === 0 ? (
               <NoDeviceHint />
             ) : (
@@ -610,8 +607,7 @@ export default function App() {
             </div>
               </>
             )}
-              </motion.div>
-            </AnimatePresence>
+              </div>
             <OverlayScrollbar
               targetRef={bodyRef}
               target={bodyNode}
