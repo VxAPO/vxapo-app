@@ -74,6 +74,8 @@ function resetStore(): void {
     effects: [],
     tuningMap: {},
     loaded: false,
+    loadedGuid: null,
+    displayGuid: null,
     configChannelMode: false,
     pollPaused: false,
     reloadNonce: 0,
@@ -475,6 +477,37 @@ describe("load", () => {
     setInputs({ selectedGuid: "C" });
     await useConfigStore.getState().load();
     expect(useConfigStore.getState().loadedGuid).toBe("C");
+  });
+
+  it("displayGuid 不随读盘清空、与 blocks 一起换：页面驻留旧设备直到新数据就绪", async () => {
+    vi.mocked(api.readConfig).mockResolvedValueOnce(cfgText(100, false));
+    setInputs({ selectedGuid: "A" });
+    await useConfigStore.getState().load();
+    expect(useConfigStore.getState().displayGuid).toBe("A");
+
+    let resolve!: (v: string) => void;
+    vi.mocked(api.readConfig).mockReturnValueOnce(new Promise<string>((r) => (resolve = r)));
+    setInputs({ selectedGuid: "B" });
+    const p = useConfigStore.getState().load();
+    // 读盘期间：loadedGuid 已清空（通道态据此推迟恢复），但 displayGuid 仍指 A——设备页不换
+    expect(useConfigStore.getState().loadedGuid).toBeNull();
+    expect(useConfigStore.getState().displayGuid).toBe("A");
+    resolve(cfgText(200, false));
+    await p;
+    // 完成后 displayGuid 与 blocks 同批到位：换数据与换页同帧
+    expect(useConfigStore.getState().displayGuid).toBe("B");
+    expect(useConfigStore.getState().blocks[0].bands[0].fc).toBe(200);
+  });
+
+  it("读取失败也把 displayGuid 写成新设备：页面切到新设备的空错态，不滞留旧页", async () => {
+    vi.mocked(api.readConfig).mockRejectedValue(new Error("boom"));
+    useConfigStore.setState({ errorSink: vi.fn() });
+    setInputs({ selectedGuid: "D" });
+    await useConfigStore.getState().load();
+    const s = useConfigStore.getState();
+    expect(s.displayGuid).toBe("D");
+    expect(s.blocks).toHaveLength(0);
+    expect(s.loaded).toBe(true);
   });
 
   it("读取失败：清空块、报错、仍置 loaded", async () => {

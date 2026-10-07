@@ -20,6 +20,7 @@ export function useConfig(
   const effects = useConfigStore((s) => s.effects);
   const tuningMap = useConfigStore((s) => s.tuningMap);
   const loaded = useConfigStore((s) => s.loaded);
+  const displayGuid = useConfigStore((s) => s.displayGuid);
   const configChannelMode = useConfigStore((s) => s.configChannelMode);
   const pollPaused = useConfigStore((s) => s.pollPaused);
   const reloadNonce = useConfigStore((s) => s.reloadNonce);
@@ -186,6 +187,7 @@ export function useConfig(
     setEffects,
     tuningMap,
     loaded,
+    displayGuid,
     configChannelMode,
     dirtyRef,
     markDirty,

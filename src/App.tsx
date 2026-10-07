@@ -80,6 +80,9 @@ export default function App() {
 
   // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成（决策 4 阶段 A）。
 
+  // 配置域的「当前设备」输入：设备列表为空时按 null 传（useConfig 的 load() 对 null 早退）。
+  const cfgGuid = installedDevices.length === 0 ? null : selectedGuid;
+
   const {
     blocks,
     setBlocks,
@@ -100,11 +103,12 @@ export default function App() {
     tuningMap,
     configChannelMode,
     loaded,
+    displayGuid,
     forceReload,
     toggleDeviceTuning,
     setChannelPreampMode,
     normalizeChainGain,
-  } = useConfig(installedDevices.length === 0 ? null : selectedGuid, {
+  } = useConfig(cfgGuid, {
     mode: channelOn,
     first: channelNames[0] ?? "L",
     active: effActiveChannel,
@@ -329,14 +333,27 @@ export default function App() {
     setCopyOpen(false);
   }, [selectedGuid]);
 
+  /**
+   * 设备页换页的 key：跟**数据归属**（displayGuid）走，不跟点击（selectedGuid）走。
+   *
+   * load() 是异步的：点标签到 readConfig 回来之间，store 里还是上一台的 blocks。
+   * 若点下即换页，新容器（scrollTop=0）会先渲染这段窗口里的上一台旧内容——旧页滚在
+   * 半空时，观感就是「旧页被生硬切到顶部」闪一下、数据到位后再换一次（踩过）。
+   * displayGuid 与 blocks 在 configStore.load() 里同一步写入，因此「换数据」与「换页」
+   * 落在同一帧：退场元素带着的仍是上一台的 props，旧页连同滚动位置原地驻留到新数据
+   * 就绪才硬切——与通道态恢复（useChannelState 等 loadedGuid）同一门槛。
+   */
+  const pageGuid = cfgGuid === null ? null : displayGuid;
+
   // 设备页是**硬切**（不补间），换页只产生一次 childList 变更，MutationObserver 已会排一次全量重绘；
   // 这段窗口是保险：新页面首帧的几何/配色若晚一两帧才稳定，画布不至于停在上一轮的染色上。
   // 画布是独立图层（`mix-blend-mode: screen` 压在内容之上），晚一帧就是「页面已经换掉、画布还在显示旧染色」。
   // 用 useLayoutEffect（绘制前）而不是 useEffect：rAF 仍在这一帧绘制前跑，画布与换页同帧对齐（踩过）。
   // 滚动位置不必显式复位：`.device-page` 仍按设备重挂载，`.tuning-scroll` 在它内部，天然回顶。
+  // 依赖是 pageGuid（真正换页的时刻）而不是 selectedGuid（点标签时刻，换页还没发生）。
   useLayoutEffect(() => {
     driveFor(DEVICE_SETTLE_MS, "full");
-  }, [selectedGuid]);
+  }, [pageGuid]);
 
   const handleChannelChange = useCallback((ch: string) => {
     setActiveChannel(ch);
@@ -490,11 +507,12 @@ export default function App() {
           />
 
           <div className="device-body" ref={setDevBodyNode}>
-            {/* 设备页过渡（拆分前原实现）：AnimatePresence mode="wait" + key=设备。
-                退出的旧元素实例带着旧数据淡出，新元素带新数据淡入，两段串行、不重叠。 */}
+            {/* 设备页过渡（拆分前原实现）：AnimatePresence mode="wait" + key=pageGuid（数据归属，
+                配置到位才换页，见上方 pageGuid 注释）。退出的旧元素实例带着旧数据淡出，
+                新元素带新数据淡入，两段串行、不重叠。 */}
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
-                key={selectedGuid ?? "none"}
+                key={pageGuid ?? "none"}
                 className="device-page"
                 /* 设备页切换是**硬切**：进出都不补间 opacity（`duration: 0`）。
                    只要补间过，整棵子树就被提升为**合成图层** —— 图层上的文字丢掉次级像素（LCD）抗锯齿、
@@ -595,7 +613,7 @@ export default function App() {
             <OverlayScrollbar
               targetRef={bodyRef}
               target={bodyNode}
-              deviceKey={selectedGuid ?? "none"}
+              deviceKey={pageGuid ?? "none"}
               rightPx={-2}
               thumbRight={-2}
               bottomInset={26}

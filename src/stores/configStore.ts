@@ -53,6 +53,12 @@ interface ConfigStore {
   /** `loaded` 的那份数据属于哪台设备。切设备时 `load()` 先把这里清成 null、解析完成后才写回，
       用于判断「配置是否已经属于当前设备」（切设备后有一小段 store 里还是上一台的 blocks）。 */
   loadedGuid: string | null;
+  /** 屏上内容（blocks/effects）当前归属的设备：**与 blocks 同一步 set() 写入，`load()` 开始不清空**。
+      设备页换页的 key 跟它走（App 的 pageGuid）：旧页带原滚动位置一直驻留到新数据就绪才硬切；
+      若点标签就换页，新容器（scrollTop=0）会先渲染这段窗口里的上一台旧内容——旧页滚在半空时
+      观感就是「旧页被生硬切到顶部」闪一下（与 loadedGuid 的分工：loadedGuid 表示「新数据是否到位」，
+      displayGuid 表示「屏上现在该是谁的数据」）。 */
+  displayGuid: string | null;
   /** 磁盘 config 编码的通道模式：存在任意带 channels 的 EQ 块或效果器即为开启。 */
   configChannelMode: boolean;
   /** 窗口不可见（最小化/遮挡）时轮询暂停。 */
@@ -122,6 +128,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   tuningMap: {},
   loaded: false,
   loadedGuid: null,
+  displayGuid: null,
   configChannelMode: false,
   pollPaused: false,
   reloadNonce: 0,
@@ -188,6 +195,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     const guid = get().inputs.selectedGuid;
     if (!guid) return;
     const seq = get().loadSeq + 1;
+    // 只清 loadedGuid（新数据归属），不清 displayGuid：页面继续显示上一台的数据与滚动位置，
+    // 直到下面与 blocks 同一步写入新设备——换数据与换页必须原子，否则会闪旧内容帧。
     set({ loadSeq: seq, loaded: false, loadedGuid: null });
     get().configRevisionRef.current = null;
     try {
@@ -199,6 +208,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           blocks: ensureBlockIds(parsed.blocks),
           effects: normalizeEffects(parsed.effects),
           configChannelMode: parsed.channelMode,
+          displayGuid: guid,
         });
         get().tailRef.current = parsed.tail;
         set((s) => ({
@@ -208,14 +218,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               : { ...s.tuningMap, [guid]: parsed.enabled },
         }));
       } catch {
-        set({ blocks: [], configChannelMode: false });
+        set({ blocks: [], configChannelMode: false, displayGuid: guid });
         get().tailRef.current = "";
       }
       get().errorSink?.("");
       set({ loaded: true, loadedGuid: guid });
     } catch (e: unknown) {
       if (get().loadSeq !== seq) return;
-      set({ blocks: [], configChannelMode: false });
+      set({ blocks: [], configChannelMode: false, displayGuid: guid });
       get().tailRef.current = "";
       get().errorSink?.(friendlyError(e));
       set({ loaded: true, loadedGuid: guid });
