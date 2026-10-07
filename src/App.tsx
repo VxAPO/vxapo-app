@@ -518,8 +518,10 @@ export default function App() {
                    只要补间过，整棵子树就被提升为**合成图层** —— 图层上的文字丢掉次级像素（LCD）抗锯齿、
                    1px 描边的栅格落点也变了；薄元素（章节标题的字形、卡片组色描边）会闪一下，而实心填充的
                    控件（滑杆/开关/数值）看不出差别。实机确认：进场淡入闪一次、退场淡出又闪一次 —— 所以两边
-                   都不给调音卡片加淡入淡出。`AnimatePresence mode="wait"` 仍负责「先退旧页、再挂新页」的次序。 */
-                initial={{ opacity: 0 }}
+                   都不给调音卡片加淡入淡出。`AnimatePresence mode="wait"` 仍负责「先退旧页、再挂新页」的次序。
+                   初始 opacity 必须是 1：写 0 的话新页首帧是整页透明，要等下一帧才被 animate 拉回来——
+                   逐帧实测正好一帧空白（GPU 被占时更久），观感就是设备卡/曲线卡闪没了（踩过）。 */
+                initial={{ opacity: 1 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0 }}
