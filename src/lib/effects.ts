@@ -74,13 +74,10 @@ const PARAM_LABELS: Record<string, string> = {
   "reverb.wet": "湿声",
   "reverb.dry": "干声",
   "compressor.threshold_db": "阈值",
-  "compressor.ratio": "比例",
-  "compressor.knee_db": "软膝",
-  "compressor.attack_ms": "攻击",
-  "compressor.release_ms": "释放时间",
-  "compressor.makeup_gain_db": "补偿增益",
-  "compressor.wet": "湿声",
-  "compressor.dry": "干声",
+  "compressor.ratio": "压缩比",
+  "compressor.attack_ms": "起音",
+  "compressor.release_ms": "释放",
+  "compressor.mix": "混合",
   "loudness.phon": "目标响度",
   "loudness.reference_phon": "参考响度",
 };
@@ -120,16 +117,7 @@ const UI_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
   // reverb 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
   reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, low_cut_hz: 100, wet: 0.27, dry: 0.73 },
-  compressor: {
-    threshold_db: -18,
-    ratio: 4,
-    knee_db: 3,
-    attack_ms: 10,
-    release_ms: 100,
-    makeup_gain_db: 6,
-    wet: 1,
-    dry: 0,
-  },
+  // compressor 无 UI 覆盖：新参数模型（-12/3/10ms/100ms/100%）直接以 driver 默认为初值。
   loudness: { phon: 80, reference_phon: 80 },
 };
 
@@ -166,7 +154,7 @@ export function semanticStrength(type: string, params: Record<string, number | s
       return clamp01(asNum(params.wet, 0.27) / 0.9);
     case "compressor":
       // 强度 = 压缩比（1 → 0，20 → 1）。
-      return clamp01((asNum(params.ratio, 4) - 1) / 19);
+      return clamp01((asNum(params.ratio, 3) - 1) / 19);
     case "loudness": {
       const ref = asNum(params.reference_phon, 80);
       return clamp01((ref - asNum(params.phon, ref)) / 40);

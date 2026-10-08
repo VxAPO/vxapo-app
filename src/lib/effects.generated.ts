@@ -177,9 +177,9 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
       {
         "key": "threshold_db",
         "step": 1,
-        "min": -60,
+        "min": -48,
         "max": 0,
-        "default": -18,
+        "default": -12,
         "unit": "dBFS"
       },
       {
@@ -187,20 +187,12 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "step": 0.5,
         "min": 1,
         "max": 20,
-        "default": 4
-      },
-      {
-        "key": "knee_db",
-        "step": 1,
-        "min": 0,
-        "max": 12,
-        "default": 3,
-        "unit": "dB"
+        "default": 3
       },
       {
         "key": "attack_ms",
         "step": 0.5,
-        "min": 0.1,
+        "min": 1,
         "max": 100,
         "default": 10,
         "unit": "ms"
@@ -214,26 +206,11 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "unit": "ms"
       },
       {
-        "key": "makeup_gain_db",
-        "step": 0.5,
-        "min": 0,
-        "max": 24,
-        "default": 6,
-        "unit": "dB"
-      },
-      {
-        "key": "wet",
+        "key": "mix",
         "step": 0.01,
         "min": 0,
         "max": 1,
         "default": 1
-      },
-      {
-        "key": "dry",
-        "step": 0.01,
-        "min": 0,
-        "max": 1,
-        "default": 0
       }
     ]
   },
