@@ -45,3 +45,6 @@ tauri-dev*.log
 # 运行中被替换的旧二进制（进程退出前被锁，改名保留）
 /src-tauri/resources/*.stuck
 /src-tauri/resources/*.old*
+
+# Local build temp (TEMP redirect in package.json build; system TEMP writes denied here)
+.build-tmp/
