@@ -190,6 +190,13 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "default": 3
       },
       {
+        "key": "lift",
+        "step": 0.01,
+        "min": 0,
+        "max": 1,
+        "default": 0
+      },
+      {
         "key": "attack_ms",
         "step": 0.5,
         "min": 1,

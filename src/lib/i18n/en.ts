@@ -192,6 +192,7 @@ export const en: Record<string, string> = {
   "动态保留": "Dynamic",
   "阈值": "Threshold",
   "压缩比": "Ratio",
+  "抬升": "Lift",
   "起音": "Attack",
   "释放": "Release",
   "混合": "Mix",

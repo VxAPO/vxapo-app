@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { EffectItem } from "../lib/model";
-import { defaultEffectParams, effectDef, effectParams } from "../lib/effects";
+import { defaultEffectParams, effectDef, effectParams, paramToSliderPos, sliderPosToParam } from "../lib/effects";
 import { t } from "../lib/i18n/core";
 import GainSlider from "./GainSlider";
 import VxSelect from "./VxSelect";
@@ -76,6 +76,37 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
             const value =
               typeof raw === "number" && Number.isFinite(raw) ? raw : typeof fallback === "number" ? fallback : p.min;
             const clamped = Math.min(p.max, Math.max(p.min, value));
+            // 曲线行程参数（如压缩比）：滑杆走映射后的位置（按感知量均匀），
+            // 数字输入框仍显示/输入原始 x:1 数值与原始步进。
+            if (p.curve) {
+              return (
+                <div className="effect-param-row" key={p.key}>
+                  <span className="effect-param-label">{t(p.label)}</span>
+                  <GainSlider
+                    value={paramToSliderPos(effect.type, p.key, clamped)}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    disabled={disabled}
+                    ariaLabel={p.label}
+                    onValueChange={(v) =>
+                      onChangeParam(effect.id ?? effect.type, p.key, sliderPosToParam(effect.type, p.key, v))
+                    }
+                  />
+                  <input
+                    type="number"
+                    className="gain-input"
+                    min={p.min}
+                    max={p.max}
+                    step={p.step}
+                    value={clamped}
+                    disabled={disabled}
+                    aria-label={p.label}
+                    onChange={(e) => onChangeParam(effect.id ?? effect.type, p.key, Number(e.target.value))}
+                  />
+                </div>
+              );
+            }
             return (
               <div className="effect-param-row" key={p.key}>
                 <span className="effect-param-label">{t(p.label)}</span>

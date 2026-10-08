@@ -48,6 +48,8 @@ export interface EffectParamDef {
   step: number;
   unit?: string;
   options?: { value: string; label: string }[];
+  /** 滑杆行程曲线（仅 UI：数值语义不变，行程按曲线映射）——见 `sliderPosToParam`。 */
+  curve?: "ratioSlope";
 }
 
 /**
@@ -75,6 +77,7 @@ const PARAM_LABELS: Record<string, string> = {
   "reverb.dry": "干声",
   "compressor.threshold_db": "阈值",
   "compressor.ratio": "压缩比",
+  "compressor.lift": "抬升",
   "compressor.attack_ms": "起音",
   "compressor.release_ms": "释放",
   "compressor.mix": "混合",
@@ -84,6 +87,34 @@ const PARAM_LABELS: Record<string, string> = {
 
 /** UI 侧枚举选项（当前无枚举参数，保留结构以便扩展）。 */
 const PARAM_OPTIONS: Record<string, { value: string; label: string }[]> = {};
+
+/**
+ * 滑杆行程曲线（UI 专属，driver 语义不变）。
+ *
+ * `ratioSlope`：压缩比的感知量是实际压力量 `1 − 1/ratio`（斜率），直接线性映射
+ * ratio 数字会让行程前重后轻（1→3 吃掉全量程 67%，7→20 只剩 8%）。滑杆行程改按
+ * 斜率均匀分布——走一格，实际压力量的变化一致；数字输入框仍显示/输入 x:1。
+ */
+const SLIDER_CURVES: Record<string, "ratioSlope"> = {
+  "compressor.ratio": "ratioSlope",
+};
+
+const RATIO_MAX = 20;
+const RATIO_SLOPE_MAX = 1 - 1 / RATIO_MAX;
+
+/** 压缩比 → 滑杆行程位置（0..1，按斜率均匀）。 */
+export function paramToSliderPos(type: string, key: string, value: number): number {
+  if (SLIDER_CURVES[`${type}.${key}`] !== "ratioSlope") return value;
+  const r = Math.min(RATIO_MAX, Math.max(1, value));
+  return (1 - 1 / r) / RATIO_SLOPE_MAX;
+}
+
+/** 滑杆行程位置（0..1）→ 压缩比（x:1，保留两位小数）。 */
+export function sliderPosToParam(type: string, key: string, pos: number): number {
+  if (SLIDER_CURVES[`${type}.${key}`] !== "ratioSlope") return pos;
+  const s = Math.min(1, Math.max(0, pos)) * RATIO_SLOPE_MAX;
+  return Math.min(RATIO_MAX, Math.max(1, Number((1 / (1 - s)).toFixed(2))));
+}
 
 /** 参数定义：范围/步进/单位取 driver 表，label 取 UI 文案表。 */
 export function effectParams(type: string): EffectParamDef[] {
@@ -99,6 +130,7 @@ export function effectParams(type: string): EffectParamDef[] {
       step: p.step,
       unit: p.unit,
       options: PARAM_OPTIONS[id],
+      ...(SLIDER_CURVES[id] ? { curve: SLIDER_CURVES[id] } : {}),
     };
   });
 }
