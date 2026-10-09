@@ -79,6 +79,8 @@ export interface ConfigParse {
   enabled: boolean;
   /** 首个未知非 peq 效果器块起、到文件末尾的原始文本（保存时原样拼回，避免破坏第三方效果器） */
   tail: string;
+  /** 解析时丢弃了 driver 已移除的参数键（如 release_ms）：文件需重写一次才能被 driver 接受。 */
+  droppedRemovedKeys: boolean;
 }
 /** TOML 表（smol-toml 解析结果的形态）。 */
 type TomlTable = Record<string, unknown>;
@@ -137,7 +139,14 @@ function parseDocument(text: string): ConfigParse {
     doc = parseToml(text) as TomlTable;
   } catch (e) {
     console.error("[toml] 解析失败：已放弃解析并按原样保留（保存时写回原文）", e);
-    return { blocks: [], effects: [], channelMode: false, enabled: true, tail: text ? "\n" + text : "" };
+    return {
+      blocks: [],
+      effects: [],
+      channelMode: false,
+      enabled: true,
+      tail: text ? "\n" + text : "",
+      droppedRemovedKeys: false,
+    };
   }
   const tables = Array.isArray(doc.effects) ? (doc.effects as TomlTable[]) : [];
   const blocks: Block[] = [];
@@ -146,6 +155,7 @@ function parseDocument(text: string): ConfigParse {
   // 多元素（如 ["L","R"]）是立体声共用一个块，不属通道模式。
   let channelMode = false;
   let tail = "";
+  let droppedRemovedKeys = false;
 
   for (let i = 0; i < tables.length; i++) {
     const t = tables[i];
@@ -170,6 +180,11 @@ function parseDocument(text: string): ConfigParse {
       const params: Record<string, number | string> = {};
       for (const [k, v] of Object.entries(t)) {
         if (k === "type" || k === "enabled" || k === "channels" || k === "bands") continue;
+        // driver 已移除的键（释放固定自动）：不再进模型，落盘时丢弃以便文件被 driver 接受。
+        if (k === "release_ms") {
+          droppedRemovedKeys = true;
+          continue;
+        }
         if (typeof v === "number") {
           warnOutOfRange(type, k, v);
           params[k] = v;
@@ -196,6 +211,7 @@ function parseDocument(text: string): ConfigParse {
     channelMode,
     enabled: typeof doc.enabled === "boolean" ? doc.enabled : true,
     tail,
+    droppedRemovedKeys,
   };
 }
 

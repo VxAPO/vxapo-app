@@ -153,19 +153,6 @@
   flex: none;
 }
 
-/* 分段滑块档位（复用 settings 的 seg 形态）：占满参数行剩余宽度、紧凑档位 */
-.effect-params .effect-seg {
-  flex: 1;
-  width: auto;
-  min-width: 0;
-}
-
-.effect-params .effect-seg button {
-  padding: 0 4px;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
 .band-params {
   display: flex;
   flex-direction: column;

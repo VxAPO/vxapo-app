@@ -50,9 +50,6 @@ export interface EffectParamDef {
   options?: { value: string; label: string }[];
   /** 滑杆行程曲线（仅 UI：数值语义不变，行程按曲线映射）——见 `sliderPosToParam`。 */
   curve?: "ratioSlope";
-  /** 分段滑块档位（仅 UI，settings 深浅切换的 seg 形态）：value 为十进制字符串，
-      写回时转 number；用于「自动/固定值」这类带文字档位的选择。 */
-  seg?: { value: string; label: string }[];
 }
 
 /**
@@ -82,7 +79,6 @@ const PARAM_LABELS: Record<string, string> = {
   "compressor.ratio": "压缩比",
   "compressor.lift": "抬升",
   "compressor.attack_ms": "起音",
-  "compressor.release_ms": "释放",
   "compressor.mix": "混合",
   "loudness.phon": "目标响度",
   "loudness.reference_phon": "参考响度",
@@ -90,21 +86,6 @@ const PARAM_LABELS: Record<string, string> = {
 
 /** UI 侧枚举选项（当前无枚举参数，保留结构以便扩展）。 */
 const PARAM_OPTIONS: Record<string, { value: string; label: string }[]> = {};
-
-/**
- * 分段滑块档位（UI 专属）：渲染成 settings 深浅切换那样的带 thumb 长滑块。
- * 释放：0 = 自动（driver 双极点程序依赖释放），其余为固定毫秒档。
- */
-const PARAM_SEGMENTS: Record<string, { value: string; label: string }[]> = {
-  "compressor.release_ms": [
-    { value: "0", label: "自动" },
-    { value: "50", label: "50" },
-    { value: "100", label: "100" },
-    { value: "200", label: "200" },
-    { value: "400", label: "400" },
-    { value: "800", label: "800" },
-  ],
-};
 
 /**
  * 滑杆行程曲线（UI 专属，driver 语义不变）。
@@ -149,7 +130,6 @@ export function effectParams(type: string): EffectParamDef[] {
       unit: p.unit,
       options: PARAM_OPTIONS[id],
       ...(SLIDER_CURVES[id] ? { curve: SLIDER_CURVES[id] } : {}),
-      ...(PARAM_SEGMENTS[id] ? { seg: PARAM_SEGMENTS[id] } : {}),
     };
   });
 }
@@ -168,7 +148,7 @@ const UI_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
   // reverb 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
   reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, low_cut_hz: 100, wet: 0.27, dry: 0.73 },
-  // compressor 无 UI 覆盖：新参数模型（-12/3/10ms/100ms/100%）直接以 driver 默认为初值。
+  // compressor 无 UI 覆盖：参数模型（-12/3/0/10ms/100%）直接以 driver 默认为初值。
   loudness: { phon: 80, reference_phon: 80 },
 };
 

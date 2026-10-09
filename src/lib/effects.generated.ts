@@ -205,14 +205,6 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "unit": "ms"
       },
       {
-        "key": "release_ms",
-        "step": 10,
-        "min": 0,
-        "max": 1000,
-        "default": 0,
-        "unit": "ms"
-      },
-      {
         "key": "mix",
         "step": 0.01,
         "min": 0,

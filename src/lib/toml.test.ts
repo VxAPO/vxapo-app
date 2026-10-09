@@ -72,6 +72,34 @@ describe("buildToml ↔ parseConfigWithTail", () => {
     expect(parsed.tail).toContain("foo = 1");
   });
 
+  it("driver 已移除的 release_ms 解析即丢弃并置 droppedRemovedKeys（触发落盘自愈）", () => {
+    const text = [
+      "version = 1",
+      "enabled = true",
+      "",
+      '[[effects]]',
+      'type = "compressor"',
+      "enabled = true",
+      "threshold_db = -12.0",
+      "release_ms = 100.0",
+      "ratio = 3.0",
+      "",
+    ].join("\n");
+    const parsed = parseConfigWithTail(text);
+    expect(parsed.droppedRemovedKeys).toBe(true);
+    expect(parsed.effects[0].params?.release_ms).toBeUndefined();
+    expect(parsed.effects[0].params?.ratio).toBe(3.0);
+    // 重写后不再含 release_ms，driver 方可接受该文件
+    const rewritten = buildToml(parsed.blocks, parsed.enabled, parsed.effects);
+    expect(rewritten).not.toContain("release_ms");
+    expect(parseConfigWithTail(rewritten).droppedRemovedKeys).toBe(false);
+  });
+
+  it("无已移除键时 droppedRemovedKeys=false", () => {
+    const parsed = parseConfigWithTail(buildToml(blocks, true, effects));
+    expect(parsed.droppedRemovedKeys).toBe(false);
+  });
+
   it("畸形 TOML 不再吞半张表：放弃解析、原文进 tail", () => {
     // 这条路径会按设计打 console.error，测试里静音以免污染输出
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});

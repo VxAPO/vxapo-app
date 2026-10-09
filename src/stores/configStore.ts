@@ -211,6 +211,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           displayGuid: guid,
         });
         get().tailRef.current = parsed.tail;
+        // 自愈：文件含 driver 已移除的键（如 release_ms）→ driver 拒载该文件（降级
+        // passthrough 无 EQ）。置脏后 useConfig 的保存 effect 会用净化后的模型重写一次。
+        if (parsed.droppedRemovedKeys) get().dirtyRef.current = true;
         set((s) => ({
           tuningMap:
             s.tuningMap[guid] === parsed.enabled
