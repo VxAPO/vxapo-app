@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT = resolve(APP_DIR, "..");
 const TRIPLE = "x86_64-pc-windows-msvc";
+const startedAt = Date.now();
 
 function run(cmdline, cwd) {
   console.log(`\n> [${cwd.replace(ROOT, ".")}] ${cmdline}`);
@@ -62,6 +63,17 @@ for (const [repo, file] of [
 
 // 4) 打包（vite 阶段的 TEMP 重定向已在 package.json build 里内置）。
 run("npx tauri build", APP_DIR);
+
+// 前端重建守卫：cmd 的 `if` 会吞掉整行 && 链，条件为假时 tsc/vite 被静默跳过、
+// 旧 dist 打进包（踩过：整轮 lift/分段滑块都没进安装包）。dist 必须是本次生成的。
+const distMtime = statSync(join(APP_DIR, "dist", "index.html")).mtimeMs;
+if (distMtime < startedAt) {
+  console.error(
+    `\n✗ dist/index.html 未在本次 release 期间重建（${new Date(distMtime).toISOString()}）——` +
+      "前端编译被跳过，包里会是旧前端。检查 package.json build 脚本。",
+  );
+  process.exit(1);
+}
 
 const version = JSON.parse(readFileSync(join(APP_DIR, "package.json"), "utf8")).version;
 const installer = join(APP_DIR, "src-tauri", "target", "release", "bundle", "nsis", `VxAPO_${version}_x64-setup.exe`);

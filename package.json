@@ -7,7 +7,7 @@
     "dev": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "if not exist .build-tmp mkdir .build-tmp && set \"TEMP=%CD%\\.build-tmp\" && set \"TMP=%CD%\\.build-tmp\" && tsc && vite build",
+    "build": "node -e \"require('fs').mkdirSync('.build-tmp',{recursive:true})\" && set \"TEMP=%CD%\\.build-tmp\" && set \"TMP=%CD%\\.build-tmp\" && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "build:win": "tauri build",
