@@ -37,6 +37,14 @@ function normalizeEffects(list: EffectItem[]): EffectItem[] {
   }));
 }
 
+/** 屏上是否有聚焦的数字输入框（调音卡片的数值框）。键入中间态允许越界、
+ *  写盘会夹取，磁盘值因此可能暂与输入框里的半截数字不同——此时回读会把
+ *  正在输入的值替换掉，失焦收口后两者一致再恢复回读。 */
+function numberInputFocused(): boolean {
+  const el = typeof document !== "undefined" ? document.activeElement : null;
+  return el instanceof HTMLInputElement && el.type === "number";
+}
+
 const DEFAULT_CHANNEL_CTX: ChannelCtx = { mode: false, first: "L", active: "L" };
 
 interface ConfigInputs {
@@ -239,14 +247,16 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   poll() {
     const { inputs, dirtyRef, configRevisionRef } = get();
     const guid = inputs.selectedGuid;
-    if (!guid || dirtyRef.current) return;
+    if (!guid || dirtyRef.current || numberInputFocused()) return;
     const first = inputs.channelCtx.first;
     readConfigChecked(guid, configRevisionRef.current)
       .then((res) => {
         if (!res) return;
         configRevisionRef.current = res.revision;
         // 内容未变：后端已短路，不回传文本，前端也无需解析
-        if (res.text == null || dirtyRef.current) return;
+        // 数字输入框聚焦时也不回读：写盘夹取后磁盘值可能 ≠ 输入中的临时值
+        //（如想打 50、先按了 5），回读会把半截数字替换掉；失焦收口后两者一致再恢复。
+        if (res.text == null || dirtyRef.current || numberInputFocused()) return;
         const parsed = parseConfigWithTail(res.text);
         get().tailRef.current = parsed.tail;
         set({ configChannelMode: parsed.channelMode });

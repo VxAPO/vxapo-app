@@ -100,6 +100,17 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                   disabled={disabled}
                   aria-label={p.label}
                   onChange={(e) => onChangeParam(effect.id ?? effect.type, p.key, Number(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  onBlur={() => {
+                    // 失焦收口：onChange 存的是原始键入值（如 999），显示层已 clamp；
+                    // 离开输入框时把收口值写回 store，避免越界值随保存落盘（写盘另有夹取兜底）。
+                    // 仅数值越界/非有限才提交：键入合法值、未改动的字段不触发 markDirty。
+                    if (typeof raw === "number" && raw !== clamped) {
+                      onChangeParam(effect.id ?? effect.type, p.key, clamped);
+                    }
+                  }}
                 />
               </div>
             );

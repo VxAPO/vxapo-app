@@ -132,6 +132,24 @@ export function buildSemanticUnits(blocks: Block[]): { key: string; blocks: Bloc
 
 export type BandPatch = Partial<{ fc: number; gain_db: number; q: number; kind: PeqBandKind }>;
 
+/**
+ * 滤波器三参数的量程与非有限兜底默认——与 driver `finite_range` 同口径
+ * （fc 20..20000、gain −30..30、q 0.1..12）。数字输入的失焦收口与 buildToml
+ * 写盘夹取共用这一份：单值越界会让 driver 拒收**整份配置**（降级 passthrough，
+ * EQ 整体失效），所以越界值不能流出 UI。
+ */
+export const BAND_LIMITS = {
+  fc: { min: 20, max: 20000, def: 1000 },
+  gain_db: { min: -30, max: 30, def: 0 },
+  q: { min: 0.1, max: 12, def: 1 },
+} as const;
+
+/** 夹到量程；NaN/非数值回该参数默认，±Infinity 夹到边界。 */
+export function clampBandParam(key: keyof typeof BAND_LIMITS, v: number): number {
+  const { min, max, def } = BAND_LIMITS[key];
+  return typeof v === "number" && !Number.isNaN(v) ? Math.min(max, Math.max(min, v)) : def;
+}
+
 export interface BlockGroup {
   label: string;
   items: { block: Block; idx: number }[];

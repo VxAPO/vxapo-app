@@ -2,7 +2,7 @@ import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { displayBandName, displayGroupLabel, t } from "../lib/i18n/core";
-import { semanticName, type BandPatch } from "../lib/blocks";
+import { BAND_LIMITS, clampBandParam, semanticName, type BandPatch } from "../lib/blocks";
 import GainSlider from "./GainSlider";
 
 interface SemanticUnitCardProps {
@@ -59,9 +59,20 @@ function SemanticUnitCard({
             <input
               type="number"
               className="num fc-num"
+              min={BAND_LIMITS.fc.min}
+              max={BAND_LIMITS.fc.max}
               value={b.bands[0]?.fc ?? 1000}
               aria-label={t("frequency")}
               onChange={(e) => onPatchBand(bi, 0, { fc: Number(e.target.value) })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              onBlur={() => {
+                // 失焦收口（与参数视图 BandParamCard 同口径）：越界/非法值夹回 driver 合法域
+                const cur = b.bands[0]?.fc ?? 1000;
+                const c = clampBandParam("fc", cur);
+                if (c !== cur) onPatchBand(bi, 0, { fc: c });
+              }}
             />
             <button className="close-x" type="button" aria-label={t("aria.delete")} onClick={() => onRemoveBlock(bi)}>
               <X size={12} strokeWidth={2.5} />

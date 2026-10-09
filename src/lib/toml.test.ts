@@ -157,3 +157,47 @@ describe("buildToml ↔ parseConfigWithTail", () => {
     expect(parsed.channelMode).toBe(false);
   });
 });
+
+describe("buildToml 写盘收口（driver finite_range 越界拒收整份配置）", () => {
+  it("band 越界值夹回 driver 范围", () => {
+    const b: Block = { id: "x", enabled: true, bands: [{ fc: 5, gain_db: 99, q: 0 }] };
+    const out = buildToml([b], true, []);
+    expect(out).toContain("fc = 20");
+    expect(out).toContain("gain_db = 30");
+    expect(out).toContain("q = 0.1");
+  });
+
+  it("band 非有限值回默认（fc=1000 / gain=0 / q=1）", () => {
+    const b: Block = { id: "x", enabled: true, bands: [{ fc: NaN, gain_db: NaN, q: NaN }] };
+    const out = buildToml([b], true, []);
+    expect(out).toContain("fc = 1000");
+    expect(out).toContain("gain_db = 0");
+    expect(out).toContain("q = 1");
+  });
+
+  it("效果器参数越界夹到 spec 范围（preamp gain_db 上限 48）", () => {
+    const eff: EffectItem = { type: "preamp", enabled: true, params: { gain_db: 999 } };
+    const out = buildToml([], true, [eff]);
+    expect(out).toContain("gain_db = 48");
+  });
+
+  it("效果器参数非有限回 spec 默认（compressor attack_ms 默认 10ms）", () => {
+    const eff: EffectItem = { type: "compressor", enabled: true, params: { attack_ms: NaN } };
+    const out = buildToml([], true, [eff]);
+    expect(out).toContain("attack_ms = 10");
+  });
+
+  it("compressor.ratio 仍先经写盘换算再夹取（内部斜率 1.0 → 20:1）", () => {
+    const eff: EffectItem = { type: "compressor", enabled: true, params: { ratio: 1 } };
+    const out = buildToml([], true, [eff]);
+    expect(out).toContain("ratio = 20");
+  });
+
+  it("范围内值原样写出（收口不改变合法配置）", () => {
+    const b: Block = { id: "x", enabled: true, bands: [{ fc: 1000, gain_db: -3.5, q: 0.707 }] };
+    const out = buildToml([b], true, []);
+    expect(out).toContain("fc = 1000");
+    expect(out).toContain("gain_db = -3.5");
+    expect(out).toContain("q = 0.707");
+  });
+});

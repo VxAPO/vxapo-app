@@ -5,6 +5,7 @@ import {
   buildRenderOrder,
   buildSemanticUnits,
   buildSortItems,
+  clampBandParam,
   ensureBlockIds,
   groupBlocks,
   mergeBlockIds,
@@ -166,5 +167,35 @@ describe("分组与渲染顺序", () => {
     const units = buildSemanticUnits(blocks);
     expect(units.map((u) => u.key)).toEqual(["s-s1", "g-G", "s-s2"]);
     expect(units[1].blocks.map((b) => b.id)).toEqual(["g1", "g2"]);
+  });
+});
+
+describe("clampBandParam（输入框失焦/写盘收口）", () => {
+  it("范围内原样返回", () => {
+    expect(clampBandParam("fc", 1000)).toBe(1000);
+    expect(clampBandParam("fc", 20)).toBe(20);
+    expect(clampBandParam("fc", 20000)).toBe(20000);
+    expect(clampBandParam("gain_db", -30)).toBe(-30);
+    expect(clampBandParam("gain_db", 30)).toBe(30);
+    expect(clampBandParam("q", 0.1)).toBe(0.1);
+    expect(clampBandParam("q", 12)).toBe(12);
+  });
+
+  it("越界夹到边界（driver finite_range 同口径）", () => {
+    expect(clampBandParam("fc", 5)).toBe(20);
+    expect(clampBandParam("fc", 999999)).toBe(20000);
+    expect(clampBandParam("gain_db", -99)).toBe(-30);
+    expect(clampBandParam("gain_db", 99)).toBe(30);
+    expect(clampBandParam("q", 0)).toBe(0.1);
+    expect(clampBandParam("q", 100)).toBe(12);
+  });
+
+  it("非有限值回该参数默认，±Infinity 夹到边界（与 NaN 区分）", () => {
+    expect(clampBandParam("fc", NaN)).toBe(1000);
+    expect(clampBandParam("gain_db", NaN)).toBe(0);
+    expect(clampBandParam("q", NaN)).toBe(1);
+    // ±Infinity 夹到边界而不是回默认（与 NaN 区分）
+    expect(clampBandParam("fc", Infinity)).toBe(20000);
+    expect(clampBandParam("fc", -Infinity)).toBe(20);
   });
 });

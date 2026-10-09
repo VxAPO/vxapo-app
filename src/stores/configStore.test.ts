@@ -573,6 +573,21 @@ describe("poll", () => {
     expect(s.blocks[0].id).toBe("keep");
     expect(s.blocks[0].bands[0].fc).toBe(123);
   });
+
+  it("数字输入框聚焦时不回读（写盘夹取后磁盘值可能≠输入中的半截值，回读会打断键入）", async () => {
+    setInputs({ selectedGuid: "A" });
+    vi.mocked(api.readConfigChecked).mockResolvedValue({ revision: "r1", text: null });
+    const inp = document.createElement("input");
+    inp.type = "number";
+    document.body.appendChild(inp);
+    inp.focus();
+    useConfigStore.getState().poll();
+    expect(api.readConfigChecked).not.toHaveBeenCalled();
+    inp.blur();
+    useConfigStore.getState().poll();
+    await vi.waitFor(() => expect(api.readConfigChecked).toHaveBeenCalledTimes(1));
+    inp.remove();
+  });
 });
 
 describe("toggleDeviceTuning", () => {

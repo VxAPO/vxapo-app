@@ -2,11 +2,11 @@ import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
-import type { BandPatch } from "../lib/blocks";
+import { BAND_LIMITS, clampBandParam, type BandPatch } from "../lib/blocks";
 import GainSlider from "./GainSlider";
 
-const FC_MIN = 20;
-const FC_MAX = 20000;
+const FC_MIN = BAND_LIMITS.fc.min;
+const FC_MAX = BAND_LIMITS.fc.max;
 const fcToPos = (fc: number) => {
   const v = Math.min(FC_MAX, Math.max(FC_MIN, fc));
   return Math.log(v / FC_MIN) / Math.log(FC_MAX / FC_MIN);
@@ -85,6 +85,15 @@ function BandParamCard({
             value={band.fc}
             aria-label={t("frequency")}
             onChange={(e) => onPatchBand(bi, 0, { fc: Number(e.target.value) })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            onBlur={() => {
+              // 失焦收口：键入过程中允许中间态越界（写盘前另有夹取兜底），
+              // 离开输入框时把越界/非法值夹回 driver 合法域（非有限回默认）。
+              const c = clampBandParam("fc", band.fc);
+              if (c !== band.fc) onPatchBand(bi, 0, { fc: c });
+            }}
           />
         </div>
         <div className="band-param-row">
@@ -107,6 +116,13 @@ function BandParamCard({
             value={band.q}
             aria-label={t("q.value")}
             onChange={(e) => onPatchBand(bi, 0, { q: Number(e.target.value) })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            onBlur={() => {
+              const c = clampBandParam("q", band.q);
+              if (c !== band.q) onPatchBand(bi, 0, { q: c });
+            }}
           />
         </div>
         <div className="band-param-row">
@@ -129,6 +145,13 @@ function BandParamCard({
             value={band.gain_db}
             aria-label={t("gain")}
             onChange={(e) => onPatchBand(bi, 0, { gain_db: Number(e.target.value) })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            onBlur={() => {
+              const c = clampBandParam("gain_db", band.gain_db);
+              if (c !== band.gain_db) onPatchBand(bi, 0, { gain_db: c });
+            }}
           />
         </div>
       </div>

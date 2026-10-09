@@ -4,10 +4,25 @@ import type { Band, Block, EffectItem } from "./model";
 import { parse as parseToml } from "smol-toml";
 import { EFFECT_PARAM_SPECS } from "./effects.generated";
 import { KNOWN_EFFECT_TYPES, defaultEffectParams, fromDriverParam, toDriverParam } from "./effects";
+import { clampBandParam } from "./blocks";
 
 function num(n: number): string {
   if (!Number.isFinite(n)) return "0";
   return Number(n.toFixed(4)).toString();
+}
+
+/**
+ * 写盘收口：数值参数按 driver 参数表范围夹取，非有限值回该参数默认。
+ * driver `finite_range` 对单值越界是**拒收整份配置**（降级 passthrough、EQ 整体失效），
+ * 所以输入框失焦收口之外，这里再兜一层——覆盖输入中途去抖保存、语义写回、
+ * 归一化写 preamp（`-filterPeak` 可超出 +48）与手改文件回写等所有落盘路径。
+ * 未知键原样带出（去留由 driver 侧 `check_keys` 决定）。
+ */
+function clampToSpec(type: string, key: string, v: number): number {
+  const spec = EFFECT_PARAM_SPECS.find((e) => e.effect === type)?.params.find((p) => p.key === key);
+  if (!spec) return v;
+  if (!Number.isFinite(v)) return spec.default;
+  return Math.min(spec.max, Math.max(spec.min, v));
 }
 
 function str(s: unknown): string {
@@ -44,7 +59,12 @@ export function buildToml(
     for (const band of b.bands) {
       out.push("", "[[effects.bands]]");
       if (band.kind && band.kind !== "peaking") out.push(`type = ${str(band.kind)}`);
-      out.push(`fc = ${num(band.fc)}`, `gain_db = ${num(band.gain_db)}`, `q = ${num(band.q)}`);
+      // band 三键写盘收口（clampBandParam 与 driver finite_range 同口径）
+      out.push(
+        `fc = ${num(clampBandParam("fc", band.fc))}`,
+        `gain_db = ${num(clampBandParam("gain_db", band.gain_db))}`,
+        `q = ${num(clampBandParam("q", band.q))}`,
+      );
     }
     out.push("");
   }
@@ -52,8 +72,9 @@ export function buildToml(
     out.push("[[effects]]", `type = ${str(e.type)}`, `enabled = ${e.enabled}`);
     if (e.channels?.length) out.push(`channels = ${JSON.stringify(e.channels)}`);
     for (const [k, v] of Object.entries({ ...defaultEffectParams(e.type), ...(e.params ?? {}) })) {
-      // 数值统一经写盘换算（compressor.ratio：内部 0..1 斜率 → driver x:1）。
-      out.push(typeof v === "number" ? `${k} = ${num(toDriverParam(e.type, k, v))}` : `${k} = ${str(String(v))}`);
+      // 数值统一先经写盘换算（compressor.ratio：内部 0..1 斜率 → driver x:1），
+      // 再按 driver 参数表范围夹取（clampToSpec）。
+      out.push(typeof v === "number" ? `${k} = ${num(clampToSpec(e.type, k, toDriverParam(e.type, k, v)))}` : `${k} = ${str(String(v))}`);
     }
     out.push("");
   }
