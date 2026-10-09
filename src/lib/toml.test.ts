@@ -88,7 +88,7 @@ describe("buildToml ↔ parseConfigWithTail", () => {
     const parsed = parseConfigWithTail(text);
     expect(parsed.droppedRemovedKeys).toBe(true);
     expect(parsed.effects[0].params?.release_ms).toBeUndefined();
-    expect(parsed.effects[0].params?.ratio).toBe(3.0);
+    expect(parsed.effects[0].params?.ratio).toBe(0.67);
     // 重写后不再含 release_ms，driver 方可接受该文件
     const rewritten = buildToml(parsed.blocks, parsed.enabled, parsed.effects);
     expect(rewritten).not.toContain("release_ms");
@@ -98,6 +98,34 @@ describe("buildToml ↔ parseConfigWithTail", () => {
   it("无已移除键时 droppedRemovedKeys=false", () => {
     const parsed = parseConfigWithTail(buildToml(blocks, true, effects));
     expect(parsed.droppedRemovedKeys).toBe(false);
+  });
+
+  it("compressor.ratio 读写换算：文件 x:1 ↔ 内部 0~1 斜率（读写各一次）", () => {
+    const text = [
+      "version = 1",
+      "enabled = true",
+      "",
+      "[[effects]]",
+      'type = "compressor"',
+      "enabled = true",
+      "threshold_db = -12.0",
+      "ratio = 3.0",
+      "",
+    ].join("\n");
+    const parsed = parseConfigWithTail(text);
+    expect(parsed.effects[0].params?.ratio).toBe(0.67);
+    // 写回换算 x:1：1/(1-0.67) ≈ 3.03
+    const out = buildToml(parsed.blocks, parsed.enabled, parsed.effects);
+    expect(out).toContain("ratio = 3.03");
+    // 往返稳定：再读仍是 0.67
+    expect(parseConfigWithTail(out).effects[0].params?.ratio).toBe(0.67);
+  });
+
+  it("斜率 1.0 写盘 ratio=20（无穷取 20），读回 0.95", () => {
+    const eff: EffectItem = { id: "c", type: "compressor", enabled: true, params: { ratio: 1 } };
+    const out = buildToml([], true, [eff]);
+    expect(out).toContain("ratio = 20");
+    expect(parseConfigWithTail(out).effects[0].params?.ratio).toBe(0.95);
   });
 
   it("畸形 TOML 不再吞半张表：放弃解析、原文进 tail", () => {

@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { X } from "lucide-react";
 import type { EffectItem } from "../lib/model";
-import { defaultEffectParams, effectDef, effectParams, paramToSliderPos, sliderPosToParam } from "../lib/effects";
+import { defaultEffectParams, effectDef, effectParams } from "../lib/effects";
 import { t } from "../lib/i18n/core";
 import GainSlider from "./GainSlider";
 import VxSelect from "./VxSelect";
@@ -76,37 +76,8 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                 </div>
               );
             }
-            // 曲线行程参数（如压缩比）：滑杆走映射后的位置（按感知量均匀），
-            // 数字输入框仍显示/输入原始 x:1 数值与原始步进。
-            if (p.curve) {
-              return (
-                <div className="effect-param-row" key={p.key}>
-                  <span className="effect-param-label">{t(p.label)}</span>
-                  <GainSlider
-                    value={paramToSliderPos(effect.type, p.key, clamped)}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    disabled={disabled}
-                    ariaLabel={p.label}
-                    onValueChange={(v) =>
-                      onChangeParam(effect.id ?? effect.type, p.key, sliderPosToParam(effect.type, p.key, v))
-                    }
-                  />
-                  <input
-                    type="number"
-                    className="gain-input"
-                    min={p.min}
-                    max={p.max}
-                    step={p.step}
-                    value={clamped}
-                    disabled={disabled}
-                    aria-label={p.label}
-                    onChange={(e) => onChangeParam(effect.id ?? effect.type, p.key, Number(e.target.value))}
-                  />
-                </div>
-              );
-            }
+            // 通用滑杆 + 数字输入框：显示值即存储值（compressor.ratio 内部存 0..1
+            // 增益削减斜率，域由 UI_PARAM_RANGES 覆盖；写盘换算见 toDriverParam）。
             return (
               <div className="effect-param-row" key={p.key}>
                 <span className="effect-param-label">{t(p.label)}</span>

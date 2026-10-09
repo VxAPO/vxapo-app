@@ -35,7 +35,19 @@ export function effectsEqual(a: EffectItem[], b: EffectItem[]): boolean {
       const py = y.params ?? {};
       const kx = Object.keys(px);
       const ky = Object.keys(py);
-      return kx.length === ky.length && kx.every((k) => px[k] === py[k]);
+      // 数值按「写盘值」比较：compressor.ratio 的 0.95~1.0 写盘都是 20:1，
+      // 否则读回0.95 会把屏上拖满的 1.0 判成外部改动换掉（滑杆弹回）。
+      return (
+        kx.length === ky.length &&
+        kx.every((k) => {
+          const a = px[k];
+          const b = py[k];
+          if (typeof a === "number" && typeof b === "number") {
+            return toDriverParam(x.type, k, a) === toDriverParam(x.type, k, b);
+          }
+          return a === b;
+        })
+      );
     })
   );
 }
@@ -48,8 +60,6 @@ export interface EffectParamDef {
   step: number;
   unit?: string;
   options?: { value: string; label: string }[];
-  /** 滑杆行程曲线（仅 UI：数值语义不变，行程按曲线映射）——见 `sliderPosToParam`。 */
-  curve?: "ratioSlope";
 }
 
 /**
@@ -88,48 +98,52 @@ const PARAM_LABELS: Record<string, string> = {
 const PARAM_OPTIONS: Record<string, { value: string; label: string }[]> = {};
 
 /**
- * 滑杆行程曲线（UI 专属，driver 语义不变）。
- *
- * `ratioSlope`：压缩比的感知量是实际压力量 `1 − 1/ratio`（斜率），直接线性映射
- * ratio 数字会让行程前重后轻（1→3 吃掉全量程 67%，7→20 只剩 8%）。滑杆行程改按
- * 斜率均匀分布——走一格，实际压力量的变化一致；数字输入框仍显示/输入 x:1。
+ * 参数值域覆盖（仅 UI 显示域 ≠ driver 值域的参数登记；决策 2 的显式例外）：
+ * `compressor.ratio` —— App 内部（滑杆值、输入框显示、语义强度、内存存储）统一用
+ * **0..1 增益削减斜率 `v = 1 − 1/ratio`**（3:1 → 0.67、20:1 → 0.95，到不了 1）；
+ * 与 driver 的 x:1 值域只在**读/写 TOML 时各换算一次**（`fromDriverParam` / `toDriverParam`），
+ * 渲染时不从 ratio 反推滑杆位置。
  */
-const SLIDER_CURVES: Record<string, "ratioSlope"> = {
-  "compressor.ratio": "ratioSlope",
+export const UI_PARAM_RANGES: Record<string, { min: number; max: number; step: number }> = {
+  "compressor.ratio": { min: 0, max: 1, step: 0.01 },
 };
 
 const RATIO_MAX = 20;
-const RATIO_SLOPE_MAX = 1 - 1 / RATIO_MAX;
 
-/** 压缩比 → 滑杆行程位置（0..1，按斜率均匀）。 */
-export function paramToSliderPos(type: string, key: string, value: number): number {
-  if (SLIDER_CURVES[`${type}.${key}`] !== "ratioSlope") return value;
-  const r = Math.min(RATIO_MAX, Math.max(1, value));
-  return (1 - 1 / r) / RATIO_SLOPE_MAX;
+/** 读 TOML（一次性换算）：driver x:1 → 内部斜率 `v = 1 − 1/ratio`（两位小数）。 */
+export function fromDriverParam(type: string, key: string, raw: number): number {
+  if (type !== "compressor" || key !== "ratio") return raw;
+  if (!Number.isFinite(raw)) return 0;
+  return Math.round((1 - 1 / Math.max(raw, 1)) * 100) / 100;
 }
 
-/** 滑杆行程位置（0..1）→ 压缩比（x:1，保留两位小数）。 */
-export function sliderPosToParam(type: string, key: string, pos: number): number {
-  if (SLIDER_CURVES[`${type}.${key}`] !== "ratioSlope") return pos;
-  const s = Math.min(1, Math.max(0, pos)) * RATIO_SLOPE_MAX;
-  return Math.min(RATIO_MAX, Math.max(1, Number((1 / (1 - s)).toFixed(2))));
+/**
+ * 写 TOML / `effectsEqual` 比较（一次性换算）：内部斜率 v → driver x:1，
+ * `ratio = 1/(1−v)`，超过 20 一律 clamp 到 20（v = 1 时 `1/0` 是无穷，直接取 20）。
+ * 0.95~1.0 这段写盘都是 20:1，往返比较因此相等——拖满的 1.0 不会读回 0.95 弹回。
+ */
+export function toDriverParam(type: string, key: string, v: number): number {
+  if (type !== "compressor" || key !== "ratio") return v;
+  const c = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+  const ratio = 1 / (1 - c);
+  return ratio > RATIO_MAX ? RATIO_MAX : Math.round(ratio * 100) / 100;
 }
 
-/** 参数定义：范围/步进/单位取 driver 表，label 取 UI 文案表。 */
+/** 参数定义：范围/步进/单位取 driver 表（显示域例外见 `UI_PARAM_RANGES`），label 取 UI 文案表。 */
 export function effectParams(type: string): EffectParamDef[] {
   const spec = EFFECT_PARAM_SPECS.find((e) => e.effect === type);
   if (!spec) return [];
   return spec.params.map((p) => {
     const id = `${type}.${p.key}`;
+    const ui = UI_PARAM_RANGES[id];
     return {
       key: p.key,
       label: PARAM_LABELS[id] ?? p.key,
-      min: p.min,
-      max: p.max,
-      step: p.step,
+      min: ui?.min ?? p.min,
+      max: ui?.max ?? p.max,
+      step: ui?.step ?? p.step,
       unit: p.unit,
       options: PARAM_OPTIONS[id],
-      ...(SLIDER_CURVES[id] ? { curve: SLIDER_CURVES[id] } : {}),
     };
   });
 }
@@ -158,11 +172,11 @@ function roundToStep(v: number, step: number): number {
   return Number(v.toFixed(decimals));
 }
 
-/** 新增效果器的参数初值：driver 默认值打底，UI 起点覆盖。 */
+/** 新增效果器的参数初值：driver 默认值打底，UI 起点覆盖（均换算为内部值域）。 */
 export function defaultEffectParams(type: string): Record<string, number | string> {
   const base: Record<string, number | string> = {};
   for (const p of EFFECT_PARAM_SPECS.find((e) => e.effect === type)?.params ?? []) {
-    base[p.key] = roundToStep(p.default, p.step);
+    base[p.key] = fromDriverParam(type, p.key, roundToStep(p.default, p.step));
   }
   return { ...base, ...(UI_DEFAULT_PARAMS[type] ?? {}) };
 }
@@ -184,8 +198,9 @@ export function semanticStrength(type: string, params: Record<string, number | s
     case "reverb":
       return clamp01(asNum(params.wet, 0.27) / 0.9);
     case "compressor":
-      // 强度 = 压缩比（1 → 0，20 → 1）。
-      return clamp01((asNum(params.ratio, 3) - 1) / 19);
+      // 压缩比内部即 0..1 增益削减斜率（与参数视图同一份值），直接就是强度；
+      // 缺省 0.67 = driver 默认 3:1 换算（1 − 1/3）。
+      return clamp01(asNum(params.ratio, 0.67));
     case "loudness": {
       const ref = asNum(params.reference_phon, 80);
       return clamp01((ref - asNum(params.phon, ref)) / 40);
@@ -233,8 +248,9 @@ export function applySemanticStrength(
       break;
     }
     case "compressor":
-      // 强度拉满 → 20:1，拉低 → 1:1（不压缩）。
-      next.ratio = Math.round((1 + s * 19) * 100) / 100;
+      // 强度即内部 0..1 斜率值本身（与参数视图同一份值）：拉满 = 1（写盘 20:1），
+      // 拉低 = 0（写盘 1:1 不压缩）。
+      next.ratio = Math.round(s * 100) / 100;
       break;
     case "loudness": {
       const ref = asNum(params.reference_phon, 80);

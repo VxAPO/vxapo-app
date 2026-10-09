@@ -149,6 +149,13 @@
   flex: 1;
 }
 
+/* 满值时 thumb（16px、center 在轨道右缘）向外探出 8px，正好吃掉行 gap 贴住输入框：
+   滑杆右侧补 2px——只拉大「进度条右端 → 输入框」这一段，label 侧不动。 */
+.effect-param-row .gs-root,
+.band-param-row .gs-root {
+  margin-right: 2px;
+}
+
 .effect-params .gain-input {
   flex: none;
 }

@@ -3,7 +3,7 @@
 import type { Band, Block, EffectItem } from "./model";
 import { parse as parseToml } from "smol-toml";
 import { EFFECT_PARAM_SPECS } from "./effects.generated";
-import { KNOWN_EFFECT_TYPES, defaultEffectParams } from "./effects";
+import { KNOWN_EFFECT_TYPES, defaultEffectParams, fromDriverParam, toDriverParam } from "./effects";
 
 function num(n: number): string {
   if (!Number.isFinite(n)) return "0";
@@ -52,7 +52,8 @@ export function buildToml(
     out.push("[[effects]]", `type = ${str(e.type)}`, `enabled = ${e.enabled}`);
     if (e.channels?.length) out.push(`channels = ${JSON.stringify(e.channels)}`);
     for (const [k, v] of Object.entries({ ...defaultEffectParams(e.type), ...(e.params ?? {}) })) {
-      out.push(typeof v === "number" ? `${k} = ${num(v)}` : `${k} = ${str(String(v))}`);
+      // 数值统一经写盘换算（compressor.ratio：内部 0..1 斜率 → driver x:1）。
+      out.push(typeof v === "number" ? `${k} = ${num(toDriverParam(e.type, k, v))}` : `${k} = ${str(String(v))}`);
     }
     out.push("");
   }
@@ -187,7 +188,8 @@ function parseDocument(text: string): ConfigParse {
         }
         if (typeof v === "number") {
           warnOutOfRange(type, k, v);
-          params[k] = v;
+          // 读盘一次性换算（compressor.ratio：driver x:1 → 内部 0..1 斜率）。
+          params[k] = fromDriverParam(type, k, v);
         } else if (typeof v === "string") {
           params[k] = v;
         }
