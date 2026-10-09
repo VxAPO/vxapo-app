@@ -48,6 +48,56 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
         <div className="effect-params">
           {defs.map((p) => {
             const raw = params[p.key];
+            const fallback = defaultEffectParams(effect.type)[p.key];
+            const value =
+              typeof raw === "number" && Number.isFinite(raw) ? raw : typeof fallback === "number" ? fallback : p.min;
+            const clamped = Math.min(p.max, Math.max(p.min, value));
+            if (p.seg) {
+              // 分段滑块（settings 深浅切换形态）：带 thumb 的长滑块 + 文字档位，
+              // 不带数字输入框；历史手输值就近吸附到档位（首次点击即落到精确档）。
+              const segs = p.seg;
+              const n = segs.length;
+              let idx = segs.findIndex((o) => Number(o.value) === clamped);
+              if (idx < 0) {
+                idx = 0;
+                for (let i = 1; i < n; i++) {
+                  if (
+                    Math.abs(Number(segs[i].value) - clamped) <
+                    Math.abs(Number(segs[idx].value) - clamped)
+                  ) {
+                    idx = i;
+                  }
+                }
+              }
+              const pad = 3;
+              const gap = 2; // 与 .seg 样式一致（padding3px、gap2px）
+              const span = `100% - ${pad * 2}px - ${(n - 1) * gap}px`;
+              return (
+                <div className="effect-param-row" key={p.key}>
+                  <span className="effect-param-label">{t(p.label)}</span>
+                  <div className="seg theme-seg effect-seg" role="group" aria-label={p.label}>
+                    <span
+                      className="theme-seg-thumb"
+                      aria-hidden
+                      style={{
+                        left: `calc(${pad}px + ${idx} * ((${span}) / ${n} + ${gap}px))`,
+                        width: `calc((${span}) / ${n})`,
+                      }}
+                    />
+                    {segs.map((o, i) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        aria-pressed={i === idx}
+                        onClick={() => onChangeParam(effect.id ?? effect.type, p.key, Number(o.value))}
+                      >
+                        {t(o.label)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             if (p.options) {
               // 驱动可能写入数字索引（0-3）或未知字符串：规整成合法选项值，
               // 保证 Radix Select 的受控值始终可选中
@@ -72,10 +122,6 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                 </div>
               );
             }
-            const fallback = defaultEffectParams(effect.type)[p.key];
-            const value =
-              typeof raw === "number" && Number.isFinite(raw) ? raw : typeof fallback === "number" ? fallback : p.min;
-            const clamped = Math.min(p.max, Math.max(p.min, value));
             // 曲线行程参数（如压缩比）：滑杆走映射后的位置（按感知量均匀），
             // 数字输入框仍显示/输入原始 x:1 数值与原始步进。
             if (p.curve) {

@@ -207,9 +207,9 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
       {
         "key": "release_ms",
         "step": 10,
-        "min": 10,
+        "min": 0,
         "max": 1000,
-        "default": 100,
+        "default": 0,
         "unit": "ms"
       },
       {
