@@ -96,11 +96,11 @@ VxAPO App 是 VxAPO 的桌面调音端，技术栈为 Rust（Tauri 2）与 React
 
 | 适用位置 | 参数 | 设定依据 |
 |---|---|---|
-| 浅色主题的卡片与工具栏 | `blur(10–12px) saturate(1.05) contrast(0.55) brightness(1.38)` | 提高背景采样的亮度并降低对比，使背景的暗部与彩色噪点不影响面板底色 |
-| 深色主题的同类面板 | `blur(8px) saturate(1.15)` | 深色主题的对比度本身较低，仅需小幅提高饱和度 |
+| 浅色主题的卡片与工具栏 | `blur(10px) saturate(1.05) contrast(0.55) brightness(1.38)` | 提高背景采样的亮度并降低对比，使背景的暗部与彩色噪点不影响面板底色 |
+| 深色主题的同类面板 | `blur(8px) saturate(1.1)` | 深色主题的对比度本身较低，仅需小幅提高饱和度 |
 | 深色主题的高光层与边缘层 | `blur(24–36px) saturate(2.4–3)` | 边缘层的采样范围较大，需要更大的模糊半径与更高的饱和度 |
-| 下拉与右键菜单 | `blur(var(--blur-md))` / `blur(var(--blur-sm))` | 使用 token，随主题过渡 |
-| 主题切换期间 | `backdrop-filter` 参与 0.55 s 过渡 | 模糊半径不参与过渡时，切换过程出现跳变 |
+| 浮出菜单（设置 / 子 / 设备菜单）与拖拽副本 | `blur(var(--blur-md))` / `blur(var(--blur-sm))` | 使用 token，随主题过渡。Radix 下拉选择与右键菜单为实底 `var(--card)`、不模糊 |
+| 主题切换期间 | `backdrop-filter` 参与 0.55 s 过渡，`.theme-transition` 下 dev-props-card / sel-toolbar 临时换 `contrast(1) brightness(1)` | 模糊半径不参与过渡时，切换过程出现跳变。底色插值期间不跑亮度对比运算 |
 
 ### 5.3 边缘染色
 
@@ -168,7 +168,9 @@ Chromium 系能力。Windows 端 Tauri 2 通过 WebView2 渲染，因此可直�
 另外两条结构性事实：
 
 - **参数单一来源**：`lib/effects.generated.ts` 由 driver 参数表生成（见 §8）。界面只维护参数
-  文案与「新增效果器的起点」，范围、步进与默认值一律取自生成表。
+  文案与「新增效果器的起点」，范围、步进与默认值一律取自生成表。唯一例外
+  `compressor.ratio`：App 内部（滑杆、显示、语义强度、内存）统一用 0..1 增益削减斜率，
+  只在读/写 TOML 时各换算一次（`UI_PARAM_RANGES` / `fromDriverParam` / `toDriverParam`）。
 - **边缘染色**：`lib/edgetint/geometry.ts` 提供颜色、亮度、环形描边等纯函数。
   `hooks/useEdgeTintLayer.ts` 在挂载时 `startAuto`、卸载时 `stopAuto`，多挂载点用引用计数。
 
@@ -177,10 +179,10 @@ Chromium 系能力。Windows 端 Tauri 2 通过 WebView2 渲染，因此可直�
 | 事项 | 约定 |
 |---|---|
 | 配置契约 | `version=1` / `enabled` / `[meta]` / `[[effects]]`。PEQ 块固定写 `crossover_hz = 200`。`channels` 声明作用声道。`name` / `group` 是 UI 元数据，driver 忽略，因此改名不触发 DSP 重建 |
-| 效果器参数 | 参数键与默认值与 driver 一致。语义强度写回的核心参数（如 reverb 的 decay / damping / room_size）同样遵守 driver 的边界 |
+| 效果器参数 | 参数键与默认值与 driver 一致，`compressor.ratio` 例外（内部存 0..1 斜率，读写 TOML 各换算一次）。语义强度写回的核心参数（如 reverb 的 decay / damping / room_size）同样遵守 driver 的边界 |
 | 限幅 | 写回时按 driver 边界主动限幅：增益 `[-120,+48]`、滤波深切地板 -60 dB、拒绝 NaN/inf、段数上限（见 §3.1）。driver 只在内存 clamp，从不回写 |
 | 安装 / 卸载 | 后端提权调用 `vxapo-cli install --verify`，进度事件流式展示。失败时 `rollback_install` 兜底，它改调 `vxapo-cli uninstall` 清除已写入的注册表配置。App 自身不写注册表 |
-| 外部变更同步 | App 轮询磁盘变更同步界面（间隔 2 s，仅在当前设备已打开且轮询未暂停时启用，编辑中跳过）。driver 侧事件驱动热重载，`spec` 指纹相同则幂等跳过 |
+| 外部变更同步 | App 轮询磁盘变更同步界面（间隔 2 s，仅在当前设备已打开且轮询未暂停时启用，编辑中或数字输入框聚焦时跳过）。driver 侧事件驱动热重载，`spec` 指纹相同则幂等跳过 |
 
 ## 8 · 上手与开发
 
@@ -189,10 +191,11 @@ npm install
 npm run tauri dev            # 开发
 npm run tauri build          # 构建
 npm run build:win            # Windows 发布构建（含 exe 图标重嵌入）
+npm run release              # 一键出安装包：driver + cli 重编 → 拷入 resources → tauri 打包
 ```
 
 ```bash
-npm test                     # vitest：TOML 往返 / 参数表一致性 / 预设库契约 / i18n 查表
+npm test                     # vitest：TOML 往返 / 参数表一致性 / 预设库契约 / i18n 查表 / store 与输入组件行为
 npm run sync:driver-schema   # 用 driver 参数表重新生成 src/lib/effects.generated.ts
 ```
 
@@ -334,11 +337,11 @@ the parameters per backdrop, and it does not use one value everywhere.
 
 | Applies to | Parameters | Basis for the values |
 |---|---|---|
-| Cards and toolbars in the light theme | `blur(10–12px) saturate(1.05) contrast(0.55) brightness(1.38)` | Raises the luminance of the sampled backdrop and lowers contrast, so shadow and colored noise behind the panel do not affect the panel color |
-| The same panels in the dark theme | `blur(8px) saturate(1.15)` | The dark theme already has low contrast, so a small saturation lift is sufficient |
+| Cards and toolbars in the light theme | `blur(10px) saturate(1.05) contrast(0.55) brightness(1.38)` | Raises the luminance of the sampled backdrop and lowers contrast, so shadow and colored noise behind the panel do not affect the panel color |
+| The same panels in the dark theme | `blur(8px) saturate(1.1)` | The dark theme already has low contrast, so a small saturation lift is sufficient |
 | Highlight and edge layers in the dark theme | `blur(24–36px) saturate(2.4–3)` | The edge layer samples a wide area, so it needs a larger blur radius and higher saturation |
-| Dropdown and context menus | `blur(var(--blur-md))` and `blur(var(--blur-sm))` | Token values, so they animate with the theme |
-| During a theme switch | `backdrop-filter` joins the 0.55 s transition | Without interpolation of the blur radius, the switch shows a jump |
+| Pop-out menus (settings / sub / device menus) and the drag ghost | `blur(var(--blur-md))` and `blur(var(--blur-sm))` | Token values, so they animate with the theme. Radix selects and the context menu use a solid `var(--card)` with no blur |
+| During a theme switch | `backdrop-filter` joins the 0.55 s transition, and `.theme-transition` swaps in `contrast(1) brightness(1)` for dev-props-card and sel-toolbar | Without interpolation of the blur radius, the switch shows a jump, and the luminance math stays off while colors interpolate |
 
 ### 5.3 Edge tinting
 
@@ -416,7 +419,9 @@ Two more structural facts:
 
 - **Single parameter source**: `lib/effects.generated.ts` comes from the driver parameter
   table (see §8). The UI keeps parameter labels and the starting point for a new effect
-  only. Ranges, steps and defaults always come from the generated table.
+  only. Ranges, steps and defaults always come from the generated table. One exception:
+  `compressor.ratio` stays a 0..1 gain-reduction slope inside the App and converts to
+  x:1 only at the TOML boundary (`UI_PARAM_RANGES` / `fromDriverParam` / `toDriverParam`).
 - **Edge tint**: `lib/edgetint/geometry.ts` holds pure helpers for color, luminance and ring
   strokes. `hooks/useEdgeTintLayer.ts` calls `startAuto` on mount and `stopAuto` on unmount,
   and it ref-counts across its multiple mount points.
@@ -426,10 +431,10 @@ Two more structural facts:
 | Item | Agreement |
 |---|---|
 | Config contract | `version=1` / `enabled` / `[meta]` / `[[effects]]`. PEQ blocks always carry `crossover_hz = 200`. `channels` declares the scope. `name` / `group` are UI metadata that the driver ignores, so a rename does not rebuild DSP |
-| Effect parameters | Parameter keys and defaults match the driver. Semantic write-back values (reverb decay, damping, room_size and others) respect the same bounds |
+| Effect parameters | Parameter keys and defaults match the driver. `compressor.ratio` is the exception: it stores a 0..1 slope and converts at the TOML boundary. Semantic write-back values (reverb decay, damping, room_size and others) respect the same bounds |
 | Clamping | The App clamps on write to driver bounds: gain `[-120,+48]`, a -60 dB deep-cut floor, NaN/inf rejected, and the band-count limit (see §3.1). The driver clamps in memory only and never writes back |
 | Install / uninstall | The backend calls `vxapo-cli install --verify` elevated and streams progress events. On failure, `rollback_install` clears the registry config that the failed run wrote by calling `vxapo-cli uninstall`. The App never writes the registry itself |
-| External change sync | The App polls for on-disk changes to sync the UI. The interval is 2 s. The App enables the poll only while a device is open and polling is not paused, and it skips the poll while you edit. The driver reloads on file events, and it skips identical content by spec fingerprint |
+| External change sync | The App polls for on-disk changes to sync the UI. The interval is 2 s. The App enables the poll only while a device is open and polling is not paused. It skips the poll while you edit, and it also skips while a number input has focus. The driver reloads on file events, and it skips identical content by spec fingerprint |
 
 ## 8 · Getting started and development
 
@@ -438,11 +443,12 @@ npm install
 npm run tauri dev            # develop
 npm run tauri build          # build
 npm run build:win            # Windows release build (includes exe icon re-embedding)
+npm run release              # one-shot installer: rebuild driver + cli, copy to resources, tauri bundle
 ```
 
 ```bash
 npm test                     # vitest: TOML round trip, parameter-table consistency,
-                             # preset-library contract, i18n lookup
+                             # preset-library contract, i18n lookup, store and input-component behavior
 npm run sync:driver-schema   # regenerate src/lib/effects.generated.ts from the driver table
 ```
 
