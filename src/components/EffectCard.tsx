@@ -4,6 +4,7 @@ import type { EffectItem } from "../lib/model";
 import { defaultEffectParams, effectDef, effectParams } from "../lib/effects";
 import { t } from "../lib/i18n/core";
 import GainSlider from "./GainSlider";
+import NumInput from "./NumInput";
 import VxSelect from "./VxSelect";
 
 interface EffectCardProps {
@@ -78,6 +79,7 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
             }
             // 通用滑杆 + 数字输入框：显示值即存储值（compressor.ratio 内部存 0..1
             // 增益削减斜率，域由 UI_PARAM_RANGES 覆盖；写盘换算见 toDriverParam）。
+            // value 存原始键入值、display 显示收口值，失焦时 NumInput 把收口值回写 store。
             return (
               <div className="effect-param-row" key={p.key}>
                 <span className="effect-param-label">{t(p.label)}</span>
@@ -90,27 +92,15 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                   ariaLabel={p.label}
                   onValueChange={(v) => onChangeParam(effect.id ?? effect.type, p.key, v)}
                 />
-                <input
-                  type="number"
-                  className="gain-input"
+                <NumInput
+                  value={value}
+                  display={clamped}
                   min={p.min}
                   max={p.max}
                   step={p.step}
-                  value={clamped}
                   disabled={disabled}
-                  aria-label={p.label}
-                  onChange={(e) => onChangeParam(effect.id ?? effect.type, p.key, Number(e.target.value))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.currentTarget.blur();
-                  }}
-                  onBlur={() => {
-                    // 失焦收口：onChange 存的是原始键入值（如 999），显示层已 clamp；
-                    // 离开输入框时把收口值写回 store，避免越界值随保存落盘（写盘另有夹取兜底）。
-                    // 仅数值越界/非有限才提交：键入合法值、未改动的字段不触发 markDirty。
-                    if (typeof raw === "number" && raw !== clamped) {
-                      onChangeParam(effect.id ?? effect.type, p.key, clamped);
-                    }
-                  }}
+                  ariaLabel={p.label}
+                  onCommit={(v) => onChangeParam(effect.id ?? effect.type, p.key, v)}
                 />
               </div>
             );

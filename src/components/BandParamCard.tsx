@@ -2,8 +2,9 @@ import { memo } from "react";
 import { X } from "lucide-react";
 import type { Block } from "../lib/model";
 import { t } from "../lib/i18n/core";
-import { BAND_LIMITS, clampBandParam, type BandPatch } from "../lib/blocks";
+import { BAND_LIMITS, type BandPatch } from "../lib/blocks";
 import GainSlider from "./GainSlider";
+import NumInput from "./NumInput";
 
 const FC_MIN = BAND_LIMITS.fc.min;
 const FC_MAX = BAND_LIMITS.fc.max;
@@ -77,23 +78,12 @@ function BandParamCard({
             ariaLabel={t("frequency")}
             onValueChange={(p) => onPatchBand(bi, 0, { fc: posToFc(p) })}
           />
-          <input
-            type="number"
-            className="gain-input"
+          <NumInput
+            value={band.fc}
             min={FC_MIN}
             max={FC_MAX}
-            value={band.fc}
-            aria-label={t("frequency")}
-            onChange={(e) => onPatchBand(bi, 0, { fc: Number(e.target.value) })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-            onBlur={() => {
-              // 失焦收口：键入过程中允许中间态越界（写盘前另有夹取兜底），
-              // 离开输入框时把越界/非法值夹回 driver 合法域（非有限回默认）。
-              const c = clampBandParam("fc", band.fc);
-              if (c !== band.fc) onPatchBand(bi, 0, { fc: c });
-            }}
+            ariaLabel={t("frequency")}
+            onCommit={(v) => onPatchBand(bi, 0, { fc: v })}
           />
         </div>
         <div className="band-param-row">
@@ -107,22 +97,13 @@ function BandParamCard({
             ariaLabel={t("q.value")}
             onValueChange={(v) => onPatchBand(bi, 0, { q: v })}
           />
-          <input
-            type="number"
-            className="gain-input"
-            min={0.1}
-            max={12}
-            step={0.01}
+          <NumInput
             value={band.q}
-            aria-label={t("q.value")}
-            onChange={(e) => onPatchBand(bi, 0, { q: Number(e.target.value) })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-            onBlur={() => {
-              const c = clampBandParam("q", band.q);
-              if (c !== band.q) onPatchBand(bi, 0, { q: c });
-            }}
+            min={BAND_LIMITS.q.min}
+            max={BAND_LIMITS.q.max}
+            step={0.01}
+            ariaLabel={t("q.value")}
+            onCommit={(v) => onPatchBand(bi, 0, { q: v })}
           />
         </div>
         <div className="band-param-row">
@@ -136,22 +117,13 @@ function BandParamCard({
             ariaLabel={t("gain")}
             onValueChange={(v) => onPatchBand(bi, 0, { gain_db: v })}
           />
-          <input
-            type="number"
-            className="gain-input"
-            min={-30}
-            max={30}
-            step={0.1}
+          <NumInput
             value={band.gain_db}
-            aria-label={t("gain")}
-            onChange={(e) => onPatchBand(bi, 0, { gain_db: Number(e.target.value) })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-            onBlur={() => {
-              const c = clampBandParam("gain_db", band.gain_db);
-              if (c !== band.gain_db) onPatchBand(bi, 0, { gain_db: c });
-            }}
+            min={BAND_LIMITS.gain_db.min}
+            max={BAND_LIMITS.gain_db.max}
+            step={0.1}
+            ariaLabel={t("gain")}
+            onCommit={(v) => onPatchBand(bi, 0, { gain_db: v })}
           />
         </div>
       </div>
