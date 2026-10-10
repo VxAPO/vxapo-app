@@ -160,7 +160,7 @@ export const en: Record<string, string> = {
   "effect.wide.desc": "Decompose the image: vocals back, instruments out",
   "effect.aural.desc": "Adds harmonics and air",
   "effect.reverb.desc": "Adds space and smoothness",
-  "effect.compressor.desc": "Compresses dynamics above the threshold",
+  "effect.compressor.desc": "Compresses loudness, keeps detail",
   "effect.loudness.desc": "Loudness compensation for low volume",
   "filter": "Filter",
   "frequency": "Frequency",

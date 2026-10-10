@@ -160,7 +160,7 @@ export const zh: Record<string, string> = {
   "effect.wide.desc": "分解声像，拉远人声，凸显器乐",
   "effect.aural.desc": "谐波激励，提升细节与空气感",
   "effect.reverb.desc": "增加空间混响，声音更润",
-  "effect.compressor.desc": "压缩动态范围，超阈值部分按比例收窄",
+  "effect.compressor.desc": "压缩响度动态，保留细节与瞬态",
   "effect.loudness.desc": "等响度曲线补偿，小音量更平衡",
   "filter": "滤波器",
   "frequency": "中心频率",
