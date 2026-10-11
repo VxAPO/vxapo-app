@@ -43,6 +43,11 @@ export function useDevices(paused?: boolean) {
   // 但标签页要等安装完成（done/failed 后的 onRefresh）才出现。
   useInterval(() => load(false), paused ? null : 5000);
 
+  // stale 残留列表的低频兜底（60s）：它的变化源是安装/卸载/迁移（动作后的
+  // refresh() 会同步重拉），每 5s 顺带重拉一次等于每轮白付一次 CLI 子进程
+  // spawn——那是 App 最大的周期性开销。60s 只对齐外部安装器造成的漂移。
+  useInterval(() => void useDeviceStore.getState().loadStale(), paused ? null : 60000);
+
   const installedDevices = useMemo(() => devices.filter(isInstalled), [devices]);
   const selected = devices.find((d) => d.guid === selectedGuid) ?? null;
 

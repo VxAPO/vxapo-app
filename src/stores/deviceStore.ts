@@ -25,6 +25,19 @@ function staleListsEqual(a: StaleInstall[], b: StaleInstall[]): boolean {
   return a.every((s, i) => JSON.stringify(s) === JSON.stringify(b[i]));
 }
 
+type DeviceSet = (partial: Partial<DeviceStore> | ((s: DeviceStore) => Partial<DeviceStore>)) => void;
+
+/** 写入设备列表（引用保持）+ selectedGuid 收口：轮询 / 首载 / 刷新三条路径共用。 */
+function applyDevices(set: DeviceSet, ds: Device[]) {
+  set((s) => ({ devices: deviceListsEqual(s.devices, ds) ? s.devices : ds }));
+  set((s) => ({
+    selectedGuid:
+      s.selectedGuid && ds.some((d) => d.guid === s.selectedGuid && isInstalled(d))
+        ? s.selectedGuid
+        : (ds.find(isInstalled)?.guid ?? null),
+  }));
+}
+
 interface DeviceStore {
   devices: Device[];
   staleInstalls: StaleInstall[];
@@ -41,6 +54,8 @@ interface DeviceStore {
   setErrorSink(sink: ((msg: string) => void) | null): void;
   /** 拉列表：`first` 为首次加载（决定 loading 生命周期）。失败经 errorSink 上报，不抛。 */
   load(first: boolean): Promise<void>;
+  /** 低频兜底重拉 stale 残留列表（轮询不再每 5s 顺带拉 stale）。 */
+  loadStale(): Promise<void>;
   /** 安装/卸载后的强制刷新。失败经 errorSink 上报，不抛。 */
   refresh(): Promise<void>;
   setSelectedGuid(guid: string | null): void;
@@ -84,6 +99,13 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
   async load(first) {
     if (first) set({ loading: true });
     try {
+      // 轮询（!first）只拉设备：stale 的变化源是安装/卸载/迁移动作（动作后的
+      // refresh() 会同步重拉），每 5s 重拉等于每轮白付一次 CLI 子进程 spawn；
+      // 外部变化由 loadStale 的低频兜底轮询对齐。
+      if (!first) {
+        applyDevices(set, await listDevices());
+        return;
+      }
       let [devRes, staleRes] = await Promise.allSettled([listDevices(), listStaleInstalls()]);
       if (devRes.status === "rejected") throw devRes.reason;
 
@@ -121,23 +143,30 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
         }
       }
 
-      const ds = devRes.value;
-      set((s) => ({ devices: deviceListsEqual(s.devices, ds) ? s.devices : ds }));
+      applyDevices(set, devRes.value);
       const nextStale = staleRes.status === "fulfilled" ? staleRes.value : [];
       // 内容未变时保留旧数组引用：否则每 5s 都会换一次引用，触发整树重渲染
       set((s) => ({
         staleInstalls: staleListsEqual(s.staleInstalls, nextStale) ? s.staleInstalls : nextStale,
       }));
-      set((s) => ({
-        selectedGuid:
-          s.selectedGuid && ds.some((d) => d.guid === s.selectedGuid && isInstalled(d))
-            ? s.selectedGuid
-            : (ds.find(isInstalled)?.guid ?? null),
-      }));
     } catch (e: unknown) {
       get().errorSink?.(friendlyError(e));
     } finally {
       if (first) set({ loading: false });
+    }
+  },
+
+  /** 低频兜底：重拉 stale 残留列表（外部 APO 安装器等造成的漂移）。
+   *  失败静默保留现值——原轮询实现失败时会把列表清成 []，横幅闪没再闪回，
+   *  现改为不动，避免抖动。 */
+  async loadStale() {
+    try {
+      const nextStale = await listStaleInstalls();
+      set((s) => ({
+        staleInstalls: staleListsEqual(s.staleInstalls, nextStale) ? s.staleInstalls : nextStale,
+      }));
+    } catch {
+      /* 保留现值（见上注） */
     }
   },
 
@@ -147,14 +176,8 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
         listDevices(),
         listStaleInstalls().catch(() => [] as StaleInstall[]),
       ]);
-      set((s) => ({ devices: deviceListsEqual(s.devices, ds) ? s.devices : ds }));
+      applyDevices(set, ds);
       set({ staleInstalls: stale });
-      set((s) => ({
-        selectedGuid:
-          s.selectedGuid && ds.some((d) => d.guid === s.selectedGuid && isInstalled(d))
-            ? s.selectedGuid
-            : (ds.find(isInstalled)?.guid ?? null),
-      }));
     } catch (e: unknown) {
       get().errorSink?.(friendlyError(e));
     }

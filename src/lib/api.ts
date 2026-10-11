@@ -7,9 +7,21 @@ import { t } from "./i18n/core";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+/**
+ * 非 Tauri 环境（浏览器直开 / vitest）的统一降级入口：跳过 IPC 返回兜底值。
+ * 之前每个 API 各自开头写一遍 `if (!isTauri) return …`，收敛到这里一处。
+ */
+async function invokeOrDefault<T>(
+  cmd: string,
+  args: Record<string, unknown> | undefined,
+  fallback: T,
+): Promise<T> {
+  if (!isTauri) return fallback;
+  return args === undefined ? invoke<T>(cmd) : invoke<T>(cmd, args);
+}
+
 export async function readConfig(guid: string): Promise<string> {
-  if (!isTauri) return "";
-  return invoke<string>("read_config", { guid });
+  return invokeOrDefault("read_config", { guid }, "");
 }
 
 export interface ConfigReadChecked {
@@ -23,48 +35,38 @@ export async function readConfigChecked(
   guid: string,
   knownRevision: string | null,
 ): Promise<ConfigReadChecked | null> {
-  if (!isTauri) return null;
-  return invoke<ConfigReadChecked>("read_config_checked", {
-    guid,
-    knownRevision,
-  });
+  return invokeOrDefault("read_config_checked", { guid, knownRevision }, null);
 }
 
 /** 读取界面语言（"zh" / "en"；无记录返回空串）。 */
 export async function readLang(): Promise<string> {
-  if (!isTauri) return "";
-  return invoke<string>("read_lang");
+  return invokeOrDefault("read_lang", undefined, "");
 }
 
 /** 写入界面语言（设置里切换时调用，与安装器共用 lang.txt）。 */
 export async function writeLang(lang: string): Promise<void> {
-  if (!isTauri) return;
   try {
-    await invoke("write_lang", { lang });
+    await invokeOrDefault("write_lang", { lang }, undefined);
   } catch {
     /* 尽力而为：写失败时本次会话仍生效 */
   }
 }
 
 export async function writeConfig(guid: string, content: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke("write_config", { guid, content });
+  await invokeOrDefault("write_config", { guid, content }, undefined);
 }
 
 export async function listDevices(): Promise<Device[]> {
-  if (!isTauri) return [];
-  return invoke<Device[]>("list_devices");
+  return invokeOrDefault("list_devices", undefined, []);
 }
 
 export async function uninstallDevice(guid: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke("uninstall_device", { guid });
+  await invokeOrDefault("uninstall_device", { guid }, undefined);
 }
 
 /** 旧 GUID 残留列表（只读）。 */
 export async function listStaleInstalls(): Promise<StaleInstall[]> {
-  if (!isTauri) return [];
-  return invoke<StaleInstall[]>("list_stale_installs");
+  return invokeOrDefault("list_stale_installs", undefined, []);
 }
 
 /** 迁移旧 GUID 到当前端点（需要管理员，Tauri 侧自动提权）。 */
@@ -74,27 +76,28 @@ export async function migrateStaleInstall(
   configFrom?: string | null,
   snapshotFrom?: string | null,
 ): Promise<MigrationReport | null> {
-  if (!isTauri) return null;
-  const raw = await invoke<string>("migrate_stale_install", {
-    from,
-    to,
-    configFrom: configFrom ?? null,
-    snapshotFrom: snapshotFrom ?? null,
-  });
+  const raw = await invokeOrDefault<string>(
+    "migrate_stale_install",
+    {
+      from,
+      to,
+      configFrom: configFrom ?? null,
+      snapshotFrom: snapshotFrom ?? null,
+    },
+    "",
+  );
   const line = raw.trim().split("\n").filter(Boolean).pop() ?? "";
   return line ? (JSON.parse(line) as MigrationReport) : null;
 }
 
 /** 清理无法匹配活跃端点的旧 GUID 残留。 */
 export async function cleanupStaleInstall(guid: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke<string>("cleanup_stale_install", { guid });
+  await invokeOrDefault("cleanup_stale_install", { guid }, undefined);
 }
 
 /** 修复迁移后 config 的用户 ACL（权限不足时一次性提权修复）。 */
 export async function repairStaleAcl(guid: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke<string>("repair_stale_acl", { guid });
+  await invokeOrDefault("repair_stale_acl", { guid }, undefined);
 }
 
 // 进度事件取自 CLI 契约（vxapo-cli/protocol 生成，见 lib/generated/index.ts）。
@@ -106,14 +109,12 @@ export type { InstallProgressEvent } from "./generated";
 export type InstallResult = Extract<InstallProgressEvent, { event: "complete" }>;
 
 export async function installDevice(guid: string): Promise<InstallResult> {
-  if (!isTauri) return { event: "complete", success: false, attempts: 0 };
-  return invoke<InstallResult>("install_device", { guid });
+  return invokeOrDefault("install_device", { guid }, { event: "complete", success: false, attempts: 0 });
 }
 
 /** 安装失败后的兜底回滚：清除已写入的注册表配置（CLI uninstall，提权）。 */
 export async function rollbackInstall(guid: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke("rollback_install", { guid });
+  await invokeOrDefault("rollback_install", { guid }, undefined);
 }
 
 export async function onInstallProgress(
@@ -124,14 +125,12 @@ export async function onInstallProgress(
 }
 
 export async function readProgress(tag: string): Promise<string> {
-  if (!isTauri) return "";
-  return invoke<string>("read_progress", { tag });
+  return invokeOrDefault("read_progress", { tag }, "");
 }
 
 /** 读取拖拽导入文件内容（Tauri 文件拖放事件路径）。 */
 export async function readImportFile(path: string): Promise<string> {
-  if (!isTauri) return "";
-  return invoke<string>("read_import_file", { path });
+  return invokeOrDefault("read_import_file", { path }, "");
 }
 
 /** 导出当前设备 config.toml 到用户选择的路径，并在资源管理器中选中。 */

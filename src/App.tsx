@@ -326,13 +326,18 @@ export default function App() {
 
   // 设备切换时保存旧设备通道状态并恢复新设备通道状态（逐设备记忆，
   // 原逻辑在通道记忆 effect 内一并清空选中）。
+  // 框选与复制浮窗都是锚定内容层的瞬态 UI：打开任何浮窗 / 切换视图 / 换设备
+  // 前先清掉，否则会悬空在浮窗点击层（原 openSettings 注释，多处同因）。
+  const clearTransientSelection = useCallback(() => {
+    setSelectedIds([]);
+    setCopyOpen(false);
+  }, []);
   const prevGuidClearRef = useRef<string | null>(selectedGuid);
   useEffect(() => {
     if (prevGuidClearRef.current === selectedGuid) return;
     prevGuidClearRef.current = selectedGuid;
-    setSelectedIds([]);
-    setCopyOpen(false);
-  }, [selectedGuid]);
+    clearTransientSelection();
+  }, [clearTransientSelection, selectedGuid]);
 
   /**
    * 设备页换页的 key：跟**数据归属**（displayGuid）走，不跟点击（selectedGuid）走。
@@ -358,34 +363,30 @@ export default function App() {
 
   const handleChannelChange = useCallback((ch: string) => {
     setActiveChannel(ch);
-    setSelectedIds([]);
-    setCopyOpen(false);
-  }, []);
+    clearTransientSelection();
+  }, [clearTransientSelection]);
   const handleCurveChannelChange = useCallback(
     (v: string) => {
       if (channelOn) {
         setActiveChannel(v);
-        setSelectedIds([]);
-        setCopyOpen(false);
+        clearTransientSelection();
       }
     },
-    [channelOn],
+    [channelOn, clearTransientSelection],
   );
   const handleToggleCopy = useCallback(() => setCopyOpen((o) => !o), []);
   const handleToggleMaximize = useCallback(() => void toggleMaximize(), [toggleMaximize]);
   const handleInstalled = useCallback((name: string) => notify(t("notify.installed", { name })), [notify]);
   const openUninstall = useCallback(
     (d: Device) => {
-      setSelectedIds([]);
-      setCopyOpen(false);
+      clearTransientSelection();
       setUninstallTarget(d);
     },
-    [setUninstallTarget],
+    [clearTransientSelection, setUninstallTarget],
   );
 
   const toggleChannel = useCallback(() => {
-    setCopyOpen(false);
-    setSelectedIds([]);
+    clearTransientSelection();
     // 基准电平的拆分/合并（配置域逻辑）在 configStore 内完成；传入切换前的 channelOn。
     setChannelPreampMode(channelOn, channelNames);
     setChannelOn((v) => !v);
@@ -398,28 +399,25 @@ export default function App() {
     channelNames,
     setChannelPreampMode,
     setChannelOn,
+    clearTransientSelection,
     blocksDragApi.cancelDrag,
     effectsDragApi.cancelDrag,
   ]);
 
   const openSettings = useCallback(() => {
-    // 打开设置前清除框选，避免浮窗悬空在点击层。
-    setSelectedIds([]);
-    setCopyOpen(false);
+    clearTransientSelection();
     useUiStore.getState().setSettingsOpen(true);
-  }, []);
+  }, [clearTransientSelection]);
   const openInstall = useCallback(() => {
-    setSelectedIds([]);
-    setCopyOpen(false);
+    clearTransientSelection();
     useUiStore.getState().setInstallOpen(true);
-  }, []);
+  }, [clearTransientSelection]);
   const openImport = useCallback(() => {
-    setSelectedIds([]);
-    setCopyOpen(false);
+    clearTransientSelection();
     const ui = useUiStore.getState();
     ui.setImportDeviceGuid(selectedGuid ?? installedDevices[0]?.guid ?? null);
     ui.setImportOpen(true);
-  }, [selectedGuid, installedDevices]);
+  }, [clearTransientSelection, selectedGuid, installedDevices]);
   const handleImport = useCallback(
     async (guid: string, content: string) => {
       try {
