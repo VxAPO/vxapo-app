@@ -11,6 +11,11 @@ interface NumInputProps {
   disabled?: boolean;
   className?: string;
   ariaLabel?: string;
+  /**
+   * 显示与失焦收口的小数位（默认 2，输入框不暴露长浮点）。
+   * Hz 类频率参数传 0——频率输入一律整数（失焦时四舍五入入 store）。
+   */
+  precision?: number;
   /** 提交键入的原始数值（不夹取；越界收口在失焦时完成） */
   onCommit: (v: number) => void;
 }
@@ -33,19 +38,27 @@ function NumInput({
   disabled,
   className = "gain-input",
   ariaLabel,
+  precision = 2,
   onCommit,
 }: NumInputProps) {
   const ref = useRef<HTMLInputElement>(null);
   const show = display ?? value;
+  // 显示与失焦收口都按 precision 收敛：rest 态不暴露长浮点（如 1.76993 → 1.77），
+  // Hz 类频率传 0 则整数化（-0 归一为 0，避免 String(-0) 之外的下游怪癖）。
+  const round = (v: number) => {
+    const r = Math.round(v * 10 ** precision) / 10 ** precision;
+    return r === 0 ? 0 : r;
+  };
+  const shown = round(show);
 
   // 非聚焦时把外部变化（滑块拖动、轮询回读、切设备）同步进输入框；
   // 聚焦期间跳过——DOM 里是键入中的文本，回写会打断输入。
   useEffect(() => {
     const el = ref.current;
     if (!el || document.activeElement === el) return;
-    const next = String(show);
+    const next = String(shown);
     if (el.value !== next) el.value = next;
-  }, [show]);
+  }, [shown]);
 
   return (
     <input
@@ -55,7 +68,7 @@ function NumInput({
       min={min}
       max={max}
       step={step}
-      defaultValue={show}
+      defaultValue={shown}
       disabled={disabled}
       aria-label={ariaLabel}
       onChange={(e) => {
@@ -68,14 +81,15 @@ function NumInput({
         if (e.key === "Enter") e.currentTarget.blur();
       }}
       onBlur={(e) => {
-        // 失焦收口：非法/空输入退回原显示值，越界夹到 [min,max]，立即回显。
-        // 收口值与 store 不一致才回写——键入合法值、未改动的字段不触发 markDirty。
+        // 失焦收口：按 precision 收敛（频率整数、其余 2 位），再夹到 [min,max]。
+        // 非法/空输入退回原显示值；收口值与 store 不一致才回写——键入合法值、
+        // 未改动的字段不触发 markDirty；store 里残留的长浮点在首次失焦时被规整。
         const el = e.currentTarget;
         const n = Number(el.value);
         const final =
           el.value.trim() === "" || Number.isNaN(n)
-            ? show
-            : Math.min(max, Math.max(min, n));
+            ? shown
+            : Math.min(max, Math.max(min, round(n)));
         if (el.value !== String(final)) el.value = String(final);
         if (final !== value) onCommit(final);
       }}

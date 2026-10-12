@@ -62,6 +62,7 @@ function SemanticUnitCard({
               min={BAND_LIMITS.fc.min}
               max={BAND_LIMITS.fc.max}
               className="num fc-num"
+              precision={0}
               ariaLabel={t("frequency")}
               onCommit={(v) => onPatchBand(bi, 0, { fc: v })}
             />

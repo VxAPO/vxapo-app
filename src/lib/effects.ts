@@ -150,18 +150,18 @@ export function effectParams(type: string): EffectParamDef[] {
 
 /**
  * UI 起点（新增效果器时写入的初值）——**app 自有取舍，不跟随 driver 默认值**：
- * - 输入框放不下长浮点、正常使用也不需要那种精度，故有意取更短的小数
- *   （如 air 0.3543、drive 1.7699；driver 的精确默认值见 effects.generated.ts）；
- * - 个别参数有意偏置以获得更好的初始听感（如 wide.gain 0.05，driver 默认 0）。
- * 未列出的参数回落到 driver 默认值（按步进位数就近取整）。
+ * - 起点值一律 ≤2 位小数（输入框显示精度即 2 位，长浮点会直接暴露在输入框里；
+ *   driver 的全精度默认值见 effects.generated.ts，未列出的参数回落时按步进位数取整）；
+ * - 个别参数有意偏置以获得更好的初始听感（如 wide.gain 0.05，driver 默认 0）；
+ * - aural odd/even 收紧到 1 / 0.2（原 1.5 即量程上限，谐波过量、听感发毛）。
  */
 const UI_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
   preamp: { gain_db: 0 },
   wide: { gain: 0.05, air: 0.2, side_itd: 0.2, crossover_hz: 200 },
-  aural: { tune_hz: 1760, drive: 1.7699, odd: 1.5, even: 0.25, wet: 0.5, dry: 0.5 },
+  aural: { tune_hz: 1760, drive: 1.77, odd: 1, even: 0.2, wet: 0.5, dry: 0.5 },
   // reverb 干湿交叉淡化：wet 上限 0.9、dry=1-wet，永不过 1；
   // 默认强度 s=wet/0.9=0.3 处 decay/damping/预延迟/房间大小过当前默认值。
-  reverb: { room_size: 1, decay: 0.41, damping: 0.4083, pre_delay_ms: 0, low_cut_hz: 100, wet: 0.27, dry: 0.73 },
+  reverb: { room_size: 1, decay: 0.41, damping: 0.41, pre_delay_ms: 0, low_cut_hz: 100, wet: 0.27, dry: 0.73 },
   // compressor 无 UI 覆盖：参数模型（-12/3/0/10ms/100%）直接以 driver 默认为初值。
   loudness: { phon: 80, reference_phon: 80 },
 };

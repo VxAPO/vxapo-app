@@ -90,14 +90,14 @@ export const EFFECT_PARAM_SPECS: EffectSpec[] = [
         "step": 0.01,
         "min": 0,
         "max": 1.5,
-        "default": 1.5
+        "default": 1
       },
       {
         "key": "even",
         "step": 0.01,
         "min": 0,
         "max": 0.75,
-        "default": 0.25
+        "default": 0.2
       },
       {
         "key": "wet",

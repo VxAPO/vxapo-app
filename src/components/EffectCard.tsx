@@ -100,6 +100,8 @@ function EffectCard({ effect, onToggle, onRemove, onChangeParam }: EffectCardPro
                   step={p.step}
                   disabled={disabled}
                   ariaLabel={p.label}
+                  /* Hz 类频率参数（tune_hz/crossover/low_cut）一律整数，其余 2 位小数 */
+                  precision={p.unit === "Hz" ? 0 : 2}
                   onCommit={(v) => onChangeParam(effect.id ?? effect.type, p.key, v)}
                 />
               </div>

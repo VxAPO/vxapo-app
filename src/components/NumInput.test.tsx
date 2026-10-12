@@ -140,6 +140,40 @@ describe("NumInput 失焦收口", () => {
   });
 });
 
+describe("NumInput 精度收口", () => {
+  it("rest 态显示按 precision 收敛：长浮点不暴露（1.76993 → 1.77）", () => {
+    const el = render({ value: 1.76993 });
+    expect(el.value).toBe("1.77");
+  });
+
+  it("失焦把键入的小数按 precision 收口并回写（输入框只留 2 位）", () => {
+    const onCommit = vi.fn();
+    const el = render({ onCommit, value: 1, min: 0, max: 4.25 });
+    type(el, "1.76993");
+    blur(el);
+    expect(onCommit).toHaveBeenLastCalledWith(1.77);
+    expect(el.value).toBe("1.77");
+  });
+
+  it("precision=0（Hz 类频率）：整数化，小数失焦不暴露", () => {
+    const onCommit = vi.fn();
+    const el = render({ onCommit, precision: 0 });
+    type(el, "1760.4");
+    expect(el.value).toBe("1760.4"); // 键入中允许
+    blur(el);
+    expect(onCommit).toHaveBeenLastCalledWith(1760);
+    expect(el.value).toBe("1760");
+  });
+
+  it("未键入直接失焦：store 里的长浮点被规整（显示与落盘一致）", () => {
+    const onCommit = vi.fn();
+    const el = render({ onCommit, value: 0.40829, min: 0, max: 1 });
+    expect(el.value).toBe("0.41");
+    blur(el);
+    expect(onCommit).toHaveBeenCalledWith(0.41);
+  });
+});
+
 describe("NumInput 外部值同步", () => {
   it("未聚焦时外部值变化同步进输入框（滑块拖动/回读）", () => {
     const onCommit = vi.fn();

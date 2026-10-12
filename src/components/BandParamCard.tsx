@@ -82,6 +82,7 @@ function BandParamCard({
             value={band.fc}
             min={FC_MIN}
             max={FC_MAX}
+            precision={0}
             ariaLabel={t("frequency")}
             onCommit={(v) => onPatchBand(bi, 0, { fc: v })}
           />
