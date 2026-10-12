@@ -101,9 +101,15 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
     try {
       // 轮询（!first）只拉设备：stale 的变化源是安装/卸载/迁移动作（动作后的
       // refresh() 会同步重拉），每 5s 重拉等于每轮白付一次 CLI 子进程 spawn；
-      // 外部变化由 loadStale 的低频兜底轮询对齐。
+      // 无列表变化的外部漂移由 loadStale 的低频兜底轮询对齐。
       if (!first) {
+        const prev = get().devices;
         applyDevices(set, await listDevices());
+        // 插拔必须当拍同步 stale：list_stale_installs 按活跃端点分类记录，
+        // enumerate_devices 也只收活跃端点——设备列表内容变化即插拔信号。
+        // 只靠 60s 兜底会让横幅对着已拔出的端点停一分钟（实测反馈）。
+        // 稳态（列表不变）仍是每轮单 spawn，只有变化那一拍多补一次。
+        if (get().devices !== prev) void get().loadStale();
         return;
       }
       let [devRes, staleRes] = await Promise.allSettled([listDevices(), listStaleInstalls()]);
