@@ -511,12 +511,18 @@ export default function App() {
                 才绘制一次，**不存在「旧页已消失、新页未挂上」的中间帧**。
                 这里刻意不用 AnimatePresence mode="wait"：它把退场/进场拆成两个 commit、要等
                 exit 动画结束回调才挂新页，中间必然隔着空帧——换页前后内容差异越大越显眼，
-                观感就是设备卡/曲线卡闪没了几帧（踩过）；退场 opacity 补间还会先把旧页整页画成
+                观感就是设备卡闪没了几帧（踩过）；退场 opacity 补间还会先把旧页整页画成
                 透明，同样是一帧空窗。
                 这棵子树上也永远不要给 opacity 加补间：一旦补间，整棵子树被提升为**合成图层**——
                 图层上的文字丢掉次级像素（LCD）抗锯齿、1px 描边的栅格落点也变了；薄元素
                 （章节标题的字形、卡片组色描边）会闪一下，实心填充的控件（滑杆/开关/数值）
-                看不出差别（实机确认：淡入淡出各闪一次）。 */}
+                看不出差别（实机确认：淡入淡出各闪一次）。
+                **bottom-row（设备属性卡 + 曲线卡）刻意不在这棵 keyed 子树里**：CurvePlot 的
+                形变状态（prevDRef/动画句柄）挂在组件实例上，随页重挂载会被清零——设备切换会
+                退化成「旧曲线闪一帧再从零起变」的另一套过渡。移出后曲线实例跨设备存活，
+                设备切换与声道切换走同一条 alignPaths 320ms 形变（含中途打断续跑）。
+                bottom-row 是绝对定位且定位块在 .device-body（.device-page 未定位），
+                移出不改变任何布局。 */}
             <div
               key={pageGuid ?? "none"}
               className="device-page"
@@ -524,7 +530,6 @@ export default function App() {
             {installedDevices.length === 0 ? (
               <NoDeviceHint />
             ) : (
-              <>
             <div
               className="tuning-scroll os-scroll"
               ref={setBodyRef}
@@ -576,6 +581,9 @@ export default function App() {
             </AnimatePresence>
             {marquee && <MarqueeBox marquee={marquee} />}
             </div>
+            )}
+              </div>
+            {installedDevices.length > 0 && (
             <div className="bottom-row">
               <div className="fx fx-dev" ref={devFxRef}>
                 <DevicePropsCard
@@ -603,9 +611,7 @@ export default function App() {
                 channelNames={channelNames}
               />
             </div>
-              </>
             )}
-              </div>
             <OverlayScrollbar
               targetRef={bodyRef}
               target={bodyNode}
