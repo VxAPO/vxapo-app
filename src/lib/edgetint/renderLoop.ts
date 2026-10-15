@@ -3,6 +3,7 @@
 
 import {
   FADE_FRAME_MS,
+  PANEL_PAD,
   PANEL_REUSE_MAX,
   PANEL_REUSE_MOTION_MS,
   PANEL_REUSE_MS,
@@ -19,6 +20,7 @@ import { ST } from "./state";
 import type { PanelBuffer } from "./state";
 import { csOf } from "./state";
 import { canvas2dRaster } from "./raster";
+import { glTintRaster } from "./gl-raster";
 import { ensureCanvas } from "./canvasPool";
 import { collectCards, refreshCardNodes } from "./targets";
 
@@ -66,7 +68,7 @@ export function renderToPanelBuffer(
 ): PanelBuffer | null {
   const rect = el.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return null;
-  const PAD = 28;
+  const PAD = PANEL_PAD;
   const x = rect.left - PAD;
   const y = rect.top - PAD;
   const w = rect.width + PAD * 2;
@@ -141,11 +143,7 @@ export function renderToPanelBuffer(
   // __vxWin/__vxMax 运行时旋钮保留，便于个人偏好微调。
   const win =
     (globalThis as { __vxWin?: number }).__vxWin ??
-    (slide
-      ? PANEL_REUSE_MOTION_MS
-      : ST.scrollingNow
-        ? 140
-        : PANEL_REUSE_MS);
+    (slide ? PANEL_REUSE_MOTION_MS : ST.scrollingNow ? 140 : PANEL_REUSE_MS);
   const maxReuse =
     (globalThis as { __vxMax?: number }).__vxMax ??
     (slide || ST.scrollingNow ? Infinity : PANEL_REUSE_MAX);
@@ -171,8 +169,15 @@ export function renderToPanelBuffer(
   buf.sk.clearRect(0, 0, buf.sc.width, buf.sc.height);
   buf.sk.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
   const d0 = performance.now();
-  // 经栅格后端接缝调用（Step1：行为零变化；Step2 可替换后端）
-  (ST.raster ?? canvas2dRaster).drawPanel(el, buf.k, buf.sk, cards, frameScale);
+  // 栅格后端选择：Step2 起工具栏走 WebGL 原型（__vxGLTool=false 可关），
+  // 基础面板仍走 canvas2d；ST.raster 可整体覆盖（测试用）。
+  const raster =
+    ST.raster ??
+    (kind === "tool" &&
+    (globalThis as { __vxGLTool?: boolean }).__vxGLTool !== false
+      ? glTintRaster
+      : canvas2dRaster);
+  raster.drawPanel(el, buf.k, buf.sk, cards, frameScale);
   const drawMs = performance.now() - d0;
   ST.stats.drawLast = drawMs;
   ST.stats.draws += 1;

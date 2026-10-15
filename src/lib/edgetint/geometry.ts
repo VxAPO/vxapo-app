@@ -240,6 +240,9 @@ export const STORE_GRID = 64;
 
 export const STORE_MARGIN = 64;
 
+/** 面板离屏缓冲的外扩边距（环带光晕溢出空间；canvas2d 与 WebGL 栅格后端共用同一约定）。 */
+export const PANEL_PAD = 28;
+
 export const Z_BASE = 25;
 
 export const Z_TOOL = 35;

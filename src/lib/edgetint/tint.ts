@@ -179,9 +179,8 @@ export function strokeHighQualityBand(
   strokeChunkBand(ST.ssCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
   const smoothing = bandCtx.imageSmoothingEnabled;
   bandCtx.imageSmoothingEnabled = true;
-  bandCtx.imageSmoothingQuality = (
-    (globalThis as { __vxSSQ?: string }).__vxSSQ ?? "high"
-  ) as ImageSmoothingQuality;
+  bandCtx.imageSmoothingQuality = ((globalThis as { __vxSSQ?: string })
+    .__vxSSQ ?? "high") as ImageSmoothingQuality;
   bandCtx.drawImage(ST.ssCanvas, 0, 0, ow * SCALE, oh * SCALE, ox, oy, ow, oh);
   bandCtx.imageSmoothingEnabled = smoothing;
 }
@@ -197,7 +196,15 @@ export function strokeGlowBand(
 ): void {
   // 尖峰归因：每次模糊带绘制计入 blurLast/blurSum（一个 drawPanel 含最多 4 次）
   const t0 = performance.now();
-  strokeGlowBandInner(bandCtx, pts, lineWidth, blurPx, alphaAt, colorAt, toolFade);
+  strokeGlowBandInner(
+    bandCtx,
+    pts,
+    lineWidth,
+    blurPx,
+    alphaAt,
+    colorAt,
+    toolFade,
+  );
   const dt = performance.now() - t0;
   ST.stats.blurLast += dt;
   ST.stats.blurSum += dt;
@@ -263,15 +270,33 @@ function strokeGlowBandInner(
   bandCtx.filter = prevFilter;
 }
 
-export function drawPanel(
+/** 采样产物：语义层（淡入状态已推进）与栅格层之间的唯一契约。 */
+export interface PanelSample {
+  rect: DOMRect;
+  corner: number;
+  pts: RingPoint[];
+  mainPts: RingPoint[];
+  st: { a: number[]; r: number[]; g: number[]; b: number[] };
+  ist: InnerState;
+  toolFade: number;
+  glowAlpha: number;
+  litAt: (i: number) => number;
+  tintAt: (i: number) => Rgb;
+  baseRgb: Rgb;
+}
+
+/**
+ * 面板采样阶段（自包含渲染重构 Step2 拆分，纯代码搬移）：淡入插值、复用
+ * 时钟的 frameScale 补偿、光源采样与暗部平滑全部在此推进——canvas2d 与
+ * WebGL 栅格后端共用同一份采样，保证「染色逻辑不因后端而变」。
+ */
+export function samplePanel(
   el: HTMLElement,
-  ctx2: CanvasRenderingContext2D,
-  shadeCtx2: CanvasRenderingContext2D,
   cards: LightSet,
   frameScale = 1,
-): void {
+): PanelSample | null {
   const rect = el.getBoundingClientRect();
-  if (rect.width < 2 || rect.height < 2) return;
+  if (rect.width < 2 || rect.height < 2) return null;
   // 本次全量重画的模糊耗时归零累计（strokeGlowBand 逐次累加）
   ST.stats.blurLast = 0;
 
@@ -322,7 +347,7 @@ export function drawPanel(
   const panelBase = pe.baseLum;
 
   const pts = ringPoints(x0, y0, x1, y1, rc);
-  if (pts.length < 2) return;
+  if (pts.length < 2) return null;
   const mainPts = insetRing(rect, corner, MENISCUS_INSET);
   const st = stateForRing(el, pts.length);
   const ist = stateForInner(el, mainPts.length);
@@ -505,6 +530,40 @@ export function drawPanel(
 
   // 外圈染色高光（根级取色每帧缓存一次，不再逐面板读根 computed style）
   const baseRgb = rootColorCached("ringBase", ringBaseRgb);
+  return {
+    rect,
+    corner,
+    pts,
+    mainPts,
+    st,
+    ist,
+    toolFade,
+    glowAlpha,
+    litAt,
+    tintAt,
+    baseRgb,
+  };
+}
+
+/** canvas2d 栅格阶段（原 drawPanel 栅格段逐字搬移；变量从采样产物解构）。 */
+export function rasterPanel2d(
+  s: PanelSample,
+  ctx2: CanvasRenderingContext2D,
+  shadeCtx2: CanvasRenderingContext2D,
+): void {
+  const {
+    rect,
+    corner,
+    pts,
+    mainPts,
+    st,
+    ist,
+    toolFade,
+    glowAlpha,
+    litAt,
+    tintAt,
+    baseRgb,
+  } = s;
   if (isDark()) {
     strokeUniformBand(ctx2, pts, 0.9, 0, baseRgb, toolFade);
   } else {
@@ -599,4 +658,17 @@ export function drawPanel(
     );
     shadeCtx2.restore();
   }
+}
+
+/** canvas2d 栅格后端入口（对外行为与拆分前的 drawPanel 一致）：采样 → 栅格。 */
+export function drawPanel(
+  el: HTMLElement,
+  ctx2: CanvasRenderingContext2D,
+  shadeCtx2: CanvasRenderingContext2D,
+  cards: LightSet,
+  frameScale = 1,
+): void {
+  const s = samplePanel(el, cards, frameScale);
+  if (!s) return;
+  rasterPanel2d(s, ctx2, shadeCtx2);
 }
