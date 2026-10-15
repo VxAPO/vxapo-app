@@ -11,9 +11,18 @@ import {
   repairStaleAcl,
   writeConfig,
 } from "../lib/api";
-import type { Block, EffectItem, PeqBandKind, PresetLibraryEntry } from "../lib/model";
+import type {
+  Block,
+  EffectItem,
+  PeqBandKind,
+  PresetLibraryEntry,
+} from "../lib/model";
 import { buildToml, parseConfigWithTail, type ChannelCtx } from "../lib/toml";
-import { applySemanticStrength, defaultEffectParams, effectsEqual } from "../lib/effects";
+import {
+  applySemanticStrength,
+  defaultEffectParams,
+  effectsEqual,
+} from "../lib/effects";
 import {
   blocksEqualShape,
   ensureBlockIds,
@@ -26,7 +35,9 @@ import { planNormalize } from "../lib/normalize";
 import { fmtDb1 } from "../lib/format";
 
 function effectId(e: EffectItem): string {
-  return e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`;
+  return (
+    e.id ?? `${e.type}:${e.channels?.length ? e.channels.join(",") : "all"}`
+  );
 }
 
 function normalizeEffects(list: EffectItem[]): EffectItem[] {
@@ -45,7 +56,11 @@ function numberInputFocused(): boolean {
   return el instanceof HTMLInputElement && el.type === "number";
 }
 
-const DEFAULT_CHANNEL_CTX: ChannelCtx = { mode: false, first: "L", active: "L" };
+const DEFAULT_CHANNEL_CTX: ChannelCtx = {
+  mode: false,
+  first: "L",
+  active: "L",
+};
 
 interface ConfigInputs {
   selectedGuid: string | null;
@@ -125,7 +140,11 @@ interface ConfigStore {
    */
   setChannelPreampMode(on: boolean, channelNames: string[]): void;
   /** 归一化整链增益（planNormalize → 写 preamp 效果器 + 提示）。 */
-  normalizeChainGain(fs: number, channelNames: string[], channelOn: boolean): void;
+  normalizeChainGain(
+    fs: number,
+    channelNames: string[],
+    channelOn: boolean,
+  ): void;
   /** 适配层用它算 totalBands / channelBandCounts（与原 useMemo 同源）。 */
   writableBlocks(): Block[];
 }
@@ -141,7 +160,11 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   pollPaused: false,
   reloadNonce: 0,
 
-  inputs: { selectedGuid: null, channelCtx: DEFAULT_CHANNEL_CTX, deviceGuids: [] },
+  inputs: {
+    selectedGuid: null,
+    channelCtx: DEFAULT_CHANNEL_CTX,
+    deviceGuids: [],
+  },
   errorSink: null,
   notifySink: null,
 
@@ -188,7 +211,12 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       return;
     } catch (e: unknown) {
       const msg = String(e);
-      const denied = /os error 5|access is denied|拒绝访问|permission/i.test(msg);
+      // denied 文案按后端分野：Tauri(Rust) 抛 "os error 5 / 拒绝访问"，
+      // Electron(Node libuv) 抛 "EPERM: operation not permitted"——两边都要认。
+      const denied =
+        /os error 5|access is denied|拒绝访问|permission|eperm|operation not permitted/i.test(
+          msg,
+        );
       if (denied && !aclRepairRef.current.has(guid)) {
         aclRepairRef.current.add(guid);
         await repairStaleAcl(guid);
@@ -256,7 +284,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         // 内容未变：后端已短路，不回传文本，前端也无需解析
         // 数字输入框聚焦时也不回读：写盘夹取后磁盘值可能 ≠ 输入中的临时值
         //（如想打 50、先按了 5），回读会把半截数字替换掉；失焦收口后两者一致再恢复。
-        if (res.text == null || dirtyRef.current || numberInputFocused()) return;
+        if (res.text == null || dirtyRef.current || numberInputFocused())
+          return;
         const parsed = parseConfigWithTail(res.text);
         get().tailRef.current = parsed.tail;
         set({ configChannelMode: parsed.channelMode });
@@ -294,7 +323,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       const s = get();
       if (!s.inputs.selectedGuid || !s.dirtyRef.current) return;
       const effective = s.tuningMap[guid] ?? true;
-      const content = buildToml(s.blocks, effective, s.effects, s.inputs.channelCtx) + s.tailRef.current;
+      const content =
+        buildToml(s.blocks, effective, s.effects, s.inputs.channelCtx) +
+        s.tailRef.current;
       void s
         .writeConfigSafe(guid, content)
         .then(() => {
@@ -333,14 +364,18 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           const parsed = parseConfigWithTail(text);
           set((s) => ({
             tuningMap:
-              s.tuningMap[guid] !== undefined ? s.tuningMap : { ...s.tuningMap, [guid]: parsed.enabled },
+              s.tuningMap[guid] !== undefined
+                ? s.tuningMap
+                : { ...s.tuningMap, [guid]: parsed.enabled },
           }));
         })
         .catch(() => {
           if (get().tuningSeq !== seq) return;
           set((s) => ({
             tuningMap:
-              s.tuningMap[guid] !== undefined ? s.tuningMap : { ...s.tuningMap, [guid]: false },
+              s.tuningMap[guid] !== undefined
+                ? s.tuningMap
+                : { ...s.tuningMap, [guid]: false },
           }));
         });
     }
@@ -361,7 +396,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     const { blocks, inputs } = get();
     return inputs.channelCtx.mode
       ? blocks
-      : blocks.filter((b) => !b.channel || b.channel === inputs.channelCtx.first);
+      : blocks.filter(
+          (b) => !b.channel || b.channel === inputs.channelCtx.first,
+        );
   },
 
   applyPreset(p) {
@@ -387,7 +424,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     }
     const lang = getLang();
     const groupBase = lang === "en" ? (p.group_en ?? p.group) : p.group;
-    const groups = new Set(blocks.map((b) => b.group).filter((g): g is string => !!g));
+    const groups = new Set(
+      blocks.map((b) => b.group).filter((g): g is string => !!g),
+    );
     const group = nextGroupName(groupBase, groups);
     get().markDirty();
     set((prev) => ({
@@ -405,7 +444,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             ...(name ? { name } : {}),
             enabled: true,
             channel: ctx.mode ? ctx.active : undefined,
-            bands: [{ fc: b.fc, gain_db: b.gain_db, q: b.q, ...(b.kind ? { kind: b.kind } : {}) }],
+            bands: [
+              {
+                fc: b.fc,
+                gain_db: b.gain_db,
+                q: b.q,
+                ...(b.kind ? { kind: b.kind } : {}),
+              },
+            ],
           };
         }),
       ],
@@ -424,7 +470,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       }
     }
     const writable = s.writableBlocks();
-    const total = ctx.mode ? undefined : writable.reduce((n, b) => n + b.bands.length, 0);
+    const total = ctx.mode
+      ? undefined
+      : writable.reduce((n, b) => n + b.bands.length, 0);
     const current = ctx.mode ? (counts[ctx.active] ?? 0) : (total ?? 0);
     if (current >= 31) {
       s.notifySink?.(t("notify.maxBandsChannel"));
@@ -460,7 +508,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     set((prev) => {
       const channels = type === "preamp" && ctx.mode ? [ctx.active] : undefined;
       const id = `${type}:${channels?.length ? channels.join(",") : "all"}`;
-      if (prev.effects.some((e) => e.id === id)) return { effects: prev.effects };
+      if (prev.effects.some((e) => e.id === id))
+        return { effects: prev.effects };
       return {
         effects: [
           ...prev.effects,
@@ -484,7 +533,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   toggleEffect(id) {
     get().markDirty();
     set((prev) => ({
-      effects: prev.effects.map((e) => (e.id === id ? { ...e, enabled: !e.enabled } : e)),
+      effects: prev.effects.map((e) =>
+        e.id === id ? { ...e, enabled: !e.enabled } : e,
+      ),
     }));
   },
 
@@ -492,7 +543,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     get().markDirty();
     set((prev) => ({
       effects: prev.effects.map((e) =>
-        e.id === id ? { ...e, params: { ...(e.params ?? {}), [key]: value } } : e,
+        e.id === id
+          ? { ...e, params: { ...(e.params ?? {}), [key]: value } }
+          : e,
       ),
     }));
   },
@@ -526,7 +579,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   patchBlock(idx, patch) {
     get().markDirty();
-    set((prev) => ({ blocks: prev.blocks.map((b, i) => (i === idx ? { ...b, ...patch } : b)) }));
+    set((prev) => ({
+      blocks: prev.blocks.map((b, i) => (i === idx ? { ...b, ...patch } : b)),
+    }));
   },
 
   patchBand(blockIdx, bandIdx, patch) {
@@ -538,7 +593,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               ...b,
               // 频率变了，语义标签就该跟着频响走：清掉旧名字让 semanticName 回退到感知标签
               ...(patch.fc !== undefined ? { name: undefined } : {}),
-              bands: b.bands.map((band, j) => (j === bandIdx ? { ...band, ...patch } : band)),
+              bands: b.bands.map((band, j) =>
+                j === bandIdx ? { ...band, ...patch } : band,
+              ),
             }
           : b,
       ),
@@ -555,10 +612,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     set((prev) => {
       if (!on) {
         // 开启通道选择器：全局基准电平拆成每声道一个
-        const globalPreamp = prev.effects.find((e) => e.type === "preamp" && !e.channels?.length);
+        const globalPreamp = prev.effects.find(
+          (e) => e.type === "preamp" && !e.channels?.length,
+        );
         if (!globalPreamp) return { effects: prev.effects };
         const gain =
-          typeof globalPreamp.params?.gain_db === "number" ? globalPreamp.params.gain_db : 0;
+          typeof globalPreamp.params?.gain_db === "number"
+            ? globalPreamp.params.gain_db
+            : 0;
         const perChannel = channelNames.map((ch) => ({
           id: `preamp:${ch}`,
           type: "preamp" as const,
@@ -566,7 +627,12 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           params: { gain_db: gain },
           channels: [ch],
         }));
-        return { effects: [...prev.effects.filter((e) => e.type !== "preamp"), ...perChannel] };
+        return {
+          effects: [
+            ...prev.effects.filter((e) => e.type !== "preamp"),
+            ...perChannel,
+          ],
+        };
       }
       // 关闭通道选择器：块与基准电平一起**合并到首声道**——只留无声道标识或首声道的块，并抹掉声道标识。
       // 这条与 buildToml 在 mode=false 时的落盘口径完全相同（只写首声道的块、且不写 channels），于是
@@ -582,7 +648,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         (e) => e.type === "preamp" && e.channels?.includes(first),
       );
       if (!firstPreamp) return { blocks: merged, effects: prev.effects };
-      const gain = typeof firstPreamp.params?.gain_db === "number" ? firstPreamp.params.gain_db : 0;
+      const gain =
+        typeof firstPreamp.params?.gain_db === "number"
+          ? firstPreamp.params.gain_db
+          : 0;
       return {
         blocks: merged,
         effects: [
@@ -600,7 +669,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   normalizeChainGain(fs, channelNames, channelOn) {
     const s = get();
-    const { updates } = planNormalize(s.blocks, s.effects, channelNames, channelOn, fs);
+    const { updates } = planNormalize(
+      s.blocks,
+      s.effects,
+      channelNames,
+      channelOn,
+      fs,
+    );
     if (!updates.length) {
       s.notifySink?.(t("normalize.title.disabled"));
       return;
@@ -617,7 +692,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           ...(u.channels ? { channels: u.channels } : {}),
         };
         const idx = next.findIndex((e) => e.id === u.id);
-        next = idx < 0 ? [...next, item] : next.map((e, i) => (i === idx ? item : e));
+        next =
+          idx < 0
+            ? [...next, item]
+            : next.map((e, i) => (i === idx ? item : e));
       }
       return { effects: next };
     });
@@ -628,9 +706,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       s.notifySink?.(t("notify.normalizedByChannel", { summary }));
     } else {
       const u = updates[0];
-      s.notifySink?.(
-        t("notify.normalized", { db: fmtDb1(u.gain_db) }),
-      );
+      s.notifySink?.(t("notify.normalized", { db: fmtDb1(u.gain_db) }));
     }
   },
 
@@ -647,8 +723,12 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         .then((text) => {
           const parsed = parseConfigWithTail(text);
           const content =
-            buildToml(parsed.blocks, next, normalizeEffects(parsed.effects), get().inputs.channelCtx) +
-            parsed.tail;
+            buildToml(
+              parsed.blocks,
+              next,
+              normalizeEffects(parsed.effects),
+              get().inputs.channelCtx,
+            ) + parsed.tail;
           return get().writeConfigSafe(guid, content);
         })
         .catch((e: unknown) => get().errorSink?.(friendlyError(e)));
