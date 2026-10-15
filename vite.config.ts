@@ -27,6 +27,8 @@ export default defineConfig(async () => ({
     strictPort: true,
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
-    watch: { ignored: ["**/src-tauri/**"] },
+    // vapo-bench-profile = perf bench 的隔离 Electron profile（内含锁文件，
+    // 被 watch 崩过 vite）——必须排除
+    watch: { ignored: ["**/src-tauri/**", "**/vapo-bench-profile/**"] },
   },
 }));

@@ -18,7 +18,12 @@ app.setName("VxAPO");
 
 // 独立 userData：默认的 %APPDATA%\Electron 目录在本机 ACL 损坏（建目录拒绝访问、
 // 沙箱授权失败），换到正式命名的 VxAPO 目录，一举绕开坏目录 + 身份正确。
-app.setPath("userData", path.join(app.getPath("appData"), "VxAPO"));
+// VXAPO_USER_DATA 可整体重定向（perf bench 等场景需要与主实例隔离 profile/单实例锁）。
+app.setPath(
+  "userData",
+  process.env.VXAPO_USER_DATA ||
+    path.join(app.getPath("appData"), "VxAPO"),
+);
 
 // ── 错误码（与 Rust 侧一致，前端 friendlyError 按码查 i18n）──
 const E_TIMEOUT = "E_TIMEOUT";

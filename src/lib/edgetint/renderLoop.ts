@@ -62,6 +62,7 @@ export function targetVisibility(el: HTMLElement): number {
 export function renderToPanelBuffer(
   el: HTMLElement,
   cards: LightSet,
+  kind: "base" | "tool",
 ): PanelBuffer | null {
   const rect = el.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return null;
@@ -132,12 +133,22 @@ export function renderToPanelBuffer(
    */
   const now = performance.now();
   const slide = now < ST.viewAnimUntil;
-  const win = slide
-    ? PANEL_REUSE_MOTION_MS
-    : isToolbar(el) && ST.scrollingNow
-      ? 140
-      : PANEL_REUSE_MS;
-  const maxReuse = slide ? Infinity : PANEL_REUSE_MAX;
+  // 滚动期重画节奏 = 时间窗 140ms（≈7 次/秒）：权衡曲线实测——旧「每 3 帧」
+  // 节奏（≈28/s）滚动 p95=55ms/尖峰78，140ms 窗口 p95=17ms/中位 357fps，
+  // 配色滞后上限140ms（与历史上工具栏滚动期发布的140ms窗口同语义，观感已验证可接受）。
+  // 根因：尖峰∝混合层纹理更新事件频率（关模糊/降超采样均无效，longtask 恒为0
+  // ——成本在 GPU/合成侧的层更新，不在画的内容）。
+  // __vxWin/__vxMax 运行时旋钮保留，便于个人偏好微调。
+  const win =
+    (globalThis as { __vxWin?: number }).__vxWin ??
+    (slide
+      ? PANEL_REUSE_MOTION_MS
+      : ST.scrollingNow
+        ? 140
+        : PANEL_REUSE_MS);
+  const maxReuse =
+    (globalThis as { __vxMax?: number }).__vxMax ??
+    (slide || ST.scrollingNow ? Infinity : PANEL_REUSE_MAX);
   if (
     buf.at > 0 &&
     buf.gen === ST.bufGen &&
@@ -159,7 +170,14 @@ export function renderToPanelBuffer(
   buf.sk.setTransform(1, 0, 0, 1, 0, 0);
   buf.sk.clearRect(0, 0, buf.sc.width, buf.sc.height);
   buf.sk.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
+  const d0 = performance.now();
   drawPanel(el, buf.k, buf.sk, cards, frameScale);
+  const drawMs = performance.now() - d0;
+  ST.stats.drawLast = drawMs;
+  ST.stats.draws += 1;
+  ST.stats.drawSum += drawMs;
+  // 本层发生过全量重画（同帧内 paintLayerPair 据此决定层必须重贴）
+  ST.lastFullRender[kind] = performance.now();
   return buf;
 }
 
@@ -178,6 +196,32 @@ export function paintLayerPair(
   // 绘制坐标仍是视口坐标，像素与整窗画布完全一致；但 mix-blend-mode 的混合层
   // 面积从整窗缩到面板范围，动画期间的重合成开销大幅下降（实测帧间隔 20-70ms → 10-20ms）。
   const next = dirtyForEls(els);
+  // ── 阶段 A：先推进各面板的复用/全量重画决策 ──
+  // 配色时效的时钟在 renderToPanelBuffer 里（复用窗口到期才重算采样），
+  // 必须先跑，否则滚动中的采样变化永远不会落到缓冲上（颜色冻结）。
+  const rendered = els.map((el) => ({
+    el,
+    buf: renderToPanelBuffer(el, cards, kind),
+  }));
+  // ── 内容未变跳过（尖峰归因修复）──
+  // 本层本 paint 没有全量重画（全复用）+ 无淡入淡出 + 脏区与上帧一致 ⇒
+  // 层画布像素与上帧完全相同，clear+重贴只是把没变化的纹理再向 GPU 重传一遍
+  //（外加混合层重复上传）。归因实测：尖峰帧 JS 仅 ~6ms 而帧间隔 34-79ms——
+  // 大头在 GPU 侧的层重传/栅格/合成。面板钉死，滚动期这条路径每帧都在白干。
+  const prevDirtyNow = kind === "base" ? ST.prevBaseDirty : ST.prevToolDirty;
+  if (
+    els.length > 0 &&
+    ST.lastFullRender[kind] < ST.lastPaintAt &&
+    !els.some((el) => targetVisibility(el) < 0.999) &&
+    prevDirtyNow &&
+    next &&
+    prevDirtyNow.x === next.x &&
+    prevDirtyNow.y === next.y &&
+    prevDirtyNow.w === next.w &&
+    prevDirtyNow.h === next.h
+  ) {
+    return;
+  }
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const ox = next ? Math.max(0, Math.floor(next.x)) : 0;
@@ -229,9 +273,11 @@ export function paintLayerPair(
     ST.prevToolOrigin = { x: ox, y: oy };
   }
   if (!els.length) return;
-  els.forEach((el) => {
-    const buf = renderToPanelBuffer(el, cards);
+  rendered.forEach(({ el, buf }) => {
     if (buf) {
+      // 注意：不能引用裸 `toolbar`——TS 会解析成 legacy 的 window.toolbar
+      //（恒为真），历史上裁剪分支因此对所有元素执行。按元素真实判断。
+      const toolbar = isToolbar(el);
       const r = el.getBoundingClientRect();
       const clipped = visibleRectOf(el, 32);
       const pl = Math.max(0, r.left - 32);
@@ -357,6 +403,13 @@ export function paint(): void {
       ST.bufGen += 1;
       window.setTimeout(() => schedule("full"), 16);
     }
+    // 尖峰归因：本次 paint 的 JS 侧总耗时（采样/绘制/调度全含）
+    {
+      const st = ST.stats;
+      st.paintLast = performance.now() - ST.lastPaintAt;
+      st.paints += 1;
+      st.paintSum += st.paintLast;
+    }
   } catch (err) {
     console.error("[edgeTint] paint failed", err);
   }
@@ -416,6 +469,10 @@ export function start(): void {
   if (ST.running) return;
   ensureCanvas();
   ST.running = true;
+  // 归因埋点暴露（perf 分支）：CDP 侧读 window.__vxTint.stats 做窗口差分/逐帧配对
+  if (typeof window !== "undefined") {
+    (window as unknown as Record<string, unknown>).__vxTint = ST;
+  }
   window.addEventListener("scroll", onScroll, {
     capture: true,
     passive: true,

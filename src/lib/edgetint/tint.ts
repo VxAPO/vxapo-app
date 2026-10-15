@@ -150,7 +150,8 @@ export function strokeHighQualityBand(
   scale: number = 4,
 ): void {
   if (pts.length < 2) return;
-  const SCALE = scale;
+  // 运行时二分开关（perf 分支归因用）：__vxSS 覆盖超采样倍率
+  const SCALE = (globalThis as { __vxSS?: number }).__vxSS ?? scale;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -178,12 +179,31 @@ export function strokeHighQualityBand(
   strokeChunkBand(ST.ssCtx, pts, lineWidth, alphaAt, colorAt, toolFade);
   const smoothing = bandCtx.imageSmoothingEnabled;
   bandCtx.imageSmoothingEnabled = true;
-  bandCtx.imageSmoothingQuality = "high";
+  bandCtx.imageSmoothingQuality = (
+    (globalThis as { __vxSSQ?: string }).__vxSSQ ?? "high"
+  ) as ImageSmoothingQuality;
   bandCtx.drawImage(ST.ssCanvas, 0, 0, ow * SCALE, oh * SCALE, ox, oy, ow, oh);
   bandCtx.imageSmoothingEnabled = smoothing;
 }
 
 export function strokeGlowBand(
+  bandCtx: CanvasRenderingContext2D,
+  pts: Array<RingPoint>,
+  lineWidth: number | ((i: number) => number),
+  blurPx: number,
+  alphaAt: (i: number) => number,
+  colorAt: (i: number) => Rgb,
+  toolFade: number,
+): void {
+  // 尖峰归因：每次模糊带绘制计入 blurLast/blurSum（一个 drawPanel 含最多 4 次）
+  const t0 = performance.now();
+  strokeGlowBandInner(bandCtx, pts, lineWidth, blurPx, alphaAt, colorAt, toolFade);
+  const dt = performance.now() - t0;
+  ST.stats.blurLast += dt;
+  ST.stats.blurSum += dt;
+}
+
+function strokeGlowBandInner(
   bandCtx: CanvasRenderingContext2D,
   pts: Array<RingPoint>,
   lineWidth: number | ((i: number) => number),
@@ -252,6 +272,8 @@ export function drawPanel(
 ): void {
   const rect = el.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return;
+  // 本次全量重画的模糊耗时归零累计（strokeGlowBand 逐次累加）
+  ST.stats.blurLast = 0;
 
   const cs = csOf(el);
   const parsedR = parseFloat(cs.borderRadius);
@@ -506,7 +528,11 @@ export function drawPanel(
     toolFade,
   );
   // 完整内光 blur：工具栏滚动期间由离屏 buffer 复用承担成本。
-  if (glowAlpha > 0.002) {
+  // __vxNoBlur：运行时二分开关（perf 归因）——关掉全部模糊带绘制
+  if (
+    glowAlpha > 0.002 &&
+    !(globalThis as { __vxNoBlur?: boolean }).__vxNoBlur
+  ) {
     // 染色向内侧轻微 blur：裁剪到卡片内部，避免向外发糊
     ctx2.save();
     roundedRectPath(ctx2, rect.left, rect.top, rect.width, rect.height, corner);

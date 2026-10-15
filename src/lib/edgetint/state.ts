@@ -105,6 +105,32 @@ export interface EdgeTintState {
   scanSig: string;
   /** 已挂载的入口数量（见 useEdgeTintLayer 的引用计数说明）。 */
   autoRefCount: number;
+  /** 归因埋点（perf 分支）：耗时统计，经 window.__vxTint 供 CDP 采样。 */
+  stats: TintStats;
+  /**
+   * 各层最近一次全量重画的时间戳：paintLayerPair 的"内容未变跳过"判据——
+   * 本 paint 开始后该层没有发生过全量重画（且无淡入淡出、脏区未动）⇒ 层像素
+   * 与上帧完全一致，跳过 clear+重贴（不向 GPU 重传未变纹理）。
+   */
+  lastFullRender: { base: number; tool: number };
+}
+
+/**
+ * 尖峰归因统计：paint = 一帧染色流水线总耗时（JS 侧）；drawPanel = 单个面板
+ * 全量重画（含超采样+模糊）；blur = drawPanel 内全部 ctx.filter 模糊合计。
+ * sum/count 供外部做窗口差分，last 供逐帧配对（帧间隔 vs 同帧 paint 耗时）。
+ * 判据：帧间隔尖峰若与 paintLast 同帧同量级 → JS 侧；paintLast 很小而帧间隔
+ * 大 → 合成/混合层（GPU/合成器）侧。
+ */
+export interface TintStats {
+  paintLast: number;
+  drawLast: number;
+  blurLast: number;
+  paints: number;
+  draws: number;
+  paintSum: number;
+  drawSum: number;
+  blurSum: number;
 }
 
 /** 单例状态。 */
@@ -163,6 +189,17 @@ export const ST: EdgeTintState = {
   innerStates: new WeakMap<HTMLElement, InnerState>(),
   scanSig: "",
   autoRefCount: 0,
+  lastFullRender: { base: 0, tool: 0 },
+  stats: {
+    paintLast: 0,
+    drawLast: 0,
+    blurLast: 0,
+    paints: 0,
+    draws: 0,
+    paintSum: 0,
+    drawSum: 0,
+    blurSum: 0,
+  },
 };
 
 /**
