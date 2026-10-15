@@ -48,3 +48,6 @@ tauri-dev*.log
 
 # Local build temp (TEMP redirect in package.json build; system TEMP writes denied here)
 .build-tmp/
+
+# Electron 打包产物
+dist-electron

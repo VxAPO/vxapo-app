@@ -5,7 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
-      html, body, #root {
+      html,
+      body,
+      #root {
         margin: 0;
         padding: 0;
         width: 100%;
@@ -25,14 +27,16 @@
     <script>
       (function () {
         try {
-          var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var dark =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
           document.documentElement.dataset.theme = dark ? "dark" : "light";
         } catch (e) {
           document.documentElement.dataset.theme = "light";
         }
       })();
     </script>
-    <title>Tauri + React + Typescript</title>
+    <title>VxAPO</title>
   </head>
 
   <body>

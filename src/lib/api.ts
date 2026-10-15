@@ -5,7 +5,24 @@ import { listen } from "@tauri-apps/api/event";
 import type { Device, MigrationReport, StaleInstall } from "./model";
 import { t } from "./i18n/core";
 
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+/**
+ * Electron 双模：主进程 preload 暴露 window.vxapo（invoke/listen，语义与
+ * Tauri invoke 1:1）。存在即优先走 Electron 桥，否则回退 Tauri，最后兜底值。
+ */
+const isElectron =
+  typeof window !== "undefined" &&
+  "vxapo" in window &&
+  typeof (window as unknown as { vxapo?: { invoke?: unknown } }).vxapo
+    ?.invoke === "function";
+
+type VxapoBridge = {
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+  listen: (channel: string, cb: (payload: unknown) => void) => () => void;
+};
+const vxapo = (): VxapoBridge =>
+  (window as unknown as { vxapo: VxapoBridge }).vxapo;
 
 /**
  * 非 Tauri 环境（浏览器直开 / vitest）的统一降级入口：跳过 IPC 返回兜底值。
@@ -16,6 +33,14 @@ async function invokeOrDefault<T>(
   args: Record<string, unknown> | undefined,
   fallback: T,
 ): Promise<T> {
+  if (isElectron) {
+    try {
+      return await vxapo().invoke<T>(cmd, args ?? {});
+    } catch (e) {
+      // 与 Tauri 的拒绝形态对齐：抛纯字符串（friendlyError 按 E_* 码解析）
+      throw e instanceof Error ? e.message : String(e);
+    }
+  }
   if (!isTauri) return fallback;
   return args === undefined ? invoke<T>(cmd) : invoke<T>(cmd, args);
 }
@@ -52,7 +77,10 @@ export async function writeLang(lang: string): Promise<void> {
   }
 }
 
-export async function writeConfig(guid: string, content: string): Promise<void> {
+export async function writeConfig(
+  guid: string,
+  content: string,
+): Promise<void> {
   await invokeOrDefault("write_config", { guid, content }, undefined);
 }
 
@@ -106,10 +134,17 @@ import type { InstallProgressEvent } from "./generated";
 export type { InstallProgressEvent } from "./generated";
 
 /** 安装结果 = 进度流里 `complete` 事件的载荷（src-tauri 取进度文件最后一行）。 */
-export type InstallResult = Extract<InstallProgressEvent, { event: "complete" }>;
+export type InstallResult = Extract<
+  InstallProgressEvent,
+  { event: "complete" }
+>;
 
 export async function installDevice(guid: string): Promise<InstallResult> {
-  return invokeOrDefault("install_device", { guid }, { event: "complete", success: false, attempts: 0 });
+  return invokeOrDefault(
+    "install_device",
+    { guid },
+    { event: "complete", success: false, attempts: 0 },
+  );
 }
 
 /** 安装失败后的兜底回滚：清除已写入的注册表配置（CLI uninstall，提权）。 */
@@ -120,6 +155,11 @@ export async function rollbackInstall(guid: string): Promise<void> {
 export async function onInstallProgress(
   cb: (ev: InstallProgressEvent) => void,
 ): Promise<() => void> {
+  if (isElectron) {
+    return vxapo().listen("install-progress", (payload) =>
+      cb(payload as InstallProgressEvent),
+    );
+  }
   if (!isTauri) return () => {};
   return listen<InstallProgressEvent>("install-progress", (e) => cb(e.payload));
 }
@@ -135,13 +175,21 @@ export async function readImportFile(path: string): Promise<string> {
 
 /** 导出当前设备 config.toml 到用户选择的路径，并在资源管理器中选中。 */
 export async function exportConfig(guid: string): Promise<void> {
-  if (!isTauri) return;
-  const { save } = await import("@tauri-apps/plugin-dialog");
-  const path = await save({
+  const opts = {
     title: t("export.title"),
     defaultPath: `config-${guid}.toml`,
     filters: [{ name: "TOML", extensions: ["toml"] }],
-  });
+  };
+  if (isElectron) {
+    const path = await vxapo().invoke<string | null>("save_dialog", opts);
+    if (!path) return;
+    await invokeOrDefault("export_config", { guid, path }, undefined);
+    await invokeOrDefault("open_in_explorer", { path }, undefined);
+    return;
+  }
+  if (!isTauri) return;
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const path = await save(opts);
   if (!path) return;
   await invoke("export_config", { guid, path });
   await invoke("open_in_explorer", { path });
@@ -150,7 +198,9 @@ export async function exportConfig(guid: string): Promise<void> {
 export function isInstalled(d: Device): boolean {
   return (
     !!d.installed_version ||
-    Object.values(d.slots).some((v) => typeof v === "string" && v.toLowerCase().includes("vxapo"))
+    Object.values(d.slots).some(
+      (v) => typeof v === "string" && v.toLowerCase().includes("vxapo"),
+    )
   );
 }
 
@@ -188,5 +238,8 @@ export function friendlyError(e: unknown): string {
 
 /** 轮询/刷新时避免无变化数据触发整树重渲染 */
 export function deviceListsEqual(a: Device[], b: Device[]): boolean {
-  return a.length === b.length && a.every((d, i) => JSON.stringify(d) === JSON.stringify(b[i]));
+  return (
+    a.length === b.length &&
+    a.every((d, i) => JSON.stringify(d) === JSON.stringify(b[i]))
+  );
 }
