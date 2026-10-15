@@ -17,7 +17,8 @@
         "height": 600,
         "minWidth": 800,
         "minHeight": 600,
-        "decorations": false,
+        "decorations": true,
+        "titleBarStyle": "Hidden",
         "center": true,
         "resizable": true,
         "maximized": false,
@@ -32,9 +33,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis"
-    ],
+    "targets": ["nsis"],
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
@@ -44,13 +43,7 @@
         "displayLanguageSelector": true
       }
     },
-    "icon": [
-      "icons/icon.ico",
-      "icons/icon.icns"
-    ],
-    "resources": [
-      "resources/vxapo-cli.exe",
-      "resources/vxapo_driver.dll"
-    ]
+    "icon": ["icons/icon.ico", "icons/icon.icns"],
+    "resources": ["resources/vxapo-cli.exe", "resources/vxapo_driver.dll"]
   }
 }

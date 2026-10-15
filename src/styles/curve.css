@@ -1,21 +1,23 @@
 .curve-wrap {
   width: 100%;
-  background: color-mix(in srgb,
+  background: color-mix(
+    in srgb,
     color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
-    transparent);
+    transparent
+  );
   border: 0; /* 描边/边缘交给外侧环带；卡片模糊需覆盖到最外缘 */
   border-radius: 16px;
   padding: 10px 18px 14px;
   flex: 1;
   min-width: 0;
   /* 与悬浮选项栏同套：近表面低对比描边 + 顶部受光 + 连续底部投影 */
-  box-shadow:
-    0 6px 14px -4px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 6px 14px -4px rgba(15, 23, 42, 0.18);
   position: relative;
   overflow: hidden;
   /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏 */
   backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
-  -webkit-backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) contrast(0.55)
+    brightness(1.38);
   transition:
     background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
@@ -77,15 +79,16 @@
   flex: none;
   width: auto;
   min-width: 240px;
-  background-color: color-mix(in srgb,
+  background-color: color-mix(
+    in srgb,
     color-mix(in srgb, var(--card) 80%, var(--border)) 50%,
-    transparent);
+    transparent
+  );
   border: 0; /* 描边/边缘交给外侧环带；卡片模糊需覆盖到最外缘 */
   border-radius: 16px;
   padding: 10px 18px 12px;
   /* 与悬浮选项栏同套：近表面低对比描边 + 顶部受光 + 连续底部投影 */
-  box-shadow:
-    0 6px 14px -4px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 6px 14px -4px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -97,7 +100,8 @@
     -webkit-backdrop-filter 0.55s cubic-bezier(0.4, 0, 0.2, 1);
   /* 浅色：提亮背板采样并降低饱和，避免背后暗影/彩灰把玻璃染脏 */
   backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
-  -webkit-backdrop-filter: blur(10px) saturate(1.05) contrast(0.55) brightness(1.38);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) contrast(0.55)
+    brightness(1.38);
   pointer-events: auto;
 }
 
@@ -165,11 +169,11 @@
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
-          mask:
+  mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask-composite: exclude;
+  mask-composite: exclude;
   opacity: 0.4;
   background:
     /* 顶部光被左右两角实测角度夹住，只画顶部直线段；两端各留短过渡 */
@@ -178,40 +182,49 @@
       rgb(255 255 255 / 0) 0deg,
       rgb(255 255 255 / var(--ring-t, 0.26)) var(--ring-fade, 2deg),
       rgb(255 255 255 / var(--ring-t, 0.26))
-        calc(var(--ang-tr, 77deg) - var(--ang-tl, 283deg) + 360deg - var(--ring-fade, 2deg)),
+        calc(
+          var(--ang-tr, 77deg) - var(--ang-tl, 283deg) + 360deg -
+            var(--ring-fade, 2deg)
+        ),
       rgb(255 255 255 / 0)
         calc(var(--ang-tr, 77deg) - var(--ang-tl, 283deg) + 360deg)
     ),
     /* 底部：低亮度，独立一条，沿底边在左下圆角前收住 */
     conic-gradient(
-      from var(--ang-br, 103deg),
-      rgb(255 255 255 / 0) 0deg,
-      rgb(255 255 255 / var(--ring-b, 0.14)) var(--ring-fade, 2deg),
-      rgb(255 255 255 / var(--ring-b, 0.14))
-        calc(
-          var(--ang-bl, 257deg) - var(--ang-br, 103deg) - var(--ring-fade, 2deg)
-        ),
-      rgb(255 255 255 / 0)
-        calc(var(--ang-bl, 257deg) - var(--ang-br, 103deg))
-    ),
+        from var(--ang-br, 103deg),
+        rgb(255 255 255 / 0) 0deg,
+        rgb(255 255 255 / var(--ring-b, 0.14)) var(--ring-fade, 2deg),
+        rgb(255 255 255 / var(--ring-b, 0.14))
+          calc(
+            var(--ang-bl, 257deg) - var(--ang-br, 103deg) -
+              var(--ring-fade, 2deg)
+          ),
+        rgb(255 255 255 / 0) calc(var(--ang-bl, 257deg) - var(--ang-br, 103deg))
+      ),
     /* 左侧：长衰减带，从左上往左下渐隐，左下角前归零 */
     conic-gradient(
-      from var(--ang-bl, 257deg),
-      rgb(255 255 255 / 0) 0deg,
-      rgb(255 255 255 / var(--ring-l, 0.08))
-        calc(var(--ang-tl, 283deg) - var(--ang-bl, 257deg))
-    ),
+        from var(--ang-bl, 257deg),
+        rgb(255 255 255 / 0) 0deg,
+        rgb(255 255 255 / var(--ring-l, 0.08))
+          calc(var(--ang-tl, 283deg) - var(--ang-bl, 257deg))
+      ),
     /* 右侧：与左侧对称，右下往右上渐隐（右比左暗一档） */
     conic-gradient(
-      from var(--ang-tr, 77deg),
-      rgb(255 255 255 / 0) 0deg,
-      rgb(255 255 255 / var(--ring-r, 0.04))
-        calc(var(--ang-br-edge, 103deg) - var(--ang-tr, 77deg))
-    ),
-    radial-gradient(28px 28px at 0% 0%,
+        from var(--ang-tr, 77deg),
+        rgb(255 255 255 / 0) 0deg,
+        rgb(255 255 255 / var(--ring-r, 0.04))
+          calc(var(--ang-br-edge, 103deg) - var(--ang-tr, 77deg))
+      ),
+    radial-gradient(
+      28px 28px at 0% 0%,
       rgb(255 255 255 / var(--ring-g1, 0.34)) 0%,
-      rgb(255 255 255 / 0) 100%),
-    radial-gradient(50% 50% at 100% 100%, rgb(255 255 255 / var(--ring-g2, 0.24)) 0%, rgb(255 255 255 / 0) 44%),
+      rgb(255 255 255 / 0) 100%
+    ),
+    radial-gradient(
+      50% 50% at 100% 100%,
+      rgb(255 255 255 / var(--ring-g2, 0.24)) 0%,
+      rgb(255 255 255 / 0) 44%
+    ),
     linear-gradient(
       180deg,
       rgb(255 255 255 / 0) 0%,
@@ -261,11 +274,11 @@
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
-          mask:
+  mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask-composite: exclude;
+  mask-composite: exclude;
   opacity: 1;
   backdrop-filter: blur(24px) saturate(2.4) brightness(1);
   -webkit-backdrop-filter: blur(24px) saturate(2.4) brightness(1);
@@ -367,7 +380,9 @@
   border-radius: 9999px;
   background: var(--track);
   border: 1px solid var(--border);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
   flex: none;
 }
 
@@ -598,23 +613,51 @@
 /* 压暗层：opacity 与 blur 一起补间（blur 0 → 2px），退场反向。
    只补 opacity 的话，背后那层模糊第一帧就到位，观感是"先糊再暗"。 */
 @keyframes vx-overlay-in {
-  from { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
-  to { opacity: 1; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
 }
 
 @keyframes vx-overlay-out {
-  from { opacity: 1; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
-  to { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+  from {
+    opacity: 1;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
 }
 
 @keyframes vx-pop {
-  from { opacity: 0; transform: translate(-50%, -48%); }
-  to { opacity: 1; transform: translate(-50%, -50%); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
 }
 
 @keyframes vx-pop-out {
-  from { opacity: 1; transform: translate(-50%, -50%); }
-  to { opacity: 0; transform: translate(-50%, -48%); }
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%);
+  }
 }
 
 /* ── 视图切换（语义视图 / 参数视图） ─────────────────────────── */
@@ -628,6 +671,9 @@
   transform: translate(-50%, -50%);
   display: inline-flex;
   padding: 8px;
+  /* Electron/Chromium 的 app-region 按「区域」命中测试，未标记子元素仍算拖拽区——
+     必须显式 no-drag，这圈死区才和 Tauri 一致（点什么都不会发生，不误触最大化） */
+  -webkit-app-region: no-drag;
 }
 
 .seg.view-seg {
@@ -712,15 +758,27 @@
 }
 
 @keyframes vx-icon-tilt-right {
-  0% { transform: translateX(0) rotate(0); }
-  38% { transform: translateX(2px) rotate(8deg); }
-  100% { transform: translateX(0) rotate(0); }
+  0% {
+    transform: translateX(0) rotate(0);
+  }
+  38% {
+    transform: translateX(2px) rotate(8deg);
+  }
+  100% {
+    transform: translateX(0) rotate(0);
+  }
 }
 
 @keyframes vx-icon-tilt-left {
-  0% { transform: translateX(0) rotate(0); }
-  38% { transform: translateX(-2px) rotate(-8deg); }
-  100% { transform: translateX(0) rotate(0); }
+  0% {
+    transform: translateX(0) rotate(0);
+  }
+  38% {
+    transform: translateX(-2px) rotate(-8deg);
+  }
+  100% {
+    transform: translateX(0) rotate(0);
+  }
 }
 
 /* ── 卡片拖拽（useDragSort 指针级引擎） ─────────────────────── */
@@ -851,7 +909,6 @@
   }
 }
 
-
 /* ── 卸载确认弹窗 ─────────────────────────────────────────── */
 
 .uninstall-body {
@@ -978,4 +1035,3 @@
   border: 1px solid var(--border-strong);
   box-shadow: 0 4px 14px rgba(var(--shadow-ink), 0.45);
 }
-

@@ -1,3 +1,18 @@
+/* 无边框拖拽区的 Chromium 语义映射：Tauri 只认 data-tauri-drag-region 属性，
+   Electron/WebView2 的原生拖拽命中测试要 -webkit-app-region。app-region 会
+   覆盖整个子树，所以交互元素统一 no-drag 兜底（Tauri 侧无副作用）。 */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+}
+button,
+input,
+select,
+textarea,
+a,
+[role="button"] {
+  -webkit-app-region: no-drag;
+}
+
 .topbar {
   position: relative;
   display: flex;
@@ -16,7 +31,7 @@
   margin-right: 4px;
   position: relative;
   top: -1px;
-display: block;
+  display: block;
   user-select: none;
 }
 
@@ -95,7 +110,8 @@ display: block;
   flex: 1;
   justify-content: center;
   background: transparent;
-  transition: color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+  transition:
+    color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -148,4 +164,3 @@ display: block;
   min-height: 0;
   gap: var(--side-gap);
 }
-
