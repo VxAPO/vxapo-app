@@ -74,6 +74,12 @@ export interface EdgeTintState {
   scrollingNow: boolean;
   fadePending: boolean;
   /**
+   * 淡入淡出仍在收敛中的面板。samplePanel 每次采样后写入；
+   * renderToPanelBuffer 据此豁免复用——否则滚动期采样时钟被复用窗冻结，
+   * 过渡以 ~100ms 粒度跳变（frameScale 补偿单步 3 倍），观感「一段一段」。
+   */
+  fading: WeakSet<HTMLElement>;
+  /**
    * 结构代数：卡片增减/视图舞台切换等配色源集合变化时 +1。
    * 面板缓冲记录渲染时的代数，代数不同禁止复用——放宽复用窗口后
    * 防止「结构已变、旧配色滞留」。
@@ -167,6 +173,7 @@ export const ST: EdgeTintState = {
   paintMode: "full",
   scrollingNow: false,
   fadePending: false,
+  fading: new WeakSet<HTMLElement>(),
   bufGen: 1,
   paintCache: new Map<HTMLElement, PaintCacheEntry>(),
   csCache: new Map<HTMLElement, CSSStyleDeclaration>(),

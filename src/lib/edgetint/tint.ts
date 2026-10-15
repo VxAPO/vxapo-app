@@ -349,6 +349,9 @@ export function samplePanel(
   const pts = ringPoints(x0, y0, x1, y1, rc);
   if (pts.length < 2) return null;
   const mainPts = insetRing(rect, corner, MENISCUS_INSET);
+  // 本次采样的最大插值残差：> 阈值说明过渡还没收敛，写入 ST.fading 供
+  // renderToPanelBuffer 豁免复用（复用会冻结这只时钟，过渡变跳变）。
+  let maxDelta = 0;
   const st = stateForRing(el, pts.length);
   const ist = stateForInner(el, mainPts.length);
   const rawGl = new Array<number>(mainPts.length).fill(0);
@@ -398,6 +401,7 @@ export function samplePanel(
     const aDelta = targetA - st.a[i];
     st.a[i] += aDelta * fadeK;
     if (Math.abs(aDelta) > 0.004) ST.fadePending = true;
+    if (Math.abs(aDelta) > maxDelta) maxDelta = Math.abs(aDelta);
     const c = sample ? sample.c : null;
     if (c) {
       const fresh = st.a[i] < 0.01 && targetA > 0;
@@ -495,6 +499,7 @@ export function samplePanel(
     const glDelta = rawGl[i] - ist.gl[i];
     ist.gl[i] += glDelta * fadeK;
     if (Math.abs(glDelta) > 0.004) ST.fadePending = true;
+    if (Math.abs(glDelta) > maxDelta) maxDelta = Math.abs(glDelta);
     // 暗部只贴在内光带与外光交界处：强度直接跟内光能量走，
     // 不再沿圆周在亮点两侧做 bump（那会围着内光包一圈）。
     rawSh[i] = smoothstep(0.08, 0.5, shadeGl[i]);
@@ -518,6 +523,7 @@ export function samplePanel(
     const shDelta = sum / wsum - ist.sh[i];
     ist.sh[i] += shDelta * fadeK;
     if (Math.abs(shDelta) > 0.004) ST.fadePending = true;
+    if (Math.abs(shDelta) > maxDelta) maxDelta = Math.abs(shDelta);
   }
   // 暗部不是压暗，而是在该处停止绘制内光（lit=0），
   // 让底层默认高光样式的暗部自己透出来；shade 只是控制这个“留空”的平滑形状。
@@ -530,6 +536,8 @@ export function samplePanel(
 
   // 外圈染色高光（根级取色每帧缓存一次，不再逐面板读根 computed style）
   const baseRgb = rootColorCached("ringBase", ringBaseRgb);
+  if (maxDelta > 0.004) ST.fading.add(el);
+  else ST.fading.delete(el);
   return {
     rect,
     corner,

@@ -139,12 +139,22 @@ export function renderToPanelBuffer(
   // 全量重画的成本压没之后，旧节奏在 60卡/646px 滚动实测 p50=3.4ms
   // p95=11.7ms、>34ms 帧=0（此前 canvas2d 同场景 p95=55/尖峰78）——
   // 「新鲜+顺滑」不再互斥，无需缩频折衷。__vxWin/__vxMax 旋钮保留。
-  const win =
-    (globalThis as { __vxWin?: number }).__vxWin ??
-    (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS);
-  const maxReuse =
-    (globalThis as { __vxMax?: number }).__vxMax ??
-    (slide ? Infinity : PANEL_REUSE_MAX);
+  //
+  // 过渡中的面板按 30fps（FADE_FRAME_MS=33）重画：采样时钟（st/ist 插值）长在
+  // drawPanel 里，复用会把它冻结——滚动期过渡以 ~100ms 粒度跳变（frameScale
+  // 把单步补成 3 倍），观感「一段一段、到地方突然冒出来」。33ms 是旧实现
+  // fadePending 续帧链的历史节奏（用户验收过的淡入平滑度）；逐 paint 重画
+  // 会让滚动期全量重画每帧都跑（实测 p50 从 3.5ms 涨到 14.4ms），33ms 地板
+  // 在两者之间。已收敛的面板照旧走 100ms/MAX2 复用窗（滚动性能主战场）。
+  const wasFading = ST.fading.has(el);
+  const win = wasFading
+    ? FADE_FRAME_MS
+    : ((globalThis as { __vxWin?: number }).__vxWin ??
+      (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS));
+  const maxReuse = wasFading
+    ? Number.POSITIVE_INFINITY
+    : ((globalThis as { __vxMax?: number }).__vxMax ??
+      (slide ? Infinity : PANEL_REUSE_MAX));
   if (
     buf.at > 0 &&
     buf.gen === ST.bufGen &&
@@ -156,8 +166,11 @@ export function renderToPanelBuffer(
   }
   // 真正要重画了：记录渲染代数；blit 位置沿用本次写入的当前 rect 值
   buf.gen = ST.bufGen;
-  // 距上次真实渲染过了多少个基准步：用于把褪色插值按时间推进（复用不改褪色时长）
-  const frameScale = buf.at > 0 ? (now - buf.at) / FADE_FRAME_MS : 1;
+  // 距上次真实渲染过了多少个基准步：用于把褪色插值按时间推进（复用不改褪色时长）。
+  // 仅当上帧仍在过渡（wasFading）才补偿——那是「过渡途中被跳帧」；上帧已收敛、
+  // 本帧刚探测到的新过渡从 1× 步长起步，避免以 3 倍步长起跳形成突变。
+  const frameScale =
+    wasFading && buf.at > 0 ? (now - buf.at) / FADE_FRAME_MS : 1;
   buf.reused = 0;
   buf.at = now;
   buf.k.setTransform(1, 0, 0, 1, 0, 0);
