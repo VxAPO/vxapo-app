@@ -115,13 +115,45 @@ interface Band {
 function meanWidthFn(
   pts: RingPoint[],
   widthAt: (i: number) => number,
+  smoothL: number,
 ): (i: number) => number {
-  const w = new Float32Array(pts.length);
+  const n = pts.length;
+  const raw = new Float32Array(n);
   for (const [s, e] of segmentRanges(pts)) {
     let sum = 0;
     for (let i = s; i <= e; i++) sum += widthAt(i);
     const mean = Math.max(0.1, sum / (e - s + 1));
-    for (let i = s; i <= e; i++) w[i] = mean;
+    for (let i = s; i <= e; i++) raw[i] = mean;
+  }
+  // 沿闭合路径弧长做一次小窗平滑：canvas2d 段均宽画完还有整带 isotropic
+  // blur，段界宽度台阶被顺带沿路径抹平；GL 剖面逐截面独立不会抹——
+  // 圆角段（短、均宽贴局部光照）与直边段（长、大范围平均）在接缝处
+  // 硬台阶，观感「圆角泛光与直边不一样」。窗口 2×blurPx 与参考模糊
+  // 的抹平范围同阶。
+  const cum = new Float32Array(n);
+  for (let i = 1; i < n; i++) {
+    cum[i] =
+      cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  }
+  const total =
+    cum[n - 1] + Math.hypot(pts[0].x - pts[n - 1].x, pts[0].y - pts[n - 1].y);
+  const w = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let sum = raw[i];
+    let wsum = 1;
+    for (const dir of [-1, 1]) {
+      for (let step = 1; step < n; step++) {
+        const j = (i + dir * step + n) % n;
+        if (j === i) break;
+        const d0 = Math.abs(cum[i] - cum[j]);
+        const d = Math.min(d0, total - d0);
+        if (d > smoothL) break;
+        const wt = 1 - d / smoothL;
+        sum += raw[j] * wt;
+        wsum += wt;
+      }
+    }
+    w[i] = sum / wsum;
   }
   return (i: number) => w[i];
 }
@@ -575,8 +607,10 @@ export const glTintRaster: TintRaster = {
       },
       {
         pts: mainPts,
-        widthAt: meanWidthFn(mainPts, (i) =>
-          Math.max(0.6, MENISCUS_WIDTH * (0.3 + 0.85 * litAt(i))),
+        widthAt: meanWidthFn(
+          mainPts,
+          (i) => Math.max(0.6, MENISCUS_WIDTH * (0.3 + 0.85 * litAt(i))),
+          2 * MENISCUS_BLUR,
         ),
         alphaAt: (i) => litAt(i) * MENISCUS_ALPHA * glowAlpha * toolFade,
         colorAt: tintAt,
@@ -585,8 +619,10 @@ export const glTintRaster: TintRaster = {
       },
       {
         pts: mainPts,
-        widthAt: meanWidthFn(mainPts, (i) =>
-          Math.max(0.5, MENISCUS_HALO_WIDTH * Math.pow(litAt(i), 1.25)),
+        widthAt: meanWidthFn(
+          mainPts,
+          (i) => Math.max(0.5, MENISCUS_HALO_WIDTH * Math.pow(litAt(i), 1.25)),
+          2 * MENISCUS_HALO_BLUR,
         ),
         alphaAt: (i) =>
           Math.pow(litAt(i), 2) * MENISCUS_HALO_ALPHA * glowAlpha * toolFade,
