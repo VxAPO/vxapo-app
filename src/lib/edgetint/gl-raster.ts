@@ -27,6 +27,7 @@ import {
   MENISCUS_WIDTH,
   PANEL_PAD,
   ringPoints,
+  segmentRanges,
 } from "./geometry";
 import { samplePanel, rasterPanel2d } from "./tint";
 import type { TintRaster } from "./raster";
@@ -103,6 +104,26 @@ interface Band {
   colorAt: (i: number) => Rgb;
   sigma: number;
   clip: boolean;
+}
+
+/**
+ * 复刻 canvas2d strokeChunkBand 的「段内均宽」语义：可变宽条带在每条直边/
+ * 圆弧段内以整段平均宽度画一条匀宽带（而非逐点变宽）。逐点变宽会让带缘
+ * 随 litAt 起伏——带间出现暗谷/亮脊（用户所见衰减带起点的亮点）；匀宽
+ * 把这些结构抹平，与 canvas2d 参考一致。
+ */
+function meanWidthFn(
+  pts: RingPoint[],
+  widthAt: (i: number) => number,
+): (i: number) => number {
+  const w = new Float32Array(pts.length);
+  for (const [s, e] of segmentRanges(pts)) {
+    let sum = 0;
+    for (let i = s; i <= e; i++) sum += widthAt(i);
+    const mean = Math.max(0.1, sum / (e - s + 1));
+    for (let i = s; i <= e; i++) w[i] = mean;
+  }
+  return (i: number) => w[i];
 }
 
 let glCanvas: HTMLCanvasElement | null = null;
@@ -554,7 +575,9 @@ export const glTintRaster: TintRaster = {
       },
       {
         pts: mainPts,
-        widthAt: (i) => Math.max(0.6, MENISCUS_WIDTH * (0.3 + 0.85 * litAt(i))),
+        widthAt: meanWidthFn(mainPts, (i) =>
+          Math.max(0.6, MENISCUS_WIDTH * (0.3 + 0.85 * litAt(i))),
+        ),
         alphaAt: (i) => litAt(i) * MENISCUS_ALPHA * glowAlpha * toolFade,
         colorAt: tintAt,
         sigma: MENISCUS_BLUR / 2,
@@ -562,8 +585,9 @@ export const glTintRaster: TintRaster = {
       },
       {
         pts: mainPts,
-        widthAt: (i) =>
+        widthAt: meanWidthFn(mainPts, (i) =>
           Math.max(0.5, MENISCUS_HALO_WIDTH * Math.pow(litAt(i), 1.25)),
+        ),
         alphaAt: (i) =>
           Math.pow(litAt(i), 2) * MENISCUS_HALO_ALPHA * glowAlpha * toolFade,
         colorAt: tintAt,
