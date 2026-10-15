@@ -214,10 +214,11 @@ function buildStrip(
     for (let i = 0; i < m; i++) {
       emit(i, i === 0 ? m - 1 : i - 1, i === m - 1 ? 0 : i + 1);
     }
-    // 封口：TRIANGLE_STRIP 是线性序列不会自动环回——重复前两对顶点，
-    // 让末段（pts[m-1]→pts[0]）也被四边形覆盖。
+    // 封口：TRIANGLE_STRIP 是线性序列不会自动环回——只重复第一对顶点，
+    // 让末段（pts[m-1]→pts[0]）被四边形覆盖。曾重复了两对，多出的
+    // (0',1') 四边形与首段 (0,1) 完全重合 → 首段画两遍，预乘 over
+    // 双份 alpha，在左缘→圆弧接缝处形成亮点。
     emit(0, m - 1, 1);
-    emit(1, 0, 2);
     const count = verts.length / STRIDE;
     if (count >= 4) segs.push({ start: 0, count });
     return { data: new Float32Array(verts), segs };
