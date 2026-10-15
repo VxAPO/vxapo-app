@@ -71,15 +71,24 @@ float sdRoundRect(vec2 p, vec4 r, float rad) {
   vec2 d = abs(p - r.xy) - (r.zw - vec2(rad));
   return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - rad;
 }
+// Abramowitz–Stegun 7.1.26（|误差|<1.5e-7）：box⊗gauss 需要两次 erf
+float erf(float x) {
+  float s = x < 0.0 ? -1.0 : 1.0;
+  x = abs(x);
+  float t = 1.0 / (1.0 + 0.3275911 * x);
+  float y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t
+    - 0.284496736) * t + 0.254829592) * t * exp(-x * x);
+  return s * y;
+}
 void main() {
   if (uClipUse > 0.5 && sdRoundRect(vPos, uClipRect, uClipRadius) > 0.0) discard;
   float d = abs(vSd);
-  float body = d <= vHalf
-    ? 1.0
-    : exp(-((d - vHalf) * (d - vHalf)) / (2.0 * uSigma * uSigma + 0.0001));
-  // 边缘1.5px 抗锯齿覆盖（替代 canvas2d 的超采样描边）
-  float cover = clamp((vHalf + 0.75 - d) / 1.5, 0.0, 1.0);
-  float a = vAlpha * body * cover;
+  // 精确复刻 canvas2d 的「宽 2h 描边 × 高斯模糊 σ」合成轮廓 = box⊗gauss：
+  //   A(d) = ½[erf((h−d)/(σ√2)) + erf((h+d)/(σ√2))]
+  // 曾用「平顶 + 高斯肩」分段函数：宽条带（halo 宽至 8px）的平顶边缘在多条带
+  // 叠加时呈台阶感；box⊗gauss 全程 C∞，细描边带（σ=0.3）自然退化为带 AA 的细线。
+  float s2 = 1.41421356 * max(uSigma, 0.15);
+  float a = vAlpha * 0.5 * (erf((vHalf - d) / s2) + erf((vHalf + d) / s2));
   if (a <= 0.003) discard;
   // 预乘输出：配合 blendFunc(ONE, ONE_MINUS_SRC_ALPHA) 与 premultipliedAlpha:true。
   // 曾用非预乘 + (SRC_ALPHA, ONE_MINUS_SRC_ALPHA)：alpha 通道被同样混合成 a²，
@@ -167,58 +176,63 @@ function buildStrip(
   const verts: number[] = [];
   const segs: Array<{ start: number; count: number }> = [];
   const n = pts.length;
-  // 按 brk 切段：段内才共享切线；每段独立 drawArrays(TRIANGLE_STRIP)，
-  // 避免跨段连接出垃圾四边形（TRIANGLES 拓扑与条带数据不匹配=几何全乱）。
+  const emit = (i: number, prevIdx: number, nextIdx: number) => {
+    const p = pts[i];
+    const prev = pts[prevIdx];
+    const next = pts[nextIdx];
+    let dx = next.x - prev.x;
+    let dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const nx = -dy;
+    const ny = dx;
+    // alpha=0 的点也必须占位：跳过会让条带跨接成弦，闭合环跨角的弦
+    // 切进环内（sd≈0 → 满 alpha）——曾出现贯穿面板的对角亮带。
+    // 片元里 a<=0.003 会 discard，零 alpha 顶点只是几何占位。
+    const a = band.alphaAt(i);
+    const c = band.colorAt(i);
+    const half = (band.widthAt(i) / 2) * dpr;
+    const ext = half + 3 * band.sigma * dpr + 1;
+    const px = (p.x - ox) * dpr;
+    const py = (p.y - oy) * dpr;
+    const rgb = [c.r / 255, c.g / 255, c.b / 255];
+    // 左沿 (+1)：符号距离 +ext
+    verts.push(px + nx * ext, py + ny * ext, 1, ext, half, a, rgb[0], rgb[1], rgb[2]);
+    // 右沿 (-1)：符号距离必须是 -ext（曾误写 +ext，整条带 sd 恒正 → 全部 discard）
+    verts.push(px - nx * ext, py - ny * ext, -1, -ext, half, a, rgb[0], rgb[1], rgb[2]);
+  };
+  // 闭合环（ringPoints/insetRing 产物首尾同点）：单条带绕环一周，切线用环回
+  // 中心差分——圆角矩形直边→圆弧本就切向连续，brk 处不再切断，两段端帽
+  // 对顶留下的接缝竖线随之消失。
+  const closed =
+    n > 3 &&
+    Math.abs(pts[0].x - pts[n - 1].x) < 1e-4 &&
+    Math.abs(pts[0].y - pts[n - 1].y) < 1e-4;
+  if (closed) {
+    const m = n - 1; // 去掉重复的闭合点，环回取邻居
+    for (let i = 0; i < m; i++) {
+      emit(i, i === 0 ? m - 1 : i - 1, i === m - 1 ? 0 : i + 1);
+    }
+    // 封口：TRIANGLE_STRIP 是线性序列不会自动环回——重复前两对顶点，
+    // 让末段（pts[m-1]→pts[0]）也被四边形覆盖。
+    emit(0, m - 1, 1);
+    emit(1, 0, 2);
+    const count = verts.length / STRIDE;
+    if (count >= 4) segs.push({ start: 0, count });
+    return { data: new Float32Array(verts), segs };
+  }
+  // 开放折线：按 brk 切段，段内才共享切线；每段独立 TRIANGLE_STRIP，
+  // 避免跨段连接出垃圾四边形。
   let segStart = 0;
   const flush = (s: number, e: number) => {
     if (e - s < 1) return;
     const startVertex = verts.length / STRIDE;
-    let count = 0;
+    const before = verts.length;
     for (let i = s; i <= e; i++) {
-      const p = pts[i];
-      const prev = pts[Math.max(s, i - 1)];
-      const next = pts[Math.min(e, i + 1)];
-      let dx = next.x - prev.x;
-      let dy = next.y - prev.y;
-      const len = Math.hypot(dx, dy) || 1;
-      dx /= len;
-      dy /= len;
-      const nx = -dy;
-      const ny = dx;
-      const a = band.alphaAt(i);
-      if (a <= 0.003) continue;
-      const c = band.colorAt(i);
-      const half = (band.widthAt(i) / 2) * dpr;
-      const ext = half + 3 * band.sigma * dpr + 1;
-      const px = (p.x - ox) * dpr;
-      const py = (p.y - oy) * dpr;
-      const rgb = [c.r / 255, c.g / 255, c.b / 255];
-      // 左沿 (+1)
-      verts.push(
-        px + nx * ext,
-        py + ny * ext,
-        1,
-        ext,
-        half,
-        a,
-        rgb[0],
-        rgb[1],
-        rgb[2],
-      );
-      // 右沿 (-1)：符号距离必须是 -ext（曾误写 +ext，整条带 sd 恒正 → 全部 discard）
-      verts.push(
-        px - nx * ext,
-        py - ny * ext,
-        -1,
-        -ext,
-        half,
-        a,
-        rgb[0],
-        rgb[1],
-        rgb[2],
-      );
-      count += 2;
+      emit(i, Math.max(s, i - 1), Math.min(e, i + 1));
     }
+    const count = (verts.length - before) / STRIDE;
     if (count >= 3) segs.push({ start: startVertex, count });
   };
   for (let i = 0; i < n; i++) {
