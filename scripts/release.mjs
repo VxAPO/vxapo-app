@@ -13,7 +13,13 @@
  * 兼容两个仓的 .cargo/config.toml 指定默认 target 与未指定的情况。
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -46,6 +52,48 @@ run("cargo build --release", join(ROOT, "vxapo-driver"));
 run("cargo build --release", join(ROOT, "vxapo-cli"));
 
 // 3) 拷贝进 app resources（tauri.conf.json bundle.resources 引用这两个路径）。
+//
+// 占用语义（踩过的坑）：本机 APO 注册（CLSID→DLL）指向的就是这个 resources
+// 下的 vxapo_driver.dll（register.rs 分支 A：exe 同级存在 DLL 即优先注册它），
+// 音频端点活跃时 **audiodg 会映射它** → EBUSY。持有者是音频引擎，关应用没用。
+// 处置：① 内容没变（构建未改动）直接跳过——多数 release 根本不需要碰它；
+//      ② 内容变了且持续 EBUSY → 给出真实出路（切注册/停音频端点）。
+import { createHash } from "node:crypto";
+
+function syncSleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+function copyWithRetry(src, dest) {
+  // 内容一致就跳过：驱动/CLI 未重新编译时完全不碰目标文件
+  try {
+    const a = createHash("sha1").update(readFileSync(src)).digest("hex");
+    const b = createHash("sha1").update(readFileSync(dest)).digest("hex");
+    if (a === b) return "skip-identical";
+  } catch {
+    /* dest 不存在等情况走拷贝 */
+  }
+  for (let attempt = 1; attempt <= 15; attempt++) {
+    try {
+      copyFileSync(src, dest);
+      return;
+    } catch (e) {
+      if (e.code !== "EBUSY" && e.code !== "EPERM") throw e;
+      if (attempt === 15) {
+        console.error(
+          `\n✗ ${dest} 被持续占用：音频引擎(audiodg)正在加载开发目录的驱动 DLL——` +
+            `CLSID 注册指向本文件（register.rs 的 exe 同级优先），活跃音频端点会一直持有它。\n` +
+            `  出路任选：\n` +
+            `  A. 暂停/切换占用该 APO 的音频输出设备后重试；\n` +
+            `  B. 管理员重启音频服务腾出模块：Restart-Service Audiosrv（随后立刻重跑）；\n` +
+            `  C. 治本：安装一次 NSIS 包并运行其 register，把 CLSID 绑定切到安装目录，` +
+            `开发目录从此不再被音频引擎持有。`,
+        );
+        process.exit(1);
+      }
+      syncSleep(500);
+    }
+  }
+}
 const resDir = join(APP_DIR, "src-tauri", "resources");
 mkdirSync(resDir, { recursive: true });
 for (const [repo, file] of [
@@ -54,11 +102,19 @@ for (const [repo, file] of [
 ]) {
   const src = findArtifact(repo, file);
   if (!src) {
-    console.error(`✗ 找不到 ${repo} 的构建产物 ${file}（target 下没有 release 输出？）`);
+    console.error(
+      `✗ 找不到 ${repo} 的构建产物 ${file}（target 下没有 release 输出？）`,
+    );
     process.exit(1);
   }
-  copyFileSync(src, join(resDir, file));
-  console.log(`✓ resources/${file} ← ${repo}（构建于 ${statSync(src).mtime.toISOString()}）`);
+  const r = copyWithRetry(src, join(resDir, file));
+  if (r === "skip-identical") {
+    console.log(`✓ resources/${file} 内容未变，跳过拷贝`);
+  } else {
+    console.log(
+      `✓ resources/${file} ← ${repo}（构建于 ${statSync(src).mtime.toISOString()}）`,
+    );
+  }
 }
 
 // 4) 打包（vite 阶段的 TEMP 重定向已在 package.json build 里内置）。
@@ -75,8 +131,18 @@ if (distMtime < startedAt) {
   process.exit(1);
 }
 
-const version = JSON.parse(readFileSync(join(APP_DIR, "package.json"), "utf8")).version;
-const installer = join(APP_DIR, "src-tauri", "target", "release", "bundle", "nsis", `VxAPO_${version}_x64-setup.exe`);
+const version = JSON.parse(
+  readFileSync(join(APP_DIR, "package.json"), "utf8"),
+).version;
+const installer = join(
+  APP_DIR,
+  "src-tauri",
+  "target",
+  "release",
+  "bundle",
+  "nsis",
+  `VxAPO_${version}_x64-setup.exe`,
+);
 if (!existsSync(installer)) {
   console.error(`\n✗ 打包完成但找不到安装包：${installer}`);
   process.exit(1);
