@@ -60,7 +60,7 @@ export function edgeShadeRgb(): Rgb {
 
 /** 暗部叠加强度：浅色卡片底色亮，过强会变成灰色填充带。 */
 export function edgeShadeAlpha(): number {
-  return isDark() ? 0.22 : 0.10;
+  return isDark() ? 0.22 : 0.1;
 }
 
 export function ringBaseRgb(): Rgb {
@@ -84,10 +84,14 @@ export function surfaceLumOf(el: HTMLElement): number | null {
   const cs = getComputedStyle(el);
   const bgValue = cs.backgroundColor.trim();
   if (bgValue && bgValue !== "transparent") {
-    const alphaM = /^rgba?\(\s*[\d.]+[,\s]+[\d.]+[,\s]+[\d.]+(?:[,\s/]+([\d.]+(?:%?)))?/i.exec(
-      bgValue,
-    );
-    const alpha = alphaM?.[1] != null ? parseFloat(alphaM[1]) / (alphaM[1].includes("%") ? 100 : 1) : 1;
+    const alphaM =
+      /^rgba?\(\s*[\d.]+[,\s]+[\d.]+[,\s]+[\d.]+(?:[,\s/]+([\d.]+(?:%?)))?/i.exec(
+        bgValue,
+      );
+    const alpha =
+      alphaM?.[1] != null
+        ? parseFloat(alphaM[1]) / (alphaM[1].includes("%") ? 100 : 1)
+        : 1;
     if (alpha >= 0.2) {
       const bg = parseColor(bgValue);
       if (bg) return rgbLuminance(bg);
@@ -122,8 +126,7 @@ export function distToRect(x: number, y: number, r: DOMRect): number {
 
 /** 卡片描边：点在卡内时只算到最近描边的距离，卡中心空白不等于 0。 */
 export function distToBorder(x: number, y: number, r: DOMRect): number {
-  const inside =
-    x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  const inside = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   if (!inside) return distToRect(x, y, r);
   return Math.min(x - r.left, r.right - x, y - r.top, r.bottom - y);
 }
@@ -210,14 +213,32 @@ export const MENISCUS_HALO_ALPHA = 0.18;
 
 export const MENISCUS_HALO_BLUR = 4;
 
-/** 面板离屏缓冲复用窗口：位置由本次 blit 偏移保证精确，只有环带配色最多滞后这么久。 */
+/**
+ * 面板离屏缓冲复用窗口：贴回位置按元素当前 rect 计算（内容锚定元素），
+ * 位置变化不再失效复用，只有环带配色最多滞后这么久。
+ */
 export const PANEL_REUSE_MS = 100;
 
-/** 连续复用上限：保证至少每 3 帧完整重算一次，配色不会长时间停在上一次采样。 */
+/**
+ * 运动窗口（滚动/视图平移/工具栏飞行）内的复用窗口：整体平移期间
+ * 采样的相对几何不变，重画纯属浪费——放宽到 200ms，运动结束由
+ * 到期终态重画收敛（bufGen 强制）。
+ */
+export const PANEL_REUSE_MOTION_MS = 200;
+
+/** 连续复用上限：保证至少每 3 帧完整重算一次，配色不会长时间停在上一次采样。运动窗口内不适用。 */
 export const PANEL_REUSE_MAX = 2;
 
 /** 褪色补帧链的基准步长：插值按「距上次真实渲染过了多少个基准步」推进，保证复用不改褪色时长。 */
 export const FADE_FRAME_MS = 33;
+
+/**
+ * 后备存储覆盖区的网格粒度与余量：dirty 向上对齐网格并外扩余量，
+ * 只有 dirty 逃出覆盖区才动几何——动画期间纹理分配从「每帧」降到「至多一两次」。
+ */
+export const STORE_GRID = 64;
+
+export const STORE_MARGIN = 64;
 
 export const Z_BASE = 25;
 
@@ -246,8 +267,7 @@ export function sampleColor(
     const d = c.border ? distToBorder(x, y, c.r) : distToRect(x, y, c.r);
     // 光源半径随强度缩放：徽标 2.4 -> 约 1.55 倍基础半径，框选次之，默认最短
     const p = c.power ?? 1;
-    const sr =
-      radius * Math.sqrt(p) * (radiusFor ? radiusFor(c.r) : 1);
+    const sr = radius * Math.sqrt(p) * (radiusFor ? radiusFor(c.r) : 1);
     if (d >= sr) continue;
     const w = Math.pow(1 - d / sr, 2) * p;
     if (w <= 0) continue;
@@ -259,7 +279,10 @@ export function sampleColor(
   }
   if (wSum <= 0) return null;
   // 同一采样点多个光源只取最强一个的强度，避免选中数量增加导致亮度叠加。
-  return { c: { r: r / wSum, g: g / wSum, b: b / wSum }, s: Math.min(2.4, wMax) };
+  return {
+    c: { r: r / wSum, g: g / wSum, b: b / wSum },
+    s: Math.min(2.4, wMax),
+  };
 }
 
 export type RingPoint = { x: number; y: number; brk?: boolean };

@@ -3,10 +3,15 @@
 // 图层实现按职责拆分：canvasPool（画布池与层级）、tint（采样与绘制）、
 // targets（目标扫描与观察者）、renderLoop（渲染循环与生命周期）；模块级状态在 state.ts。
 
-
 import { useEffect, type RefObject } from "react";
 import { ST } from "../lib/edgetint/state";
 import { startAuto, stopAuto } from "../lib/edgetint/targets";
+
+/**
+ * 边缘染色总开关（排查帧率用）：false = 整层染色不启动——不扫描目标、
+ * 不建画布、不跑渲染循环。HMR 热生效（旧实例 cleanup 会把已建的层拆掉）。
+ */
+const EDGE_TINT_ENABLED = true;
 
 /**
  * 边缘染色入口（决策 5 阶段 B：生命周期化）。
@@ -18,6 +23,7 @@ import { startAuto, stopAuto } from "../lib/edgetint/targets";
  */
 export function useEdgeTintLayer(_ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {
+    if (!EDGE_TINT_ENABLED) return;
     // 三个挂载点（App / CurvePanel / 选择工具栏），且工具栏随选中态反复挂卸 ⇒
     // 用引用计数保证「首个挂载启动、最后一个卸载停止」，避免工具栏一隐藏就停掉整层染色。
     ST.autoRefCount += 1;

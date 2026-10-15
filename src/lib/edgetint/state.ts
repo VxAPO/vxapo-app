@@ -16,12 +16,28 @@ export type PanelBuffer = {
   at: number;
   /** 自上次完整渲染以来已连续复用的帧数。 */
   reused: number;
+  /**
+   * 本帧的贴回（blit）位置：始终取元素**当前** rect 推出的视口坐标。
+   * 缓冲像素以元素自身 rect 为基准绘制（见 renderToPanelBuffer 的 transform），
+   * 内容对元素是「锚定」的——元素平移后按当前位置贴回即对齐，因此复用
+   * 不再要求位置与渲染时一致（动画/滚动期间复用窗口才能真正命中）。
+   */
   x: number;
   y: number;
   w: number;
   h: number;
   dpr: number;
+  /** 渲染时的结构代数（ST.bufGen）：代数不同禁止复用（配色源集合已变）。 */
+  gen: number;
 };
+
+/** 单次 paint 内的元素样式缓存（paint() 入口整体清空；同一帧内 DOM 不变，读数安全）。 */
+export interface PaintCacheEntry {
+  /** targetVisibility 的缓存值：同一帧内多次调用只算一次。 */
+  vis?: number;
+  /** panelBaseLum 的缓存值：含 querySelector + 多段样式读取，每帧每面板只算一次。 */
+  baseLum?: number;
+}
 
 /** 模块级可变状态（字段与原 `let/const` 声明一一对应）。 */
 export interface EdgeTintState {
@@ -56,6 +72,20 @@ export interface EdgeTintState {
   paintMode: "tool" | "full";
   scrollingNow: boolean;
   fadePending: boolean;
+  /**
+   * 结构代数：卡片增减/视图舞台切换等配色源集合变化时 +1。
+   * 面板缓冲记录渲染时的代数，代数不同禁止复用——放宽复用窗口后
+   * 防止「结构已变、旧配色滞留」。
+   */
+  bufGen: number;
+  /** 本次 paint 的元素样式缓存（paint() 入口清空）。 */
+  paintCache: Map<HTMLElement, PaintCacheEntry>;
+  /** 本次 paint 的 getComputedStyle 缓存（同一帧内 DOM 不变）。 */
+  csCache: Map<HTMLElement, CSSStyleDeclaration>;
+  /** 本次 paint 的根级取色缓存（--edge-shade/--ring-base 解析结果）。 */
+  rootColorCache: Map<string, Rgb | null>;
+  /** 上一次真正执行 paint 的时刻（fadePending 续帧的最小间隔保护）。 */
+  lastPaintAt: number;
   autoScanTimer: number;
   autoMo: MutationObserver | null;
   autoScanRaf: number;
@@ -67,7 +97,10 @@ export interface EdgeTintState {
   cardNodes: CardNode[] | null;
   curvePointCache: WeakMap<SVGPathElement, { key: string; pts: ColorSource[] }>;
   /** 每个采样点的平滑状态：alpha 独立逼近目标，颜色做插值。 */
-  ringStates: WeakMap<HTMLElement, { a: number[]; r: number[]; g: number[]; b: number[] }>;
+  ringStates: WeakMap<
+    HTMLElement,
+    { a: number[]; r: number[]; g: number[]; b: number[] }
+  >;
   innerStates: WeakMap<HTMLElement, InnerState>;
   scanSig: string;
   /** 已挂载的入口数量（见 useEdgeTintLayer 的引用计数说明）。 */
@@ -105,6 +138,11 @@ export const ST: EdgeTintState = {
   paintMode: "full",
   scrollingNow: false,
   fadePending: false,
+  bufGen: 1,
+  paintCache: new Map<HTMLElement, PaintCacheEntry>(),
+  csCache: new Map<HTMLElement, CSSStyleDeclaration>(),
+  rootColorCache: new Map(),
+  lastPaintAt: 0,
   autoScanTimer: 0,
   autoMo: null,
   autoScanRaf: 0,
@@ -114,9 +152,57 @@ export const ST: EdgeTintState = {
   colorCache: new WeakMap<HTMLElement, { at: number; color: Rgb | null }>(),
   host: null,
   cardNodes: null,
-  curvePointCache: new WeakMap<SVGPathElement, { key: string; pts: ColorSource[] }>(),
-  ringStates: new WeakMap<HTMLElement, { a: number[]; r: number[]; g: number[]; b: number[] }>(),
+  curvePointCache: new WeakMap<
+    SVGPathElement,
+    { key: string; pts: ColorSource[] }
+  >(),
+  ringStates: new WeakMap<
+    HTMLElement,
+    { a: number[]; r: number[]; g: number[]; b: number[] }
+  >(),
   innerStates: new WeakMap<HTMLElement, InnerState>(),
   scanSig: "",
   autoRefCount: 0,
 };
+
+/**
+ * 同一帧内的 getComputedStyle 缓存：paint() 入口整体清空。
+ * 动画期间 framer-motion 每帧写 style，染色循环再逐帧读样式会互相强制重算；
+ * 同一帧内 DOM 不变，重复读取没有信息量，缓存即可。
+ */
+export function csOf(el: HTMLElement): CSSStyleDeclaration {
+  let cs = ST.csCache.get(el);
+  if (!cs) {
+    cs = getComputedStyle(el);
+    ST.csCache.set(el, cs);
+  }
+  return cs;
+}
+
+/**
+ * 同一帧内的元素级 paint 缓存（可见度/面板底色等复合读数）。
+ * Map 不存在或缺少该元素时创建条目；调用方在 paint() 入口无需逐项清理。
+ */
+export function paintEntryOf(el: HTMLElement): PaintCacheEntry {
+  let e = ST.paintCache.get(el);
+  if (!e) {
+    e = {};
+    ST.paintCache.set(el, e);
+  }
+  return e;
+}
+
+/**
+ * 同一帧内的根级取色缓存（--edge-shade/--ring-base 等解析结果）：
+ * 原实现每个面板各读一次根 computed style，一帧 N 个面板就是 2N 次根样式读取。
+ */
+export function rootColorCached<T extends Rgb | null>(
+  key: string,
+  read: () => T,
+): T {
+  const cache = ST.rootColorCache;
+  if (cache.has(key)) return cache.get(key) as T;
+  const v = read();
+  cache.set(key, v);
+  return v;
+}

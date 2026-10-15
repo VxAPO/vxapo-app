@@ -1,11 +1,47 @@
 // 边缘染色的采样与绘制：颜色/亮度采样、环带与描边、面板离屏绘制（决策 5 阶段 A 第四批，
 // 从 hooks/useEdgeTintLayer.ts 原样搬出，行为零变化；状态经 state.ts 的 ST 共享）。
 
-import { COLOR_K, FADE_K, INNER_SAMPLE_R, LINE_ALPHA, MAX_SOURCE_R, MENISCUS_ALPHA, MENISCUS_BLUR, MENISCUS_HALO_ALPHA, MENISCUS_HALO_BLUR, MENISCUS_HALO_WIDTH, MENISCUS_INSET, MENISCUS_WIDTH, SAMPLE_R, SHADE_OUT_SMOOTH_R, SHADE_SMOOTH_R, edgeShadeAlpha, edgeShadeRgb, insetRing, isDark, mapRingToReference, panelBaseLum, panelRectsForTool, parseColor, ringBaseRgb, ringPoints, sampleColor, scaleK, smoothstep, strokeChunkBand, strokeUniformBand } from "./geometry";
+import {
+  COLOR_K,
+  FADE_K,
+  INNER_SAMPLE_R,
+  LINE_ALPHA,
+  MAX_SOURCE_R,
+  MENISCUS_ALPHA,
+  MENISCUS_BLUR,
+  MENISCUS_HALO_ALPHA,
+  MENISCUS_HALO_BLUR,
+  MENISCUS_HALO_WIDTH,
+  MENISCUS_INSET,
+  MENISCUS_WIDTH,
+  SAMPLE_R,
+  SHADE_OUT_SMOOTH_R,
+  SHADE_SMOOTH_R,
+  edgeShadeAlpha,
+  edgeShadeRgb,
+  insetRing,
+  isDark,
+  mapRingToReference,
+  panelBaseLum,
+  panelRectsForTool,
+  parseColor,
+  ringBaseRgb,
+  ringPoints,
+  sampleColor,
+  scaleK,
+  smoothstep,
+  strokeChunkBand,
+  strokeUniformBand,
+} from "./geometry";
 import type { ColorSource, Rgb, RingPoint } from "./geometry";
-import { isToolbar, roundedRectPath, sampleColorGrid, sampleLumGrid } from "./primitives";
+import {
+  isToolbar,
+  roundedRectPath,
+  sampleColorGrid,
+  sampleLumGrid,
+} from "./primitives";
 import type { InnerState, LightSet } from "./primitives";
-import { ST } from "./state";
+import { ST, csOf, paintEntryOf, rootColorCached } from "./state";
 import { ensureSoftCanvas, ensureSsCanvas } from "./canvasPool";
 
 export function curvePointSources(): ColorSource[] {
@@ -51,7 +87,7 @@ export function curvePointSources(): ColorSource[] {
 export function cardColor(el: HTMLElement): Rgb | null {
   const hit = ST.colorCache.get(el);
   if (hit && performance.now() - hit.at < 500) return hit.color;
-  const cs = getComputedStyle(el);
+  const cs = csOf(el);
   const darkKey = "--card-accent-dark";
   const lightKey = "--card-accent";
   const accent =
@@ -59,15 +95,16 @@ export function cardColor(el: HTMLElement): Rgb | null {
     cs.getPropertyValue(lightKey).trim();
   const fallbackBrand =
     parseColor(cs.getPropertyValue("--brand").trim()) ||
-    parseColor(
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--brand")
-        .trim(),
+    rootColorCached("brand", () =>
+      parseColor(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--brand")
+          .trim(),
+      ),
     );
   const color =
     parseColor(accent) ||
-    (el.dataset.dndGroup === "effects" ||
-    !el.classList.contains("sem-group")
+    (el.dataset.dndGroup === "effects" || !el.classList.contains("sem-group")
       ? fallbackBrand
       : null);
   ST.colorCache.set(el, { at: performance.now(), color });
@@ -110,9 +147,10 @@ export function strokeHighQualityBand(
   alphaAt: (i: number) => number,
   colorAt: (i: number) => Rgb,
   toolFade: number,
+  scale: number = 4,
 ): void {
   if (pts.length < 2) return;
-  const SCALE = 4;
+  const SCALE = scale;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -141,17 +179,7 @@ export function strokeHighQualityBand(
   const smoothing = bandCtx.imageSmoothingEnabled;
   bandCtx.imageSmoothingEnabled = true;
   bandCtx.imageSmoothingQuality = "high";
-  bandCtx.drawImage(
-    ST.ssCanvas,
-    0,
-    0,
-    ow * SCALE,
-    oh * SCALE,
-    ox,
-    oy,
-    ow,
-    oh,
-  );
+  bandCtx.drawImage(ST.ssCanvas, 0, 0, ow * SCALE, oh * SCALE, ox, oy, ow, oh);
   bandCtx.imageSmoothingEnabled = smoothing;
 }
 
@@ -225,7 +253,7 @@ export function drawPanel(
   const rect = el.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return;
 
-  const cs = getComputedStyle(el);
+  const cs = csOf(el);
   const parsedR = parseFloat(cs.borderRadius);
   const corner = Number.isFinite(parsedR) && parsedR > 0 ? parsedR : 16;
   const o = 1;
@@ -266,7 +294,10 @@ export function drawPanel(
   const scale = Math.max(1, frameScale);
   const fadeK = movingTool ? 1 : scaleK(FADE_K, scale);
   const colorK = movingTool ? 1 : scaleK(COLOR_K, scale);
-  const panelBase = panelBaseLum(el);
+  // 面板底色：querySelector + 多段样式读取，同一帧同一面板只算一次
+  const pe = paintEntryOf(el);
+  if (pe.baseLum === undefined) pe.baseLum = panelBaseLum(el);
+  const panelBase = pe.baseLum;
 
   const pts = ringPoints(x0, y0, x1, y1, rc);
   if (pts.length < 2) return;
@@ -342,8 +373,8 @@ export function drawPanel(
     );
     const lum = lumSample?.lum ?? panelBase;
     const prox = lumSample?.prox ?? 0;
-      // 只有比玻璃更亮的部分才算“光”；暗色滑块/描边不能把玻璃染脏。
-      const contrast = Math.max(0, lum - panelBase) / 255;
+    // 只有比玻璃更亮的部分才算“光”；暗色滑块/描边不能把玻璃染脏。
+    const contrast = Math.max(0, lum - panelBase) / 255;
     const innerTint = sampleColorGrid(
       glowP.x,
       glowP.y,
@@ -357,9 +388,7 @@ export function drawPanel(
       ? Math.min(1, (innerTint.s * innerFade) / 1.1)
       : 0;
     const lumEnergy =
-      Math.min(1, contrast * 1.6) *
-      Math.pow(prox, 0.8) *
-      innerFade;
+      Math.min(1, contrast * 1.6) * Math.pow(prox, 0.8) * innerFade;
     const targetGl = Math.min(1, colorEnergy + lumEnergy * 0.55);
     rawGl[j] = targetGl;
     if (innerTint) {
@@ -452,26 +481,12 @@ export function drawPanel(
       ? { r: ist.ir[i], g: ist.ig[i], b: ist.ib[i] }
       : { r: 255, g: 255, b: 255 };
 
-  // 外圈染色高光
-  const baseRgb = ringBaseRgb();
+  // 外圈染色高光（根级取色每帧缓存一次，不再逐面板读根 computed style）
+  const baseRgb = rootColorCached("ringBase", ringBaseRgb);
   if (isDark()) {
-    strokeUniformBand(
-      ctx2,
-      pts,
-      0.9,
-      0,
-      baseRgb,
-      toolFade,
-    );
+    strokeUniformBand(ctx2, pts, 0.9, 0, baseRgb, toolFade);
   } else {
-    strokeUniformBand(
-      shadeCtx2,
-      pts,
-      0.9,
-      0,
-      baseRgb,
-      toolFade,
-    );
+    strokeUniformBand(shadeCtx2, pts, 0.9, 0, baseRgb, toolFade);
   }
   strokeHighQualityBand(
     ctx2,
@@ -532,13 +547,20 @@ export function drawPanel(
 
   // 暗部：独立乘式层。单条软带贴边 + 轻模糊，避免多条 1px 同心环
   // 在抗锯齿下出现脏边的颗粒感。
-  const darkRgb = edgeShadeRgb();
+  const darkRgb = rootColorCached("edgeShade", edgeShadeRgb);
   const darkAlpha = edgeShadeAlpha() * glowAlpha;
   const darkPts = insetRing(rect, corner, 1.4);
   if (darkAlpha > 0.002 && darkPts.length >= 2) {
     const mapDark = mapRingToReference(darkPts, mainPts);
     shadeCtx2.save();
-    roundedRectPath(shadeCtx2, rect.left, rect.top, rect.width, rect.height, corner);
+    roundedRectPath(
+      shadeCtx2,
+      rect.left,
+      rect.top,
+      rect.width,
+      rect.height,
+      corner,
+    );
     shadeCtx2.clip();
     strokeGlowBand(
       shadeCtx2,

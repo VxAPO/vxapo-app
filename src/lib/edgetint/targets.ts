@@ -1,7 +1,12 @@
 // 边缘染色的目标扫描与观察者注册：卡片节点扫描、ResizeObserver 绑定、自动扫描（决策 5 阶段 A
 // 第四批，从 hooks/useEdgeTintLayer.ts 原样搬出，行为零变化；状态经 state.ts 的 ST 共享）。
 
-import { MAX_SOURCE_R, buildGrid, rgbLuminance, surfaceLumOf } from "./geometry";
+import {
+  MAX_SOURCE_R,
+  buildGrid,
+  rgbLuminance,
+  surfaceLumOf,
+} from "./geometry";
 import type { ColorSource, LumSource } from "./geometry";
 import type { CardNode, LightSet } from "./primitives";
 import { ST } from "./state";
@@ -127,6 +132,8 @@ export function syncTargets(): void {
   // 真的变化时才需要一次全量重绘，其余情况保持上一帧画面。
   const sig = targetScanSignature();
   if (changed || sig !== ST.scanSig) {
+    // 目标增减 = 光源集合变化：代数 +1 让既有面板缓冲失效（复用窗口防旧配色滞留）
+    if (changed) ST.bufGen += 1;
     ST.scanSig = sig;
     schedule("full");
   }

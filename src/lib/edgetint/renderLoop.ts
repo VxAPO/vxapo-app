@@ -1,11 +1,23 @@
 // 边缘染色的渲染循环与生命周期：面板缓冲、脏区、paint/schedule、事件与 start/stop
 //（决策 5 阶段 A 第四批，从 hooks/useEdgeTintLayer.ts 原样搬出，行为零变化；状态经 state.ts 的 ST 共享）。
 
-import { FADE_FRAME_MS, PANEL_REUSE_MAX, PANEL_REUSE_MS } from "./geometry";
-import { clearDirtyUnion, clipToolbar, dirtyForEls, isToolbar, visibleRectOf } from "./primitives";
+import {
+  FADE_FRAME_MS,
+  PANEL_REUSE_MAX,
+  PANEL_REUSE_MOTION_MS,
+  PANEL_REUSE_MS,
+} from "./geometry";
+import {
+  clearDirtyUnion,
+  clipToolbar,
+  dirtyForEls,
+  isToolbar,
+  visibleRectOf,
+} from "./primitives";
 import type { LightSet } from "./primitives";
 import { ST } from "./state";
 import type { PanelBuffer } from "./state";
+import { csOf } from "./state";
 import { ensureCanvas } from "./canvasPool";
 import { drawPanel } from "./tint";
 import { collectCards, refreshCardNodes } from "./targets";
@@ -19,19 +31,31 @@ import { collectCards, refreshCardNodes } from "./targets";
  *   在过渡期间取到的是插值中的值）；
  * - 页面内目标：读所在设备页的实时 opacity（进入是 CSS 过渡、退出是 framer-motion，
  *   两者都反映在 computed 值上）。
+ *
+ * 同一帧内多次调用（fade 检测、buffer 生成、blit 各一次）走 paintCache 只算一次：
+ * 动画期间这些 getComputedStyle 与 framer-motion 的每帧 style 写入互相踩，读数本身
+ * 也会强制样式重算。
  */
 export function targetVisibility(el: HTMLElement): number {
-  const clamp01 = (n: number) => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1);
+  const hit = ST.paintCache.get(el);
+  if (hit && hit.vis !== undefined) return hit.vis;
+  const clamp01 = (n: number) =>
+    Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
   let v = 1;
   if (isToolbar(el)) {
-    const cs = getComputedStyle(el);
+    const cs = csOf(el);
     const t = Number.parseFloat(cs.getPropertyValue("--glass-t"));
     // 兜底：没有 --glass-t（旧路径/未注册）时退回自身 opacity
-    v = Number.isFinite(t) ? clamp01(t) : clamp01(Number.parseFloat(cs.opacity));
+    v = Number.isFinite(t)
+      ? clamp01(t)
+      : clamp01(Number.parseFloat(cs.opacity));
   }
   // 再乘所在页面自身的淡入淡出：设备页切换时工具栏若还在（有选中），它得跟着页面一起淡
   const page = el.closest<HTMLElement>(".device-page");
-  if (page) v *= clamp01(Number.parseFloat(getComputedStyle(page).opacity));
+  if (page) v *= clamp01(Number.parseFloat(csOf(page).opacity));
+  const entry = ST.paintCache.get(el);
+  if (entry) entry.vis = v;
+  else ST.paintCache.set(el, { vis: v });
   return v;
 }
 
@@ -75,18 +99,12 @@ export function renderToPanelBuffer(
     const sc = document.createElement("canvas");
     const sk = sc.getContext("2d");
     if (!k || !sk) return null;
-    buf = { c, k, sc, sk, at: 0, reused: 0, x, y, w, h, dpr };
+    buf = { c, k, sc, sk, at: 0, reused: 0, x, y, w, h, dpr, gen: 0 };
     ST.panelBuffers.set(el, buf);
   }
-  /**
-   * buf.x/y 是**渲染时**的视口位置：缓冲里的像素就是按它画的（drawPanel 用
-   * setTransform(dpr,0,0,dpr,-x*dpr,-y*dpr)），blit 也按它贴回画布。
-   *
-   * 复用窗口（下方 blit 分支）会直接返回上一帧像素，因此位置必须与像素一致：
-   * 若把本次 rect 的位置写给旧像素，面板（含环带/染色）会整体错位若干像素；
-   * 滚动收敛后重绘停止，错位会留在画布上直到下一次重绘覆盖（现象：某几个滚动
-   * 位置出现一小块发白的错位带）。
-   */
+  // 贴回位置每帧按当前 rect 计算：像素锚定元素，复用/重画两条路径都用它
+  buf.x = x;
+  buf.y = y;
   if (
     buf.c.width !== Math.ceil(w * dpr) ||
     buf.c.height !== Math.ceil(h * dpr)
@@ -101,35 +119,36 @@ export function renderToPanelBuffer(
     buf.sc.width = Math.ceil(w * dpr);
     buf.sc.height = Math.ceil(h * dpr);
   }
-  // 复用上一帧离屏 buffer：面板绘制（4× 超采样描边 + 整张模糊）是重绘的固定大头，
-  // 而画布原点与 blit 偏移都取自本次 dirtyForEls()，所以环带位置永远精确，
-  // 复用的只是「采样到的配色」——它最多滞后 PANEL_REUSE_MS，且至少每 3 帧重算一次。
+  /**
+   * 复用上一帧离屏 buffer：面板绘制（超采样描边 + 最多 4 次整张模糊）是
+   * 重绘的固定大头。缓冲像素以**元素自身 rect** 为基准绘制（下方 drawPanel 的
+   * transform 就是按 x/y 平移的），内容对元素是锚定的——贴回位置每帧按当前
+   * rect 计算（buf.x/y 在进入本函数时已写成本次值），所以位置变化不再失效复用。
+   *
+   * 复用窗口与旧实现同节奏：静止 PANEL_REUSE_MS + PANEL_REUSE_MAX 每 3 帧强制
+   * 重算（工具栏滚动期 140ms）；唯一放宽是视图平移（viewAnimUntil 窗口内）——
+   * 面板与光源整体同移、采样相对几何不变，重画纯属浪费，到期由 paint() 的
+   * 终态分支 bufGen+1 强制全量收敛。结构代数（bufGen）不同直接禁用复用。
+   */
   const now = performance.now();
-  // 工具栏滚动期间用更长的 140ms 复用窗口（滚动时几何相对内容不变）
+  const slide = now < ST.viewAnimUntil;
+  const win = slide
+    ? PANEL_REUSE_MOTION_MS
+    : isToolbar(el) && ST.scrollingNow
+      ? 140
+      : PANEL_REUSE_MS;
+  const maxReuse = slide ? Infinity : PANEL_REUSE_MAX;
   if (
-    isToolbar(el) &&
-    ST.scrollingNow &&
     buf.at > 0 &&
-    now - buf.at < 140 &&
-    Math.abs(x - buf.x) < 0.5 &&
-    Math.abs(y - buf.y) < 0.5
+    buf.gen === ST.bufGen &&
+    buf.reused < maxReuse &&
+    now - buf.at < win
   ) {
     buf.reused += 1;
     return buf;
   }
-  if (
-    buf.at > 0 &&
-    buf.reused < PANEL_REUSE_MAX &&
-    now - buf.at < PANEL_REUSE_MS &&
-    Math.abs(x - buf.x) < 0.5 &&
-    Math.abs(y - buf.y) < 0.5
-  ) {
-    buf.reused += 1;
-    return buf;
-  }
-  // 真正要重画了：把渲染位置对齐到本次 rect（blit 与像素始终同源）
-  buf.x = x;
-  buf.y = y;
+  // 真正要重画了：记录渲染代数；blit 位置沿用本次写入的当前 rect 值
+  buf.gen = ST.bufGen;
   // 距上次真实渲染过了多少个基准步：用于把褪色插值按时间推进（复用不改褪色时长）
   const frameScale = buf.at > 0 ? (now - buf.at) / FADE_FRAME_MS : 1;
   buf.reused = 0;
@@ -251,13 +270,7 @@ export function paintLayerPair(
         clipToolbar(k, vis);
       }
       k.globalAlpha = fade;
-      k.drawImage(
-        buf.c,
-        buf.x,
-        buf.y,
-        buf.w,
-        buf.h,
-      );
+      k.drawImage(buf.c, buf.x, buf.y, buf.w, buf.h);
       k.globalAlpha = 1;
       if (toolbar) k.restore();
       if (toolbar) {
@@ -265,13 +278,7 @@ export function paintLayerPair(
         clipToolbar(sk, vis);
       }
       sk.globalAlpha = fade;
-      sk.drawImage(
-        buf.sc,
-        buf.x,
-        buf.y,
-        buf.w,
-        buf.h,
-      );
+      sk.drawImage(buf.sc, buf.x, buf.y, buf.w, buf.h);
       sk.globalAlpha = 1;
       if (toolbar) sk.restore();
     }
@@ -283,6 +290,12 @@ export function paint(): void {
   try {
     if (!ST.running || !ST.targets.size) return;
     ST.fadePending = false;
+    // 同一帧内的样式读数缓存：入口整体作废（下方所有 getComputedStyle
+    // 复合读数在本次 paint 内只算一次）
+    ST.paintCache.clear();
+    ST.csCache.clear();
+    ST.rootColorCache.clear();
+    ST.lastPaintAt = performance.now();
     const cards = collectCards();
     const els = [...ST.targets];
     if (ST.paintMode !== "tool") {
@@ -307,6 +320,8 @@ export function paint(): void {
     );
     // 淡入淡出期间逐帧重绘：DOM 的透明度/玻璃进度在变，画布得跟着走。
     // 只有工具栏在淡就只刷工具栏画布；有页面内目标在淡就必须走 full（底图也在变）。
+    // 续帧一律走 schedule()（rAF，与 vsync 对齐）；旧实现的 setTimeout(16) 不对齐
+    // 垂直同步，GPU 空闲时都会抖，GPU 紧张时更是雪上加霜。
     const fadingBase = els.some(
       (el) => !isToolbar(el) && targetVisibility(el) < 0.999,
     );
@@ -316,7 +331,8 @@ export function paint(): void {
     if (fadingBase || fadingTool) {
       window.setTimeout(() => schedule(fadingBase ? "full" : "tool"), 16);
     }
-    // driveFor 的截止期：在窗口内无条件逐帧重绘（不依赖采样值），保证 canvas 跟得上 DOM 过渡
+    // driveFor 的截止期：在窗口内无条件逐帧重绘（不依赖采样值），保证 canvas 跟得上 DOM 过渡。
+    //（链节奏与旧实现一致：setTimeout(16)——rAF 直连在 400Hz 屏上会让淡出链跑出远超旧版的频率。）
     if (ST.toolAnimUntil > performance.now()) {
       window.setTimeout(() => schedule("tool"), 16);
     } else if (ST.toolAnimUntil) {
@@ -324,11 +340,22 @@ export function paint(): void {
     }
     if (ST.paintMode === "full" && ST.fadePending) {
       window.setTimeout(() => schedule("full"), 33);
-    } else if (ST.paintMode === "full" && ST.viewAnimUntil > performance.now()) {
+    } else if (
+      ST.paintMode === "full" &&
+      ST.viewAnimUntil > performance.now()
+    ) {
       window.setTimeout(() => schedule("full"), 16);
     }
-    if (ST.paintMode === "full" && ST.viewAnimUntil <= performance.now()) {
+    if (
+      ST.paintMode === "full" &&
+      ST.viewAnimUntil &&
+      ST.viewAnimUntil <= performance.now()
+    ) {
+      // 视图平移窗口到期：代数 +1 强制一帧全量重画（平移期复用放宽到 200ms，
+      // 终态必须强制收敛；其余场景旧实现直接清标志即可）
       ST.viewAnimUntil = 0;
+      ST.bufGen += 1;
+      window.setTimeout(() => schedule("full"), 16);
     }
   } catch (err) {
     console.error("[edgeTint] paint failed", err);
@@ -459,7 +486,9 @@ export function start(): void {
     );
     if (structureChanged) {
       refreshCardNodes();
-      // 卡片增减会改变光源集合，必须重绘一次（原逻辑依赖 300ms 轮询兜底）
+      // 卡片增减会改变光源集合，必须重绘一次（原逻辑依赖 300ms 轮询兜底）；
+      // 代数 +1 让所有面板缓冲失效——复用窗口放宽后，光靠重绘调度拦不住旧配色滞留
+      ST.bufGen += 1;
       schedule("full");
     }
     if (toolbarMoved) {
@@ -499,9 +528,7 @@ export function start(): void {
   schedule();
   // HMR/刷新后 DOM 可能晚于模块初始化：分几拍再全量采样，
   // 避免“要滚动一下才开始染色”。
-  [80, 220, 500].forEach((ms) =>
-    window.setTimeout(() => schedule("full"), ms),
-  );
+  [80, 220, 500].forEach((ms) => window.setTimeout(() => schedule("full"), ms));
 }
 
 export function stop(): void {
@@ -522,12 +549,20 @@ export function stop(): void {
   window.clearTimeout(ST.themePaintTimer);
   ST.themePaintTimer = 0;
   ST.viewAnimUntil = 0;
+  ST.toolAnimUntil = 0;
+  ST.prevBaseOrigin = null;
+  ST.prevToolOrigin = null;
+  ST.prevBaseDirty = null;
+  ST.prevToolDirty = null;
   ST.themeObserver?.disconnect();
   ST.themeObserver = null;
   ST.layoutObserver?.disconnect();
   ST.layoutObserver = null;
   ST.colorCache = new WeakMap();
   ST.panelBuffers = new WeakMap();
+  ST.paintCache.clear();
+  ST.csCache.clear();
+  ST.rootColorCache.clear();
   ST.canvas?.remove();
   ST.canvas = null;
   ST.ctx = null;
