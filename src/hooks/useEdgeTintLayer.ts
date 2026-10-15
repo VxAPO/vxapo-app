@@ -11,7 +11,7 @@ import { startAuto, stopAuto } from "../lib/edgetint/targets";
  * 边缘染色总开关（排查帧率用）：false = 整层染色不启动——不扫描目标、
  * 不建画布、不跑渲染循环。HMR 热生效（旧实例 cleanup 会把已建的层拆掉）。
  */
-const EDGE_TINT_ENABLED = false;
+const EDGE_TINT_ENABLED = true;
 
 /**
  * 边缘染色入口（决策 5 阶段 B：生命周期化）。
