@@ -18,8 +18,8 @@ import type { LightSet } from "./primitives";
 import { ST } from "./state";
 import type { PanelBuffer } from "./state";
 import { csOf } from "./state";
+import { canvas2dRaster } from "./raster";
 import { ensureCanvas } from "./canvasPool";
-import { drawPanel } from "./tint";
 import { collectCards, refreshCardNodes } from "./targets";
 
 /**
@@ -171,7 +171,8 @@ export function renderToPanelBuffer(
   buf.sk.clearRect(0, 0, buf.sc.width, buf.sc.height);
   buf.sk.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
   const d0 = performance.now();
-  drawPanel(el, buf.k, buf.sk, cards, frameScale);
+  // 经栅格后端接缝调用（Step1：行为零变化；Step2 可替换后端）
+  (ST.raster ?? canvas2dRaster).drawPanel(el, buf.k, buf.sk, cards, frameScale);
   const drawMs = performance.now() - d0;
   ST.stats.drawLast = drawMs;
   ST.stats.draws += 1;

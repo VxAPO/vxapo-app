@@ -5,6 +5,7 @@
 // 只有对象属性（`ST.x = …`）才能被 tint / renderLoop / targets / canvasPool 共享。
 import type { ColorSource, Rgb } from "./geometry";
 import type { CardNode, InnerState } from "./primitives";
+import type { TintRaster } from "./raster";
 
 /** 一个画布面板的复用缓冲（原 `PanelBuffer`）。 */
 export type PanelBuffer = {
@@ -113,6 +114,8 @@ export interface EdgeTintState {
    * 与上帧完全一致，跳过 clear+重贴（不向 GPU 重传未变纹理）。
    */
   lastFullRender: { base: number; tool: number };
+  /** 栅格后端（Step1 接缝，缺省 canvas2d；Step2 可替换为 WebGL）。 */
+  raster: TintRaster | null;
 }
 
 /**
@@ -190,6 +193,7 @@ export const ST: EdgeTintState = {
   scanSig: "",
   autoRefCount: 0,
   lastFullRender: { base: 0, tool: 0 },
+  raster: null,
   stats: {
     paintLast: 0,
     drawLast: 0,
