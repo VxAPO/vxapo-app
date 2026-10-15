@@ -135,18 +135,16 @@ export function renderToPanelBuffer(
    */
   const now = performance.now();
   const slide = now < ST.viewAnimUntil;
-  // 滚动期重画节奏 = 时间窗 140ms（≈7 次/秒）：权衡曲线实测——旧「每 3 帧」
-  // 节奏（≈28/s）滚动 p95=55ms/尖峰78，140ms 窗口 p95=17ms/中位 357fps，
-  // 配色滞后上限140ms（与历史上工具栏滚动期发布的140ms窗口同语义，观感已验证可接受）。
-  // 根因：尖峰∝混合层纹理更新事件频率（关模糊/降超采样均无效，longtask 恒为0
-  // ——成本在 GPU/合成侧的层更新，不在画的内容）。
-  // __vxWin/__vxMax 运行时旋钮保留，便于个人偏好微调。
+  // 重画节奏 = 旧节奏（每 3 帧/100ms 窗口，配色最新鲜）：GL 栅格后把单次
+  // 全量重画的成本压没之后，旧节奏在 60卡/646px 滚动实测 p50=3.4ms
+  // p95=11.7ms、>34ms 帧=0（此前 canvas2d 同场景 p95=55/尖峰78）——
+  // 「新鲜+顺滑」不再互斥，无需缩频折衷。__vxWin/__vxMax 旋钮保留。
   const win =
     (globalThis as { __vxWin?: number }).__vxWin ??
-    (slide ? PANEL_REUSE_MOTION_MS : ST.scrollingNow ? 140 : PANEL_REUSE_MS);
+    (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS);
   const maxReuse =
     (globalThis as { __vxMax?: number }).__vxMax ??
-    (slide || ST.scrollingNow ? Infinity : PANEL_REUSE_MAX);
+    (slide ? Infinity : PANEL_REUSE_MAX);
   if (
     buf.at > 0 &&
     buf.gen === ST.bufGen &&
@@ -169,12 +167,13 @@ export function renderToPanelBuffer(
   buf.sk.clearRect(0, 0, buf.sc.width, buf.sc.height);
   buf.sk.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
   const d0 = performance.now();
-  // 栅格后端选择：Step2 起工具栏走 WebGL 原型（__vxGLTool=false 可关），
-  // 基础面板仍走 canvas2d；ST.raster 可整体覆盖（测试用）。
+  // 栅格后端选择：Step2 起工具栏走 WebGL（__vxGLTool=false 关）；Step3a 起
+  // 基础面板也走（__vxGLBase=false 关）。ST.raster 可整体覆盖（测试用）。
+  const g = globalThis as { __vxGLTool?: boolean; __vxGLBase?: boolean };
   const raster =
     ST.raster ??
-    (kind === "tool" &&
-    (globalThis as { __vxGLTool?: boolean }).__vxGLTool !== false
+    ((kind === "tool" && g.__vxGLTool !== false) ||
+    (kind === "base" && g.__vxGLBase !== false)
       ? glTintRaster
       : canvas2dRaster);
   raster.drawPanel(el, buf.k, buf.sk, cards, frameScale);
