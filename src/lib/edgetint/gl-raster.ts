@@ -26,6 +26,7 @@ import {
   MENISCUS_HALO_WIDTH,
   MENISCUS_WIDTH,
   PANEL_PAD,
+  ringPoints,
 } from "./geometry";
 import { samplePanel, rasterPanel2d } from "./tint";
 import type { TintRaster } from "./raster";
@@ -43,13 +44,16 @@ varying float vHalf;
 varying float vAlpha;
 varying vec3 vRgb;
 varying vec2 vPos;
+// 像素 → NDC：x' = x*(2/W)-1，y' = 1-y*(2/H)（y 轴翻转）
+uniform vec2 uScale;
+uniform vec2 uOff;
 void main() {
   vSd = aSd;
   vHalf = aHalf;
   vAlpha = aAlpha;
   vRgb = aRgb;
   vPos = aPos;
-  gl_Position = vec4(aPos, 0.0, 1.0);
+  gl_Position = vec4(aPos * uScale + uOff, 0.0, 1.0);
 }`;
 
 const FS = `
@@ -120,14 +124,22 @@ function ensureGl(): WebGLRenderingContext | null {
     const sh = g.createShader(type)!;
     g.shaderSource(sh, src);
     g.compileShader(sh);
+    if (!g.getShaderParameter(sh, g.COMPILE_STATUS)) {
+      console.error("[edgeTint/gl] shader 编译失败:", g.getShaderInfoLog(sh));
+    }
     return sh;
   };
   prog = g.createProgram()!;
   g.attachShader(prog, compile(g.VERTEX_SHADER, VS));
   g.attachShader(prog, compile(g.FRAGMENT_SHADER, FS));
   g.linkProgram(prog);
+  if (!g.getProgramParameter(prog, g.LINK_STATUS)) {
+    console.error("[edgeTint/gl] 程序链接失败:", g.getProgramInfoLog(prog));
+  }
   buf = g.createBuffer();
   locs = {
+    uScale: g.getUniformLocation(prog, "uScale"),
+    uOff: g.getUniformLocation(prog, "uOff"),
     uSigma: g.getUniformLocation(prog, "uSigma"),
     uClipUse: g.getUniformLocation(prog, "uClipUse"),
     uClipRect: g.getUniformLocation(prog, "uClipRect"),
@@ -147,13 +159,17 @@ function buildStrip(
   dpr: number,
   ox: number,
   oy: number,
-): Float32Array {
+): { data: Float32Array; segs: Array<{ start: number; count: number }> } {
   const verts: number[] = [];
+  const segs: Array<{ start: number; count: number }> = [];
   const n = pts.length;
-  // 按 brk 切段：段内才共享切线
+  // 按 brk 切段：段内才共享切线；每段独立 drawArrays(TRIANGLE_STRIP)，
+  // 避免跨段连接出垃圾四边形（TRIANGLES 拓扑与条带数据不匹配=几何全乱）。
   let segStart = 0;
   const flush = (s: number, e: number) => {
     if (e - s < 1) return;
+    const startVertex = verts.length / STRIDE;
+    let count = 0;
     for (let i = s; i <= e; i++) {
       const p = pts[i];
       const prev = pts[Math.max(s, i - 1)];
@@ -185,19 +201,21 @@ function buildStrip(
         rgb[1],
         rgb[2],
       );
-      // 右沿 (-1)
+      // 右沿 (-1)：符号距离必须是 -ext（曾误写 +ext，整条带 sd 恒正 → 全部 discard）
       verts.push(
         px - nx * ext,
         py - ny * ext,
         -1,
-        ext,
+        -ext,
         half,
         a,
         rgb[0],
         rgb[1],
         rgb[2],
       );
+      count += 2;
     }
+    if (count >= 3) segs.push({ start: startVertex, count });
   };
   for (let i = 0; i < n; i++) {
     if (pts[i].brk && i > segStart) {
@@ -206,7 +224,7 @@ function buildStrip(
     }
   }
   flush(segStart, n - 1);
-  return new Float32Array(verts);
+  return { data: new Float32Array(verts), segs };
 }
 
 function drawBand(
@@ -224,8 +242,8 @@ function drawBand(
     if (a > maxA) maxA = a;
   }
   if (maxA <= 0.003) return;
-  const data = buildStrip(band.pts, band, dpr, ox, oy);
-  if (!data.length) return;
+  const { data, segs } = buildStrip(band.pts, band, dpr, ox, oy);
+  if (!segs.length) return;
   g.bindBuffer(g.ARRAY_BUFFER, buf!);
   g.bufferData(g.ARRAY_BUFFER, data, g.DYNAMIC_DRAW);
   const B = STRIDE * 4;
@@ -246,12 +264,196 @@ function drawBand(
   g.uniform1f(locs.uClipUse, band.clip ? 1 : 0);
   g.uniform4f(locs.uClipRect, clipRect.x, clipRect.y, clipRect.w, clipRect.h);
   g.uniform1f(locs.uClipRadius, clipRect.r);
-  g.drawArrays(g.TRIANGLES, 0, data.length / STRIDE);
+  for (const seg of segs) {
+    g.drawArrays(g.TRIANGLE_STRIP, seg.start, seg.count);
+  }
+  // 调试追踪（__vxGLTrace 数组存在时）：逐带记录 GL 错误码与规模
+  {
+    const t = (globalThis as { __vxGLTrace?: unknown[] }).__vxGLTrace;
+    if (t)
+      t.push({
+        op: "band",
+        err: g.getError(),
+        segs: segs.length,
+        verts: data.length / STRIDE,
+        v0: Array.from(data.subarray(0, 9)),
+      });
+  }
 }
 
 /**
  * 栅格入口（TintRaster）：采样（语义共用）→ 条带绘制 → blit 进 PanelBuffer。
  */
+/** 调试回放：用真实条带管线画一个合成矩形环并读回（隔离 数据 vs 绘制路径）。 */
+export function __glReplay(): {
+  nzStripHard: number;
+  nzStrip: number;
+  nzTri: number;
+  err: number;
+  segs: number;
+  v0: number[];
+} | null {
+  const g = ensureGl();
+  if (!g || !prog) return null;
+  const gw = (glCanvas!.width = 256);
+  const gh = (glCanvas!.height = 128);
+  g.viewport(0, 0, gw, gh);
+  g.useProgram(prog);
+  g.uniform2f(locs.uScale, 2 / gw, -2 / gh);
+  g.uniform2f(locs.uOff, -1, 1);
+  g.clearColor(0, 0, 0, 0);
+  g.clear(g.COLOR_BUFFER_BIT);
+  // 合成矩形环（借 ringPoints 造点集）
+  const pts = ringPoints(20, 20, 236, 108, 12);
+  const band: Band = {
+    pts,
+    widthAt: () => 3,
+    alphaAt: () => 1,
+    colorAt: () => ({ r: 255, g: 128, b: 32 }),
+    sigma: 0.3,
+    clip: false,
+  };
+  const { data, segs } = buildStrip(pts, band, 1, 0, 0);
+  const setupAttrs = () => {
+    g.bindBuffer(g.ARRAY_BUFFER, buf!);
+    g.bufferData(g.ARRAY_BUFFER, data, g.DYNAMIC_DRAW);
+    const B = STRIDE * 4;
+    const attr = (name: string, size: number, off: number) => {
+      const loc = g.getAttribLocation(prog!, name);
+      if (loc >= 0) {
+        g.enableVertexAttribArray(loc);
+        g.vertexAttribPointer(loc, size, g.FLOAT, false, B, off);
+      }
+    };
+    attr("aPos", 2, 0);
+    attr("aEdge", 1, 8);
+    attr("aSd", 1, 12);
+    attr("aHalf", 1, 16);
+    attr("aAlpha", 1, 20);
+    attr("aRgb", 3, 24);
+  };
+  const readNz = () => {
+    const px = new Uint8Array(gw * gh * 4);
+    g.readPixels(0, 0, gw, gh, g.RGBA, g.UNSIGNED_BYTE, px);
+    let nz = 0;
+    for (let i = 3; i < px.length; i += 4) if (px[i] !== 0) nz++;
+    return nz;
+  };
+  g.uniform1f(locs.uSigma, Math.max(0.01, band.sigma));
+  g.uniform1f(locs.uClipUse, 0);
+  g.uniform4f(locs.uClipRect, 0, 0, 0, 0);
+  g.uniform1f(locs.uClipRadius, 0);
+  // ① 硬编码条带（自检同款数值 + STRIP 拓扑 + 4 顶点）
+  const stripData = new Float32Array([
+    10, 10, 1, 2, 4, 1, 1, 0, 0,
+    50, 10, -1, 2, 4, 1, 1, 0, 0,
+    10, 50, 1, 2, 4, 1, 1, 0, 0,
+    50, 50, -1, 2, 4, 1, 1, 0, 0,
+  ]);
+  g.bindBuffer(g.ARRAY_BUFFER, buf!);
+  g.bufferData(g.ARRAY_BUFFER, stripData, g.DYNAMIC_DRAW);
+  {
+    const B = STRIDE * 4;
+    const attr = (name: string, size: number, off: number) => {
+      const loc = g.getAttribLocation(prog!, name);
+      if (loc >= 0) {
+        g.enableVertexAttribArray(loc);
+        g.vertexAttribPointer(loc, size, g.FLOAT, false, B, off);
+      }
+    };
+    attr("aPos", 2, 0);
+    attr("aEdge", 1, 8);
+    attr("aSd", 1, 12);
+    attr("aHalf", 1, 16);
+    attr("aAlpha", 1, 20);
+    attr("aRgb", 3, 24);
+  }
+  g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+  const nzStripHard = readNz();
+  g.clear(g.COLOR_BUFFER_BIT);
+  // ② buildStrip 数据 + 条带拓扑
+  setupAttrs();
+  const first = segs[0];
+  g.drawArrays(g.TRIANGLE_STRIP, first.start, first.count);
+  const nzStrip = readNz();
+  g.clear(g.COLOR_BUFFER_BIT);
+  // ② 三角形拓扑（同一份前3顶点）
+  g.drawArrays(g.TRIANGLES, 0, 3);
+  const nzTri = readNz();
+  const err = g.getError();
+  return {
+    nzStripHard,
+    nzStrip,
+    nzTri,
+    err,
+    segs: segs.length,
+    v0: Array.from(data.subarray(0, 27)),
+  };
+}
+
+/** 调试：把共享 GL 画布贴到页面上（截图用），用完调 __glDetachDebug 移除。 */
+export function __glAttachDebug(): number {
+  if (!glCanvas) return -1;
+  glCanvas.style.cssText = `position:fixed;left:0;top:0;width:${glCanvas.width}px;height:${glCanvas.height}px;z-index:99999;opacity:0.6;outline:4px solid red;`;
+  if (!glCanvas.parentElement) document.body.appendChild(glCanvas);
+  return glCanvas.width * 10000 + glCanvas.height;
+}
+export function __glDetachDebug(): void {
+  glCanvas?.remove();
+}
+
+/** 调试自检：用真实 program/blend 画一个硬编码 NDC 三角形并读回非空像素。 */
+export function __glSelfTest(): {
+  nz: number;
+  err: number;
+  gw: number;
+  gh: number;
+} | null {
+  const g = ensureGl();
+  if (!g || !prog) return null;
+  const gw = glCanvas!.width || 64;
+  const gh = glCanvas!.height || 64;
+  g.viewport(0, 0, gw, gh);
+  g.useProgram(prog);
+  g.uniform2f(locs.uScale, 2 / gw, -2 / gh);
+  g.uniform2f(locs.uOff, -1, 1);
+  g.uniform1f(locs.uSigma, 0.5);
+  g.uniform1f(locs.uClipUse, 0);
+  g.uniform4f(locs.uClipRect, 0, 0, 0, 0);
+  g.uniform1f(locs.uClipRadius, 0);
+  g.clearColor(0, 0, 0, 0);
+  g.clear(g.COLOR_BUFFER_BIT);
+  // 覆盖画布左下角区域的直角三角形
+  const data = new Float32Array([
+    2, gh - 2, 1, 2, 4, 1, 1, 0, 0,
+    gw - 2, gh - 2, 1, 2, 4, 1, 0, 1, 0,
+    2, 2, 1, 2, 4, 1, 0, 0, 1,
+  ]);
+  g.bindBuffer(g.ARRAY_BUFFER, buf!);
+  g.bufferData(g.ARRAY_BUFFER, data, g.DYNAMIC_DRAW);
+  const B = STRIDE * 4;
+  const attr = (name: string, size: number, off: number) => {
+    const loc = g.getAttribLocation(prog!, name);
+    if (loc >= 0) {
+      g.enableVertexAttribArray(loc);
+      g.vertexAttribPointer(loc, size, g.FLOAT, false, B, off);
+    }
+  };
+  attr("aPos", 2, 0);
+  attr("aEdge", 1, 8);
+  attr("aSd", 1, 12);
+  attr("aHalf", 1, 16);
+  attr("aAlpha", 1, 20);
+  attr("aRgb", 3, 24);
+  g.drawArrays(g.TRIANGLES, 0, 3);
+  const err = g.getError();
+  const px = new Uint8Array(gw * gh * 4);
+  g.readPixels(0, 0, gw, gh, g.RGBA, g.UNSIGNED_BYTE, px);
+  let nz = 0;
+  for (let i = 3; i < px.length; i += 4) if (px[i] !== 0) nz++;
+  return { nz, err, gw, gh };
+}
+
 export const glTintRaster: TintRaster = {
   id: "webgl",
   drawPanel(el, ctx2, shadeCtx2, cards, frameScale) {
@@ -283,15 +485,20 @@ export const glTintRaster: TintRaster = {
     if (glCanvas!.width !== gw) glCanvas!.width = gw;
     if (glCanvas!.height !== gh) glCanvas!.height = gh;
     g.viewport(0, 0, gw, gh);
+    g.useProgram(prog);
     g.clearColor(0, 0, 0, 0);
     g.clear(g.COLOR_BUFFER_BIT);
+    // 像素→NDC 变换（y 翻转）：每次按画布尺寸设置
+    g.uniform2f(locs.uScale, 2 / gw, -2 / gh);
+    g.uniform2f(locs.uOff, -1, 1);
     const ox = rect.left - PANEL_PAD;
     const oy = rect.top - PANEL_PAD;
+    // 片元侧 sdRoundRect 语义：xy = 中心，zw = 半尺寸
     const clipRect = {
-      x: PANEL_PAD * dpr,
-      y: PANEL_PAD * dpr,
-      w: rect.width * dpr,
-      h: rect.height * dpr,
+      x: PANEL_PAD * dpr + (rect.width * dpr) / 2,
+      y: PANEL_PAD * dpr + (rect.height * dpr) / 2,
+      w: (rect.width * dpr) / 2,
+      h: (rect.height * dpr) / 2,
       r: corner * dpr,
     };
     const darkRgb = rootColorCached("edgeShade", edgeShadeRgb);
@@ -346,6 +553,18 @@ export const glTintRaster: TintRaster = {
       },
     ];
     for (const band of glowBands) drawBand(g, band, dpr, ox, oy, clipRect);
+    g.flush();
+    // 调试探针（提前到 blit 前）：确认条带绘制是否真的产生像素
+    {
+      const t = (globalThis as { __vxGLTrace?: unknown[] }).__vxGLTrace;
+      if (t) {
+        const px = new Uint8Array(gw * gh * 4);
+        g.readPixels(0, 0, gw, gh, g.RGBA, g.UNSIGNED_BYTE, px);
+        let nz = 0;
+        for (let i = 3; i < px.length; i += 4) if (px[i] !== 0) nz++;
+        t.push({ op: "preBlitReadback", nz, gw, gh });
+      }
+    }
     ctx2.drawImage(
       glCanvas!,
       0,
@@ -357,6 +576,25 @@ export const glTintRaster: TintRaster = {
       w,
       h,
     );
+    // 调试探针：blit 前读回 GL 画布，确认 glow 内容是否真实存在
+    {
+      const t = (globalThis as { __vxGLTrace?: unknown[] }).__vxGLTrace;
+      if (t) {
+        const px = new Uint8Array(gw * gh * 4);
+        g.readPixels(0, 0, gw, gh, g.RGBA, g.UNSIGNED_BYTE, px);
+        let nz = 0;
+        for (let i = 3; i < px.length; i += 4) if (px[i] !== 0) nz++;
+        t.push({
+          op: "glowReadback",
+          nz,
+          gw,
+          gh,
+          scale: Array.from(g.getUniform(prog!, locs.uScale!) as Float32Array),
+          off: Array.from(g.getUniform(prog!, locs.uOff!) as Float32Array),
+          progOk: g.getParameter(g.CURRENT_PROGRAM) === prog,
+        });
+      }
+    }
     // ── dark 层（清屏后单独一轮）──
     g.clear(g.COLOR_BUFFER_BIT);
     const darkBand: Band = {
