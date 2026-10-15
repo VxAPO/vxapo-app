@@ -81,7 +81,10 @@ void main() {
   float cover = clamp((vHalf + 0.75 - d) / 1.5, 0.0, 1.0);
   float a = vAlpha * body * cover;
   if (a <= 0.003) discard;
-  gl_FragColor = vec4(vRgb, a);
+  // 预乘输出：配合 blendFunc(ONE, ONE_MINUS_SRC_ALPHA) 与 premultipliedAlpha:true。
+  // 曾用非预乘 + (SRC_ALPHA, ONE_MINUS_SRC_ALPHA)：alpha 通道被同样混合成 a²，
+  // 颜色再被浏览器乘一次 alpha → 层内容又黑又淡（maxA 15/255）不可见。
+  gl_FragColor = vec4(vRgb * a, a);
 }`;
 
 interface Band {
@@ -113,7 +116,7 @@ function ensureGl(): WebGLRenderingContext | null {
   }
   const g = glCanvas.getContext("webgl", {
     alpha: true,
-    premultipliedAlpha: false,
+    premultipliedAlpha: true,
     preserveDrawingBuffer: true,
     antialias: false,
   });
@@ -146,7 +149,8 @@ function ensureGl(): WebGLRenderingContext | null {
     uClipRadius: g.getUniformLocation(prog, "uClipRadius"),
   };
   g.enable(g.BLEND);
-  g.blendFunc(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA);
+  // 预乘 alpha 的标准 over：多条带在同一画布上依次叠加也语义正确
+  g.blendFunc(g.ONE, g.ONE_MINUS_SRC_ALPHA);
   return g;
 }
 
