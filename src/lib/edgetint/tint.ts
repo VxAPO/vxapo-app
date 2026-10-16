@@ -345,9 +345,10 @@ export function samplePanel(
     ? Math.max(0, Math.min(1, parseFloat(cs.opacity) || 0))
     : 1;
   const glowAlpha = 1;
-  // movingTool（快照跟随）：滚动中，或工具栏画布本次重画时元素刚移动
-  //（框选移动）——两种情况位置都在连续变化，染色慢收敛只会拖尾。
-  const movingTool = tool && (ST.scrollingNow || ST.toolMoving);
+  // movingTool（快照跟随）：仅滚动中——滚动期工具栏与光源相对几何不变，
+  // 染色无真实变化，快照只是防御。框选飞行动画**不走**快照（位置在动但
+  // 背景在变，需要0.3 平滑插值——快照曾让它以100ms 顿挫硬跳）。
+  const movingTool = tool && ST.scrollingNow;
   // 按时间推进：frameScale=1（正常 33ms 补帧）时与原常数逐字等价；
   // 复用跳帧时按经过的步数放大，保证褪色总时长不变（只是步数更少、每步更大）。
   const scale = Math.max(1, frameScale);

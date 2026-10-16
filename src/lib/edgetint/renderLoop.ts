@@ -117,15 +117,14 @@ export function renderToPanelBuffer(
     buf = { c, k, sc, sk, at: 0, reused: 0, x, y, w, h, dpr, gen: 0 };
     ST.panelBuffers.set(el, buf);
   }
-  // 元素自上次渲染是否移动（工具栏随框选移动）：移动中的工具栏环带
-  // 染色走 movingTool 快照直接跟随——否则停下后还要 ~300ms 慢收敛，
-  // 「停住再变亮」残留在描边染色上的根因。
-  const moved =
-    buf.at > 0 && (Math.abs(buf.x - x) > 0.5 || Math.abs(buf.y - y) > 0.5);
   // 假移动（滚动平移）不触发重画：滚动时面板/工具栏与光源的相对几何
   // 不变，缓冲像素本来就是对的——位移由混合层画布的 translate 补偿
   //（guardTick 假移动守卫）。只有真实变化（fading/bufGen/选中/主题）
   // 才走重画。
+  // 注：曾按「元素自上次渲染移动过」给工具栏染色做移动快照（fadeK=1
+  // 硬跳）——那是「停住再变亮」成因未明时代的补丁；真因（防抖+补偿
+  // 失效）修掉后，快照反而让框选飞行动画期间颜色以100ms 顿挫硬跳
+  //（快照清收敛标志→踢回复用窗）。已撤，飞行期间恢复0.3 平滑插值。
   // 贴回位置每帧按当前 rect 计算：像素锚定元素，复用/重画两条路径都用它
   buf.x = x;
   buf.y = y;
@@ -223,7 +222,6 @@ export function renderToPanelBuffer(
     (kind === "base" && g.__vxGLBase !== false)
       ? glTintRaster
       : canvas2dRaster);
-  ST.toolMoving = kind === "tool" && moved;
   raster.drawPanel(el, buf.k, buf.sk, cards, frameScale);
   const drawMs = performance.now() - d0;
   ST.stats.drawLast = drawMs;

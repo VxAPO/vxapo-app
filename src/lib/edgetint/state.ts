@@ -79,8 +79,6 @@ export interface EdgeTintState {
    * 过渡以 ~100ms 粒度跳变（frameScale 补偿单步 3 倍），观感「一段一段」。
    */
   fading: WeakSet<HTMLElement>;
-  /** 工具栏画布本次重画时元素刚移动过：环带染色快照跟随（movingTool） */
-  toolMoving: boolean;
   /** 每块混合层画布上次重定位时的滚动位置：假移动补偿的基准（画布追平移） */
   paintedScroll: WeakMap<HTMLCanvasElement, { left: number; top: number }>;
   /** 最近一次工具栏 blit 的锚点（画布原点 + 工具栏位置）：领先帧探针用 */
@@ -186,7 +184,6 @@ export const ST: EdgeTintState = {
   scrollingNow: false,
   fadePending: false,
   fading: new WeakSet<HTMLElement>(),
-  toolMoving: false,
   paintedScroll: new WeakMap<HTMLCanvasElement, { left: number; top: number }>(),
   toolAnchor: null,
   guardRaf: 0,
