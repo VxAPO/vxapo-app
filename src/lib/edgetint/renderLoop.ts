@@ -16,7 +16,7 @@ import {
   visibleRectOf,
 } from "./primitives";
 import type { LightSet } from "./primitives";
-import { ST, rawRectOf } from "./state";
+import { ST } from "./state";
 import type { PanelBuffer } from "./state";
 
 // 面板重画相位（滚动期把 fading 面板分散到3个相位错峰重画）：
@@ -78,7 +78,7 @@ export function renderToPanelBuffer(
   cards: LightSet,
   kind: "base" | "tool",
 ): PanelBuffer | null {
-  const rect = rawRectOf(el);
+  const rect = el.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return null;
   const PAD = PANEL_PAD;
   const x = rect.left - PAD;
@@ -122,12 +122,10 @@ export function renderToPanelBuffer(
   // 「停住再变亮」残留在描边染色上的根因。
   const moved =
     buf.at > 0 && (Math.abs(buf.x - x) > 0.5 || Math.abs(buf.y - y) > 0.5);
-  // 工具栏在滚动/移动中必须逐 paint 重画：movingTool 快照让染色瞬时
-  // 收敛 → fading 标志保持 false → 复用窗重新生效 → 采样被压到
-  // ~10-20Hz 大跳——「滚动时描边抖动、慢半拍」的根因。快照与复用
-  // 互斥：快照生效期间禁止复用。
-  const toolMovingNow =
-    kind === "tool" && (ST.scrollingNow || moved) && buf.at > 0;
+  // 假移动（滚动平移）不触发重画：滚动时面板/工具栏与光源的相对几何
+  // 不变，缓冲像素本来就是对的——位移由混合层画布的 translate 补偿
+  //（guardTick 假移动守卫）。只有真实变化（fading/bufGen/选中/主题）
+  // 才走重画。
   // 贴回位置每帧按当前 rect 计算：像素锚定元素，复用/重画两条路径都用它
   buf.x = x;
   buf.y = y;
@@ -182,12 +180,10 @@ export function renderToPanelBuffer(
     ? FADE_FRAME_MS +
       (ST.scrollingNow ? (elHash(el) % 3) * 17 : 0)
     : 0;
-  const win = toolMovingNow
-    ? 0
-    : wasFading
-      ? wasFadingWin
-      : ((globalThis as { __vxWin?: number }).__vxWin ??
-        (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS));
+  const win = wasFading
+    ? wasFadingWin
+    : ((globalThis as { __vxWin?: number }).__vxWin ??
+      (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS));
   const maxReuse =
     wasFading
       ? Number.POSITIVE_INFINITY
@@ -335,8 +331,8 @@ export function paintLayerPair(
       // 注意：不能引用裸 `toolbar`——TS 会解析成 legacy 的 window.toolbar
       //（恒为真），历史上裁剪分支因此对所有元素执行。按元素真实判断。
       const toolbar = isToolbar(el);
-      const r = rawRectOf(el);
-      const clipped = visibleRectOf(el, 32, r);
+      const r = el.getBoundingClientRect();
+      const clipped = visibleRectOf(el, 32);
       const pl = Math.max(0, r.left - 32);
       const pt = Math.max(0, r.top - 32);
       const prr = Math.min(window.innerWidth, r.right + 32);
@@ -384,46 +380,57 @@ export function paintLayerPair(
       sk.drawImage(buf.sc, buf.x, buf.y, buf.w, buf.h);
       sk.globalAlpha = 1;
       if (toolbar) sk.restore();
-      if (toolbar) {
-        // 记录本次已绘位置并解除钉住——解除与画布更新在同一任务内，
-        // 工具栏本体与它的画布在同一帧提交（「等画完再一起动」）
-        const p = ST.pinned.get(el);
-        if (p) {
-          el.style.translate = "";
-          ST.pinned.delete(el);
-        }
-        ST.toolPaintedRect = { x: r.left, y: r.top };
-      }
     }
   });
+  // 假移动补偿折算基准：本层两块画布刚在本任务内重定位+重贴——
+  // 清掉补偿 translate 并记录当前滚动位置，守卫从这里重新累计
+  const sc0 = scrollContainerOf();
+  const base = sc0 ? { left: sc0.scrollLeft, top: sc0.scrollTop } : null;
+  for (const cv of [c, sc]) {
+    cv.style.translate = "";
+    if (base) ST.paintedScroll.set(cv, base);
+    else ST.paintedScroll.delete(cv);
+  }
 }
 
-// 工具栏钉住守卫：工具栏位置一旦偏离上次已绘位置（滚动/框选移动），
-// 先用 translate 把它视觉钉回已绘位置、排一次工具栏重画；重画完成时
-// 在同一任务内解除钉住——本体与画布永远同帧移动，不再出现「画布慢
-// 一拍」。只作用于工具栏本体，整页滚动完全不干预。
+// ── 假移动补偿（用户方案）─────────────────────────────────────────
+// 滚动时工具栏/面板与卡片的相对位置不变，离屏缓冲像素本来就是对的；
+// 唯一变化是绝对位置——纯平移（假移动），不应触发任何重画。守卫每帧
+// 把「当前滚动位置 − 画布已绘时的滚动位置」作为 translate 写到混合层
+// 画布上：与 DOM 同帧合成，零重画、零延迟；真实光源变化照旧走重画，
+// 重画完成时折算归零。
+function scrollContainerOf(): HTMLElement | null {
+  for (const el of ST.targets) {
+    let p: HTMLElement | null = el.parentElement;
+    while (p) {
+      if (
+        p.scrollHeight > p.clientHeight + 8 &&
+        /auto|scroll/.test(getComputedStyle(p).overflowY)
+      ) {
+        return p;
+      }
+      p = p.parentElement;
+    }
+  }
+  return null;
+}
+
 function guardTick(): void {
   ST.guardRaf = 0;
   if (!ST.running) return;
-  const painted = ST.toolPaintedRect;
-  if (painted) {
-    for (const el of ST.targets) {
-      if (!isToolbar(el)) continue;
-      const p = ST.pinned.get(el);
-      const dx0 = p ? p.dx : 0;
-      const dy0 = p ? p.dy : 0;
-      const g = el.getBoundingClientRect();
-      const realX = g.left - dx0;
-      const realY = g.top - dy0;
-      const offX = realX - painted.x;
-      const offY = realY - painted.y;
-      if (Math.abs(offX) > 1 || Math.abs(offY) > 1) {
-        const dx = painted.x - realX;
-        const dy = painted.y - realY;
-        el.style.translate = `${dx}px ${dy}px`;
-        ST.pinned.set(el, { dx, dy });
-        schedule("tool");
-      }
+  const sc = scrollContainerOf();
+  if (sc) {
+    for (const cv of [ST.canvas, ST.shadeCanvas, ST.toolCanvas, ST.toolShadeCanvas]) {
+      if (!cv) continue;
+      const base = ST.paintedScroll.get(cv);
+      if (!base) continue;
+      const dx = sc.scrollLeft - base.left;
+      const dy = sc.scrollTop - base.top;
+      const t =
+        Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5
+          ? `translate(${dx}px, ${dy}px)`
+          : "";
+      if (cv.style.translate !== t) cv.style.translate = t;
     }
   }
   ST.guardRaf = requestAnimationFrame(guardTick);

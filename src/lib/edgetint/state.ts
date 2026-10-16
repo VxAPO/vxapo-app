@@ -81,13 +81,9 @@ export interface EdgeTintState {
   fading: WeakSet<HTMLElement>;
   /** 工具栏画布本次重画时元素刚移动过：环带染色快照跟随（movingTool） */
   toolMoving: boolean;
-  /** 工具栏钉住位移：视觉冻结在上次已绘位置，画布跟上后同帧解除
-   *（「工具栏本体等它自己的画布渲染完再一起动」——只钉工具栏，
-   * 整页滚动完全不干预） */
-  pinned: WeakMap<HTMLElement, { dx: number; dy: number }>;
-  /** 上次完成 paint 时工具栏的原始（未钉住）位置 */
-  toolPaintedRect: { x: number; y: number } | null;
-  /** 钉住守卫循环的 rAF id */
+  /** 每块混合层画布上次重定位时的滚动位置：假移动补偿的基准（画布追平移） */
+  paintedScroll: WeakMap<HTMLCanvasElement, { left: number; top: number }>;
+  /** 假移动补偿守卫循环的 rAF id */
   guardRaf: number;
   /**
    * 结构代数：卡片增减/视图舞台切换等配色源集合变化时 +1。
@@ -185,8 +181,7 @@ export const ST: EdgeTintState = {
   fadePending: false,
   fading: new WeakSet<HTMLElement>(),
   toolMoving: false,
-  pinned: new WeakMap<HTMLElement, { dx: number; dy: number }>(),
-  toolPaintedRect: null,
+  paintedScroll: new WeakMap<HTMLCanvasElement, { left: number; top: number }>(),
   guardRaf: 0,
   bufGen: 1,
   paintCache: new Map<HTMLElement, PaintCacheEntry>(),
@@ -226,15 +221,6 @@ export const ST: EdgeTintState = {
     blurSum: 0,
   },
 };
-
-/** 目标元素的「原始」位置：钉住期间 gBCR 含补偿位移，这里减回来——
- * 采样/绘制一律用原始位置，视觉冻结只作用于合成层。 */
-export function rawRectOf(el: HTMLElement): DOMRect {
-  const r = el.getBoundingClientRect();
-  const p = ST.pinned.get(el);
-  if (!p) return r;
-  return new DOMRect(r.left - p.dx, r.top - p.dy, r.width, r.height);
-}
 
 /**
  * 同一帧内的 getComputedStyle 缓存：paint() 入口整体清空。

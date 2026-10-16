@@ -140,19 +140,13 @@ export function isToolbar(el: HTMLElement): boolean {
 }
 
 /** 经过所有 overflow 祖先裁切后的可见矩形。 */
-export function visibleRectOf(
-  el: HTMLElement,
-  pad = 0,
-  rectOverride?: DOMRect,
-): {
+export function visibleRectOf(el: HTMLElement, pad = 0): {
   left: number;
   top: number;
   w: number;
   h: number;
 } {
-  // rectOverride：钉住期间调用方传入「原始」rect（rawRectOf），
-  // 本原语保持零状态、不感知钉住机制
-  const rect = rectOverride ?? el.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
   let left = rect.left - pad;
   let top = rect.top - pad;
   let right = rect.right + pad;
