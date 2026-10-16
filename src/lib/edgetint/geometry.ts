@@ -181,7 +181,16 @@ export const SAMPLE_R = 32;
 
 export const INNER_SAMPLE_R = 16;
 
-export const MAX_POWER = 2.4;
+/** 玻璃（设备卡/曲线卡）盖住的光源：隔着盖板看到的开关/圆点/曲线的强度倍率 */
+export const COVERED_DIM = 0.25;
+
+/** 玻璃下 inner 光源对内泛光的衰减（比外圈环带稍强，玻璃内仍有柔光） */
+export const COVERED_INNER_DIM = 0.45;
+
+/** 描边被染色即出内泛光的权重（st.a → 内光目标） */
+export const RING_GLOW_K = 0.8;
+
+export const MAX_POWER = 2.6;
 
 export const MAX_SOURCE_R = Math.ceil(SAMPLE_R * Math.sqrt(MAX_POWER));
 

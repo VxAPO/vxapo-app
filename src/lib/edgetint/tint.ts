@@ -3,6 +3,8 @@
 
 import {
   COLOR_K,
+  COVERED_DIM,
+  COVERED_INNER_DIM,
   FADE_K,
   INNER_SAMPLE_R,
   LINE_ALPHA,
@@ -14,6 +16,7 @@ import {
   MENISCUS_HALO_WIDTH,
   MENISCUS_INSET,
   MENISCUS_WIDTH,
+  RING_GLOW_K,
   SAMPLE_R,
   SHADE_OUT_SMOOTH_R,
   SHADE_SMOOTH_R,
@@ -388,14 +391,18 @@ export function samplePanel(
       SAMPLE_R,
       overPanel,
     );
-    // 叠卡时开关/圆点虽然可见，但隔着玻璃已衰减：强度倍率降低
+    // 叠卡时开关/圆点/曲线虽然可见，但隔着玻璃已衰减：强度倍率压低
     const cardSample =
       rawCardSample && overPanel
-        ? { ...rawCardSample, s: rawCardSample.s * 0.5 }
+        ? { ...rawCardSample, s: rawCardSample.s * COVERED_DIM }
         : rawCardSample;
+    const curveLit =
+      overPanel && curveSample
+        ? { ...curveSample, s: curveSample.s * COVERED_DIM }
+        : curveSample;
     const sample =
-      overPanel && curveSample && (!cardSample || curveSample.s >= cardSample.s)
-        ? curveSample
+      overPanel && curveLit && (!cardSample || curveLit.s >= cardSample.s)
+        ? curveLit
         : cardSample;
     const targetA = sample ? sample.s : 0;
     const aDelta = targetA - st.a[i];
@@ -413,6 +420,8 @@ export function samplePanel(
   }
   // 内光直接在内圈路径上逐点采样，不再从外圈做序号映射，
   // 圆角处的采样点与绘制点一一对应。
+  // 外圈→内圈序号映射：描边染色联动内泛光用（同暗部的映射方式）
+  const mapMain = mapRingToReference(mainPts, pts);
   for (let j = 0; j < mainPts.length; j++) {
     const glowP = mainPts[j];
     const lumSample = sampleLumGrid(
@@ -434,24 +443,53 @@ export function samplePanel(
       true,
       outsideFade,
     );
-    const innerFade = toolOverPanel ? 0.75 : 1;
-    const colorEnergy = innerTint
-      ? Math.min(1, (innerTint.s * innerFade) / 1.1)
-      : 0;
+    // 曲线光源：工具栏玻璃盖在曲线卡上时，曲线本身作为 inner 光源参与
+    // 内泛光（与环带同规则——仅玻璃覆盖时参与，按玻璃厚度衰减）。
+    const curveSample = sampleColor(glowP.x, glowP.y, nearCurve, INNER_SAMPLE_R);
+    const curveLit =
+      toolOverPanel && curveSample
+        ? { ...curveSample, s: curveSample.s * COVERED_INNER_DIM }
+        : null;
+    const tint =
+      !innerTint
+        ? curveLit
+        : curveLit && curveLit.s >= innerTint.s
+          ? curveLit
+          : innerTint;
+    const innerFade = toolOverPanel ? COVERED_INNER_DIM : 1;
+    const colorEnergy = tint ? Math.min(1, (tint.s * innerFade) / 1.1) : 0;
     const lumEnergy =
       Math.min(1, contrast * 1.6) * Math.pow(prox, 0.8) * innerFade;
-    const targetGl = Math.min(1, colorEnergy + lumEnergy * 0.55);
+    // 描边被染色即出内泛光：外圈 st.a 映射为内光目标的附加项——
+    // 不再要求内圈必须采到比玻璃更亮的光源。
+    const ringIdx = mapMain[j] ?? 0;
+    const ringA = st.a[ringIdx];
+    const targetGl = Math.min(
+      1,
+      colorEnergy + lumEnergy * 0.55 + ringA * RING_GLOW_K,
+    );
     rawGl[j] = targetGl;
-    if (innerTint) {
+    if (tint) {
       const kg =
         ist.gl[j] < 0.01 && targetGl > 0
           ? 1
           : movingTool
             ? COLOR_K
             : scaleK(COLOR_K, scale);
-      ist.ir[j] += (innerTint.c.r - ist.ir[j]) * kg;
-      ist.ig[j] += (innerTint.c.g - ist.ig[j]) * kg;
-      ist.ib[j] += (innerTint.c.b - ist.ib[j]) * kg;
+      ist.ir[j] += (tint.c.r - ist.ir[j]) * kg;
+      ist.ig[j] += (tint.c.g - ist.ig[j]) * kg;
+      ist.ib[j] += (tint.c.b - ist.ib[j]) * kg;
+    } else if (ringA > 0.02) {
+      // 内圈无染色源但描边有色：内光沿用描边色
+      const kg =
+        ist.gl[j] < 0.01 && targetGl > 0
+          ? 1
+          : movingTool
+            ? COLOR_K
+            : scaleK(COLOR_K, scale);
+      ist.ir[j] += (st.r[ringIdx] - ist.ir[j]) * kg;
+      ist.ig[j] += (st.g[ringIdx] - ist.ig[j]) * kg;
+      ist.ib[j] += (st.b[ringIdx] - ist.ib[j]) * kg;
     }
   }
 
