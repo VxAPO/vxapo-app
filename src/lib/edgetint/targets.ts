@@ -55,7 +55,7 @@ export function collectCards(): LightSet {
         r,
         color,
         border: true,
-        power: selected ? 1.8 : 1,
+        power: selected ? 2.6 : 1,
       });
     }
     accents.forEach((sub) => {
