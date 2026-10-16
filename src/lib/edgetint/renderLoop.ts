@@ -105,6 +105,11 @@ export function renderToPanelBuffer(
     buf = { c, k, sc, sk, at: 0, reused: 0, x, y, w, h, dpr, gen: 0 };
     ST.panelBuffers.set(el, buf);
   }
+  // 元素自上次渲染是否移动（工具栏随框选移动）：移动中的工具栏环带
+  // 染色走 movingTool 快照直接跟随——否则停下后还要 ~300ms 慢收敛，
+  // 「停住再变亮」残留在描边染色上的根因。
+  const moved =
+    buf.at > 0 && (Math.abs(buf.x - x) > 0.5 || Math.abs(buf.y - y) > 0.5);
   // 贴回位置每帧按当前 rect 计算：像素锚定元素，复用/重画两条路径都用它
   buf.x = x;
   buf.y = y;
@@ -189,6 +194,7 @@ export function renderToPanelBuffer(
     (kind === "base" && g.__vxGLBase !== false)
       ? glTintRaster
       : canvas2dRaster);
+  ST.toolMoving = kind === "tool" && moved;
   raster.drawPanel(el, buf.k, buf.sk, cards, frameScale);
   const drawMs = performance.now() - d0;
   ST.stats.drawLast = drawMs;

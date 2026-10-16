@@ -79,6 +79,8 @@ export interface EdgeTintState {
    * 过渡以 ~100ms 粒度跳变（frameScale 补偿单步 3 倍），观感「一段一段」。
    */
   fading: WeakSet<HTMLElement>;
+  /** 工具栏画布本次重画时元素刚移动过：环带染色快照跟随（movingTool） */
+  toolMoving: boolean;
   /**
    * 结构代数：卡片增减/视图舞台切换等配色源集合变化时 +1。
    * 面板缓冲记录渲染时的代数，代数不同禁止复用——放宽复用窗口后
@@ -174,6 +176,7 @@ export const ST: EdgeTintState = {
   scrollingNow: false,
   fadePending: false,
   fading: new WeakSet<HTMLElement>(),
+  toolMoving: false,
   bufGen: 1,
   paintCache: new Map<HTMLElement, PaintCacheEntry>(),
   csCache: new Map<HTMLElement, CSSStyleDeclaration>(),

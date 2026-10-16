@@ -91,9 +91,12 @@ void main() {
     // 为 vAlpha，vHalf 调制衰减半径=「亮处扩散更远」），只重塑空间剖面。
     float depth = -sdRoundRect(vPos, uClipRect, uClipRadius);
     if (depth >= 0.0) {
-      float R = max(vHalf + 3.0 * uSigma, 0.15);
+      // R=4σ + 0.8 次幂提升中段：circleMap 原始衰减偏陡，改弧线后
+      // 泛光整体偏弱（体感反馈）——峰值不变，只补中场与触及距离。
+      float R = max(vHalf + 4.0 * uSigma, 0.15);
       float u = clamp(1.0 - depth / R, 0.0, 1.0);
-      a = vAlpha * (1.0 - sqrt(max(0.0, 1.0 - u * u)));
+      float circ = 1.0 - sqrt(max(0.0, 1.0 - u * u));
+      a = vAlpha * pow(circ, 0.8);
     } else {
       a = vAlpha * exp(-depth * depth / (2.0 * uSigma * uSigma + 0.0001));
     }

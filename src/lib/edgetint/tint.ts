@@ -73,15 +73,17 @@ export function curvePointSources(): ColorSource[] {
   if (!ctm) return [];
   const pts: ColorSource[] = [];
   const len = path.getTotalLength();
-  const STEP = 16;
+  // 步长与点尺寸配成近连续线：曲线是多点光源，稀疏小点会让沿环采样
+  // 逐点亮灭（描边染色呈一颗颗亮点）。step10 + 8px 方点 ≈ 首尾相接。
+  const STEP = 10;
   for (let d = 0; d <= len; d += STEP) {
     const p = path.getPointAtLength(Math.min(len, d));
     const s = p.matrixTransform(ctm);
     pts.push({
-      r: new DOMRect(s.x - 1, s.y - 1, 2, 2),
-      color,
+      r: new DOMRect(s.x - 4, s.y - 4, 8, 8),
       power: 1.8,
       inner: true,
+      color,
     });
   }
   ST.curvePointCache.set(path, { key, pts });
@@ -339,7 +341,9 @@ export function samplePanel(
     ? Math.max(0, Math.min(1, parseFloat(cs.opacity) || 0))
     : 1;
   const glowAlpha = 1;
-  const movingTool = tool && ST.scrollingNow;
+  // movingTool（快照跟随）：滚动中，或工具栏画布本次重画时元素刚移动
+  //（框选移动）——两种情况位置都在连续变化，染色慢收敛只会拖尾。
+  const movingTool = tool && (ST.scrollingNow || ST.toolMoving);
   // 按时间推进：frameScale=1（正常 33ms 补帧）时与原常数逐字等价；
   // 复用跳帧时按经过的步数放大，保证褪色总时长不变（只是步数更少、每步更大）。
   const scale = Math.max(1, frameScale);
@@ -401,10 +405,23 @@ export function samplePanel(
       overPanel && curveSample
         ? { ...curveSample, s: curveSample.s * CURVE_RING_DIM }
         : curveSample;
-    const sample =
-      overPanel && curveLit && (!cardSample || curveLit.s >= cardSample.s)
-        ? curveLit
-        : cardSample;
+    // 多光混色：强度取最强者（不叠加，防选多爆亮），颜色按强度加权
+    // 混合——赢家通吃会在曲线与背景光强度相近处产生色彩突变。
+    let sample: { c: Rgb; s: number } | null;
+    if (overPanel && curveLit && cardSample) {
+      const sa = curveLit.s;
+      const sb = cardSample.s;
+      sample = {
+        s: Math.max(sa, sb),
+        c: {
+          r: (curveLit.c.r * sa + cardSample.c.r * sb) / (sa + sb),
+          g: (curveLit.c.g * sa + cardSample.c.g * sb) / (sa + sb),
+          b: (curveLit.c.b * sa + cardSample.c.b * sb) / (sa + sb),
+        },
+      };
+    } else {
+      sample = overPanel && curveLit ? curveLit : cardSample;
+    }
     const targetA = sample ? sample.s : 0;
     const aDelta = targetA - st.a[i];
     st.a[i] += aDelta * fadeK;
@@ -461,12 +478,22 @@ export function samplePanel(
       ? sampleColor(glowP.x, glowP.y, nearCurve, curveR)
       : null;
     const curveLit = curveSample;
-    const tint =
-      !innerTint
-        ? curveLit
-        : curveLit && curveLit.s >= innerTint.s
-          ? curveLit
-          : innerTint;
+    // 多光混色：同环带——强度取 max，颜色按强度加权
+    let tint: { c: Rgb; s: number } | null;
+    if (innerTint && curveLit) {
+      const sa = curveLit.s;
+      const sb = innerTint.s;
+      tint = {
+        s: Math.max(sa, sb),
+        c: {
+          r: (curveLit.c.r * sa + innerTint.c.r * sb) / (sa + sb),
+          g: (curveLit.c.g * sa + innerTint.c.g * sb) / (sa + sb),
+          b: (curveLit.c.b * sa + innerTint.c.b * sb) / (sa + sb),
+        },
+      };
+    } else {
+      tint = innerTint ?? curveLit;
+    }
     const innerFade = toolOverPanel ? COVERED_INNER_DIM : 1;
     const colorEnergy = tint ? Math.min(1, (tint.s * innerFade) / 1.1) : 0;
     const lumEnergy =
