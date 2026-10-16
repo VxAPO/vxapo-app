@@ -18,6 +18,18 @@ import {
 import type { LightSet } from "./primitives";
 import { ST } from "./state";
 import type { PanelBuffer } from "./state";
+
+// 面板重画相位（滚动期把 fading 面板分散到3个相位错峰重画）：
+// 每元素一次随机相位，WeakMap 保证稳定且零 GC。
+const elPhase = new WeakMap<HTMLElement, number>();
+function elHash(el: HTMLElement): number {
+  let h = elPhase.get(el);
+  if (h === undefined) {
+    h = (Math.random() * 3) | 0;
+    elPhase.set(el, h);
+  }
+  return h;
+}
 import { csOf } from "./state";
 import { canvas2dRaster } from "./raster";
 import { glTintRaster } from "./gl-raster";
@@ -158,14 +170,22 @@ export function renderToPanelBuffer(
   // 会让滚动期全量重画每帧都跑（实测 p50 从 3.5ms 涨到 14.4ms），33ms 地板
   // 在两者之间。已收敛的面板照旧走 100ms/MAX2 复用窗（滚动性能主战场）。
   const wasFading = ST.fading.has(el);
-  // 工具栏滚动/移动中逐 paint 重画（win=0 永不复用）：工具栏在滚动中
-  // 是固定的（实测 DOM 不动），描边染色是它与身下掠过卡片之间逐帧
-  // 变化的相对几何——任何复用/降频都表现为「描边跟不上位移」的抖动。
-  // 工具栏层很小（~350×130 脏区），逐帧成本可负担。
-  const win = wasFading
-    ? FADE_FRAME_MS
-    : toolMovingNow
-      ? 0
+  // 工具栏滚动/移动中逐 paint 重画（win=0 永不复用）：描边染色是工具栏
+  // 与身下掠过卡片之间逐帧变化的相对几何，任何降频都表现为滞后。
+  //
+  // 基础面板滚动期按3相错开重画：全部 fading 面板同33ms节奏会在
+  // 帧内集中爆发（全量重画 ~10-15ms），超帧 → 该帧画布贴不上 →
+  // 描边/泛光整体「慢一拍」。按元素哈希把 fading 面板分到
+  // 33/50/67ms 三个相位：每帧只重画 ~1/3，帧成本均匀，不再超帧；
+  // 单面板更新仍有15-30fps（时间补偿插值保总收敛时长）。
+  const wasFadingWin = wasFading
+    ? FADE_FRAME_MS +
+      (ST.scrollingNow ? (elHash(el) % 3) * 17 : 0)
+    : 0;
+  const win = toolMovingNow
+    ? 0
+    : wasFading
+      ? wasFadingWin
       : ((globalThis as { __vxWin?: number }).__vxWin ??
         (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS));
   const maxReuse =
