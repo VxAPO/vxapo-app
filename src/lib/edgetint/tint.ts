@@ -79,7 +79,7 @@ export function curvePointSources(): ColorSource[] {
     pts.push({
       r: new DOMRect(s.x - 1, s.y - 1, 2, 2),
       color,
-      power: 0.9,
+      power: 1.8,
       inner: true,
     });
   }
@@ -445,11 +445,12 @@ export function samplePanel(
     );
     // 曲线光源：工具栏玻璃盖在曲线卡上时，曲线本身作为 inner 光源参与
     // 内泛光（与环带同规则——仅玻璃覆盖时参与，按玻璃厚度衰减）。
-    const curveSample = sampleColor(glowP.x, glowP.y, nearCurve, INNER_SAMPLE_R);
-    const curveLit =
-      toolOverPanel && curveSample
-        ? { ...curveSample, s: curveSample.s * COVERED_INNER_DIM }
-        : null;
+    // 必须短路：无条件采样会让每个内圈点遍历整条曲线点集，视图切换
+    // 全量重画时每帧都吃 O(内圈点×曲线点)——实测视图切换掉帧的元凶。
+    const curveSample = toolOverPanel
+      ? sampleColor(glowP.x, glowP.y, nearCurve, INNER_SAMPLE_R)
+      : null;
+    const curveLit = curveSample;
     const tint =
       !innerTint
         ? curveLit

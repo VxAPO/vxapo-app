@@ -187,8 +187,10 @@ export const COVERED_DIM = 0.25;
 /** 玻璃下 inner 光源对内泛光的衰减（比外圈环带稍强，玻璃内仍有柔光） */
 export const COVERED_INNER_DIM = 0.45;
 
-/** 描边被染色即出内泛光的权重（st.a → 内光目标） */
-export const RING_GLOW_K = 0.8;
+/** 描边被染色即出内泛光的权重（st.a → 内光目标）。过高会让工具栏贴卡阵时
+ *  st.a 全程饱和、内光灌成均匀一层（太猛太整）；0.35 保留染色联动的
+ *  同时让内光仍有疏密变化。 */
+export const RING_GLOW_K = 0.35;
 
 export const MAX_POWER = 2.6;
 
