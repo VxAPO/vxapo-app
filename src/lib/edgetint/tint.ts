@@ -46,6 +46,10 @@ import {
 } from "./primitives";
 import type { InnerState, LightSet } from "./primitives";
 import { ST, csOf, paintEntryOf, rootColorCached } from "./state";
+
+// 描边亮度路径平滑的可复用缓冲（每采样建数组会在滚动期制造 GC 抖动）
+let smoothCum: Float64Array | null = null;
+let smoothOut: Float64Array | null = null;
 import { ensureSoftCanvas, ensureSsCanvas } from "./canvasPool";
 
 export function curvePointSources(): ColorSource[] {
@@ -434,6 +438,48 @@ export function samplePanel(
       st.r[i] += (c.r - st.r[i]) * k;
       st.g[i] += (c.g - st.g[i]) * k;
       st.b[i] += (c.b - st.b[i]) * k;
+    }
+  }
+  // 描边亮度沿路径平滑：高强小半径（开关塔）与低强宽半径（边框基底）
+  // 并存时，逐点取最强光源会在两者交替主导的区域产生暗亮分层。
+  // 与暗部平滑同款的弧长加权窗（12px）抹平沿路径的亮度起伏——
+  // 光源的空间分布不变，只让描边的衰减过渡连续。
+  {
+    const n = st.a.length;
+    if (n > 2) {
+      let cum = smoothCum;
+      let out = smoothOut;
+      if (!cum || !out || cum.length < n || out.length < n) {
+        cum = smoothCum = new Float64Array(n);
+        out = smoothOut = new Float64Array(n);
+      }
+      cum[0] = 0;
+      for (let i = 1; i < n; i++) {
+        cum[i] =
+          cum[i - 1] +
+          Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      }
+      const total =
+        cum[n - 1] + Math.hypot(pts[0].x - pts[n - 1].x, pts[0].y - pts[n - 1].y);
+      const W = 12;
+      for (let i = 0; i < n; i++) {
+        let sum = st.a[i];
+        let wsum = 1;
+        for (const dir of [-1, 1]) {
+          for (let step = 1; step < n; step++) {
+            const j = (i + dir * step + n) % n;
+            if (j === i) break;
+            const d0 = Math.abs(cum[i] - cum[j]);
+            const d = Math.min(d0, total - d0);
+            if (d > W) break;
+            const wt = 1 - d / W;
+            sum += st.a[j] * wt;
+            wsum += wt;
+          }
+        }
+        out[i] = sum / wsum;
+      }
+      for (let i = 0; i < n; i++) st.a[i] = out[i];
     }
   }
   // 内光直接在内圈路径上逐点采样，不再从外圈做序号映射，

@@ -61,8 +61,10 @@ export function collectCards(): LightSet {
     accents.forEach((sub) => {
       const sr = sub.getBoundingClientRect();
       if (sr.width < 2 || sr.height < 2) return;
+      // enable-dot 曾为 2.4：√p 半径×1.55 再叠权重×2.4，在「取最强」
+      // 语义下形成远超其他光源的高地——开关旁的描边亮度阶梯感的来源。
       const power = sub.classList.contains("enable-dot")
-        ? 2.4
+        ? 1.8
         : sub.classList.contains("effect-dot")
           ? 1.4
           : 1.2;

@@ -110,6 +110,12 @@ export function renderToPanelBuffer(
   // 「停住再变亮」残留在描边染色上的根因。
   const moved =
     buf.at > 0 && (Math.abs(buf.x - x) > 0.5 || Math.abs(buf.y - y) > 0.5);
+  // 工具栏在滚动/移动中必须逐 paint 重画：movingTool 快照让染色瞬时
+  // 收敛 → fading 标志保持 false → 复用窗重新生效 → 采样被压到
+  // ~10-20Hz 大跳——「滚动时描边抖动、慢半拍」的根因。快照与复用
+  // 互斥：快照生效期间禁止复用。
+  const toolMovingNow =
+    kind === "tool" && (ST.scrollingNow || moved) && buf.at > 0;
   // 贴回位置每帧按当前 rect 计算：像素锚定元素，复用/重画两条路径都用它
   buf.x = x;
   buf.y = y;
@@ -152,14 +158,21 @@ export function renderToPanelBuffer(
   // 会让滚动期全量重画每帧都跑（实测 p50 从 3.5ms 涨到 14.4ms），33ms 地板
   // 在两者之间。已收敛的面板照旧走 100ms/MAX2 复用窗（滚动性能主战场）。
   const wasFading = ST.fading.has(el);
+  // 工具栏滚动/移动中逐 paint 重画（win=0 永不复用）：工具栏在滚动中
+  // 是固定的（实测 DOM 不动），描边染色是它与身下掠过卡片之间逐帧
+  // 变化的相对几何——任何复用/降频都表现为「描边跟不上位移」的抖动。
+  // 工具栏层很小（~350×130 脏区），逐帧成本可负担。
   const win = wasFading
     ? FADE_FRAME_MS
-    : ((globalThis as { __vxWin?: number }).__vxWin ??
-      (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS));
-  const maxReuse = wasFading
-    ? Number.POSITIVE_INFINITY
-    : ((globalThis as { __vxMax?: number }).__vxMax ??
-      (slide ? Infinity : PANEL_REUSE_MAX));
+    : toolMovingNow
+      ? 0
+      : ((globalThis as { __vxWin?: number }).__vxWin ??
+        (slide ? PANEL_REUSE_MOTION_MS : PANEL_REUSE_MS));
+  const maxReuse =
+    wasFading
+      ? Number.POSITIVE_INFINITY
+      : ((globalThis as { __vxMax?: number }).__vxMax ??
+        (slide ? Infinity : PANEL_REUSE_MAX));
   if (
     buf.at > 0 &&
     buf.gen === ST.bufGen &&
