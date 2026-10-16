@@ -602,7 +602,10 @@ export const glTintRaster: TintRaster = {
         widthAt: () => 3,
         alphaAt: (i) => st.a[i] * LINE_ALPHA * 0.3 * glowAlpha * toolFade,
         colorAt: (i) => ({ r: st.r[i], g: st.g[i], b: st.b[i] }),
-        sigma: MENISCUS_BLUR / 2,
+        // canvas2d 参考是 strokeGlowBand(..., 3, 2, ...) → blur(2) → σ=2/2=1。
+        // 曾误写 MENISCUS_BLUR/2=0.6：尾巴短够不到描边根部，泛光起点与
+        // 描边之间留 1px 暗接缝，直边观感也偏细偏硬。
+        sigma: 1,
         clip: true,
       },
       {
