@@ -416,7 +416,7 @@ export function paintLayerPair(
       if (toolbar) {
         // 领先帧探针锚点：本次 blit 时工具栏位置与画布原点（视口坐标）——
         // 画布描边的显示位置 = canvas.style.top + translate + (top - originY)
-        ST.toolAnchor = { originY: oy, top: r.top };
+        ST.toolAnchor = { originX: ox, originY: oy, left: r.left, top: r.top };
       }
     }
   });
@@ -458,37 +458,70 @@ function scrollContainerOf(): HTMLElement | null {
   return null;
 }
 
+// translate 写入约定（两坑都踩过）：必须 setProperty/removeProperty
+//（驼峰访问器静默失效），值必须是长度对（"0px -40px"，函数语法被拒）。
+function applyTranslate(cv: HTMLCanvasElement | null, t: string): void {
+  if (!cv) return;
+  if (cv.style.getPropertyValue("translate") !== t) {
+    if (t) cv.style.setProperty("translate", t);
+    else cv.style.removeProperty("translate");
+  }
+}
+
+// 基础层滚动平移：onScroll 同步调用（scroll 事件同帧生效，消掉「rAF
+// 下一帧才补」的差一帧残留跳帧感）+ guardTick 每帧兜底。
+function applyScrollTranslate(): void {
+  const sc = scrollContainerOf();
+  if (!sc) return;
+  for (const cv of [ST.canvas, ST.shadeCanvas]) {
+    if (!cv) continue;
+    const base = ST.paintedScroll.get(cv);
+    if (!base) continue;
+    const dx = sc.scrollLeft - base.left;
+    const dy = sc.scrollTop - base.top;
+    const t =
+      Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 ? `${-dx}px ${-dy}px` : "";
+    applyTranslate(cv, t);
+  }
+}
+
 function guardTick(): void {
   ST.guardRaf = 0;
   if (!ST.running) return;
+  // ── 工具层：锚点位移补偿（真源）──
+  // 位移 = 当前工具栏视口位置 − 上次已绘锚点。滚动、框选飞行 transform、
+  // 任何来源的位移都逐帧覆盖——「位移动画帧不匹配」的根修：跳过重贴的
+  // 帧里画布靠这个逐帧贴着本体走，飞行不再出现本体先飞、画布隔帧猛追。
+  const anchor = ST.toolAnchor;
+  let tbRaw: DOMRect | null = null;
+  if (anchor) {
+    for (const el of ST.targets) {
+      if (isToolbar(el)) {
+        tbRaw = el.getBoundingClientRect();
+        break;
+      }
+    }
+  }
+  if (anchor && tbRaw) {
+    const dx = tbRaw.left - anchor.left;
+    const dy = tbRaw.top - anchor.top;
+    const t =
+      Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 ? `${dx}px ${dy}px` : "";
+    if (t) ST.toolMovedAt = performance.now();
+    applyTranslate(ST.toolCanvas, t);
+    applyTranslate(ST.toolShadeCanvas, t);
+    (globalThis as { __vxGuard?: unknown }).__vxGuard = {
+      dx, dy, t, mode: "anchor",
+    };
+  }
+  // ── 基础层：滚动增量补偿（面板不飞，滚动是唯一位移来源）──
+  applyScrollTranslate();
   const sc = scrollContainerOf();
   if (sc) {
-    for (const cv of [ST.canvas, ST.shadeCanvas, ST.toolCanvas, ST.toolShadeCanvas]) {
-      if (!cv) continue;
-      const base = ST.paintedScroll.get(cv);
-      if (!base) continue;
-      const dx = sc.scrollLeft - base.left;
-      const dy = sc.scrollTop - base.top;
-      // 符号：画布挂在视口坐标系（不随内容滚动），工具栏随内容滚动——
-      // 滚动增量为正（内容上移）时画布必须反向平移才追得上。
-      const t =
-        Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5
-          ? `${-dx}px ${-dy}px`
-          : "";
-      // 必须走 setProperty/removeProperty 且值用长度对（"0px -40px"）：
-      // 1) 本 Chromium 构建里 el.style.translate 驼峰访问器静默失效
-      //    （写入丢失）——假移动补偿死过一版的直接死因；
-      // 2) translate 属性不接受 transform 函数语法（"translate(0px,-40px)"
-      //    是非法值会被整体拒绝），只能给 x y 两个长度。
-      if (cv.style.getPropertyValue("translate") !== t) {
-        if (t) cv.style.setProperty("translate", t);
-        else cv.style.removeProperty("translate");
-      }
-      // 调试探针：守卫最近一次的计算（领先帧归因）
-      (globalThis as { __vxGuard?: unknown }).__vxGuard = {
-        dx, dy, t, scroll: sc.scrollTop, base: base.top,
-      };
-    }
+    (globalThis as { __vxGuard?: unknown }).__vxGuard = {
+      scroll: sc.scrollTop,
+      mode: "scroll",
+    };
   }
   ST.guardRaf = requestAnimationFrame(guardTick);
 }
@@ -602,6 +635,9 @@ export function driveFor(ms: number, mode: "tool" | "full" = "tool"): void {
 }
 
 export function onScroll(): void {
+  // 位移补偿同步应用：scroll 事件与 DOM 位移同帧到达，画布平移不再
+  // 等下一次 rAF（差一帧的微弱跳帧感来源）；guard 仍每帧兜底。
+  applyScrollTranslate();
   // 绘制本身已足够快：滚动期间直接全量刷新，
   // 避免底卡/曲线染色要等停顿后才更新。
   window.clearTimeout(ST.scrollIdleTimer);

@@ -352,8 +352,13 @@ export function samplePanel(
   // 按时间推进：frameScale=1（正常 33ms 补帧）时与原常数逐字等价；
   // 复用跳帧时按经过的步数放大，保证褪色总时长不变（只是步数更少、每步更大）。
   const scale = Math.max(1, frameScale);
-  const fadeK = movingTool ? 1 : scaleK(FADE_K, scale);
-  const colorK = movingTool ? 1 : scaleK(COLOR_K, scale);
+  // 位移中收敛提速（真源：守卫观测到工具栏位移时刷新 ST.toolMovedAt）：
+  // 运动中 K 提到 ~0.54（0.3×1.8，远低于历史硬跳1）——否则颜色一直
+  // 落后于移动中的目标，停稳后还要再收敛一段，「快停下 vs 完全停下」
+  // 两个状态颜色可见地不同。仅加速插值，不跳变，平滑度保留。
+  const toolRecent = tool && performance.now() - ST.toolMovedAt < 140;
+  const fadeK = movingTool ? 1 : scaleK(FADE_K, scale) * (toolRecent ? 1.8 : 1);
+  const colorK = movingTool ? 1 : scaleK(COLOR_K, scale) * (toolRecent ? 1.6 : 1);
   // 面板底色：querySelector + 多段样式读取，同一帧同一面板只算一次
   const pe = paintEntryOf(el);
   if (pe.baseLum === undefined) pe.baseLum = panelBaseLum(el);

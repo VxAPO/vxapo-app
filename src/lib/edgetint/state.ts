@@ -81,10 +81,14 @@ export interface EdgeTintState {
   fading: WeakSet<HTMLElement>;
   /** 每块混合层画布上次重定位时的滚动位置：假移动补偿的基准（画布追平移） */
   paintedScroll: WeakMap<HTMLCanvasElement, { left: number; top: number }>;
-  /** 最近一次工具栏 blit 的锚点（画布原点 + 工具栏位置）：领先帧探针用 */
-  toolAnchor: { originY: number; top: number } | null;
+  /** 最近一次工具栏 blit 的锚点（画布原点 + 工具栏视口位置）：
+   * 工具层位移补偿的真源——按「当前位置 − 锚点」逐帧 translate，
+   * 覆盖滚动/框选飞行等一切位移来源（纯滚动增量只解释得了滚动）。 */
+  toolAnchor: { originX: number; originY: number; left: number; top: number } | null;
   /** 假移动补偿守卫循环的 rAF id */
   guardRaf: number;
+  /** 工具栏最近一次被观测到发生位移的时刻：运动中染色收敛提速的依据 */
+  toolMovedAt: number;
   /**
    * 结构代数：卡片增减/视图舞台切换等配色源集合变化时 +1。
    * 面板缓冲记录渲染时的代数，代数不同禁止复用——放宽复用窗口后
@@ -187,6 +191,7 @@ export const ST: EdgeTintState = {
   paintedScroll: new WeakMap<HTMLCanvasElement, { left: number; top: number }>(),
   toolAnchor: null,
   guardRaf: 0,
+  toolMovedAt: 0,
   bufGen: 1,
   paintCache: new Map<HTMLElement, PaintCacheEntry>(),
   csCache: new Map<HTMLElement, CSSStyleDeclaration>(),
