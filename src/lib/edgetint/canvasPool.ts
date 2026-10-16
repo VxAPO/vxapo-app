@@ -12,8 +12,11 @@ export function makeLayer(
   k: CanvasRenderingContext2D;
 } | null {
   const c = document.createElement("canvas");
+  // will-change:把混合层提升为独立合成器层——假移动补偿每帧写 translate，
+  // 未提升时每次都是主线程样式失效+整页背板混合重算；提升后位移是
+  // 合成器上的纯 transform 更新（GPU），不回主线程。
   c.style.cssText =
-    `position:fixed;left:0;top:0;pointer-events:none;z-index:${z};mix-blend-mode:${blend};`;
+    `position:fixed;left:0;top:0;pointer-events:none;z-index:${z};mix-blend-mode:${blend};will-change:transform;`;
   if (blend === "multiply") c.classList.add("vx-edge-shade");
   const k = c.getContext("2d");
   if (!k) {

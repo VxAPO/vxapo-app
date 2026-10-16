@@ -754,12 +754,11 @@ export function start(): void {
       schedule("full");
     }
     if (toolbarMoved) {
-      // 工具栏位移动画每帧改 style；MutationObserver 在该帧渲染前触发，
-      // 同步重画可以对齐当前帧位置，避免 Canvas 永远慢半拍。
-      if (ST.raf) cancelAnimationFrame(ST.raf);
-      ST.raf = 0;
-      ST.paintMode = "tool";
-      paint();
+      // 位移的同帧对齐已由锚点补偿守卫承担（guard 逐帧 translate，帧 dump
+      // 实证 锚点+translate==本体 每帧相等）——这里曾对每次 transform 写入
+      // 做同步全量重画，飞行期等于每帧两次 paint（同步 tool + 选中链 full），
+      // 是「呼出工具栏帧数暴降」的主因之一。降级为合并调度（每帧至多一次）。
+      schedule("tool");
       return;
     }
     if (viewStyleChanged) {
