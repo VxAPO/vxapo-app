@@ -655,6 +655,10 @@ export const glTintRaster: TintRaster = {
         colorAt: tintAt,
         sigma: MENISCUS_HALO_BLUR / 2,
         clip: false,
+        // halo 也走边峰剖面：box 剖面的等值线贴着条带弦走，圆角处
+        // 衰减起点被切成直线（沿半径方向一刀）；circleMap 锚定面板
+        // SDF，等值线严格沿着圆角弧。
+        arc: true,
       },
     ];
     for (const band of glowBands) drawBand(g, band, dpr, ox, oy, clipRect);

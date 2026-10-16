@@ -184,6 +184,10 @@ export const INNER_SAMPLE_R = 16;
 /** 玻璃（设备卡/曲线卡）盖住的光源：隔着盖板看到的开关/圆点/曲线的强度倍率 */
 export const COVERED_DIM = 0.25;
 
+/** 曲线在环带采样的专属倍率：曲线是刻意的光源（悬浮工具栏要被它染色），
+ *  比被盖住的开关/圆点（COVERED_DIM）保留更多强度。 */
+export const CURVE_RING_DIM = 0.6;
+
 /** 玻璃下 inner 光源对内泛光的衰减（比外圈环带稍强，玻璃内仍有柔光） */
 export const COVERED_INNER_DIM = 0.45;
 

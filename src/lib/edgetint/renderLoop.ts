@@ -586,10 +586,12 @@ export function start(): void {
       return;
     }
     if (selectionChanged) {
-      // 框选拖动会每帧改 is-selected；不立即全量重绘，
-      // 停顿后刷新一次，让选中描边权重收敛。
+      // 框选期间工具栏随选区移动：必须逐帧驱动工具栏画布（16ms 链），
+      // 否则画布冻结在选区变化前，停下后才补一帧——「停住再变亮」的
+      // 断层感。基础面板的配色收敛仍走防抖全量。
+      driveFor(320, "tool");
       window.clearTimeout(ST.selectionTimer);
-      ST.selectionTimer = window.setTimeout(() => schedule("full"), 160);
+      ST.selectionTimer = window.setTimeout(() => schedule("full"), 120);
       return;
     }
     if (!records.length) return;

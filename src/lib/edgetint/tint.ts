@@ -5,6 +5,7 @@ import {
   COLOR_K,
   COVERED_DIM,
   COVERED_INNER_DIM,
+  CURVE_RING_DIM,
   FADE_K,
   INNER_SAMPLE_R,
   LINE_ALPHA,
@@ -398,7 +399,7 @@ export function samplePanel(
         : rawCardSample;
     const curveLit =
       overPanel && curveSample
-        ? { ...curveSample, s: curveSample.s * COVERED_DIM }
+        ? { ...curveSample, s: curveSample.s * CURVE_RING_DIM }
         : curveSample;
     const sample =
       overPanel && curveLit && (!cardSample || curveLit.s >= cardSample.s)
@@ -422,6 +423,15 @@ export function samplePanel(
   // 圆角处的采样点与绘制点一一对应。
   // 外圈→内圈序号映射：描边染色联动内泛光用（同暗部的映射方式）
   const mapMain = mapRingToReference(mainPts, pts);
+  // 曲线内圈采样半径按面板尺度放大：内圈采样点都贴着边，而曲线是从
+  // 面板中间穿过的线光源——固定 16px 半径永远够不到（工具栏悬浮在
+  // 曲线卡上时内泛光全程看不见曲线的根因）。取面板短边的0.8，
+  // 让「线穿过面板中央」也能被边界点采到，且保留位置疏密（离线远的
+  // 一侧自然衰减）。
+  const curveR = Math.max(
+    INNER_SAMPLE_R,
+    Math.min(rect.width, rect.height) * 0.8,
+  );
   for (let j = 0; j < mainPts.length; j++) {
     const glowP = mainPts[j];
     const lumSample = sampleLumGrid(
@@ -448,7 +458,7 @@ export function samplePanel(
     // 必须短路：无条件采样会让每个内圈点遍历整条曲线点集，视图切换
     // 全量重画时每帧都吃 O(内圈点×曲线点)——实测视图切换掉帧的元凶。
     const curveSample = toolOverPanel
-      ? sampleColor(glowP.x, glowP.y, nearCurve, INNER_SAMPLE_R)
+      ? sampleColor(glowP.x, glowP.y, nearCurve, curveR)
       : null;
     const curveLit = curveSample;
     const tint =
