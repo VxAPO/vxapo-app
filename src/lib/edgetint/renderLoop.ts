@@ -674,10 +674,13 @@ export function start(): void {
       return;
     }
     if (selectionChanged) {
-      // 框选期间工具栏随选区移动：必须逐帧驱动工具栏画布（16ms 链），
-      // 否则画布冻结在选区变化前，停下后才补一帧——「停住再变亮」的
-      // 断层感。基础面板的配色收敛仍走防抖全量。
+      // 真移动（框选对象改变 = 光源集合变化）：立即全量触发。
+      // 工具栏逐帧驱动（本体跟随）；原120ms 防抖是 canvas2d 时代「全量
+      // 重画很贵」的遗留——现在未变化面板走复用零成本、变化面板走
+      // fading 分相重画，防抖只会给真移动贡献一拍延迟。尾部保留一次
+      // 扫描兜底（连续切换时清掉半截状态）。
       driveFor(320, "tool");
+      schedule("full");
       window.clearTimeout(ST.selectionTimer);
       ST.selectionTimer = window.setTimeout(() => schedule("full"), 120);
       return;
