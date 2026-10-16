@@ -16,7 +16,7 @@ import {
   visibleRectOf,
 } from "./primitives";
 import type { LightSet } from "./primitives";
-import { ST } from "./state";
+import { ST, rawRectOf } from "./state";
 import type { PanelBuffer } from "./state";
 
 // 面板重画相位（滚动期把 fading 面板分散到3个相位错峰重画）：
@@ -78,7 +78,7 @@ export function renderToPanelBuffer(
   cards: LightSet,
   kind: "base" | "tool",
 ): PanelBuffer | null {
-  const rect = el.getBoundingClientRect();
+  const rect = rawRectOf(el);
   if (rect.width < 2 || rect.height < 2) return null;
   const PAD = PANEL_PAD;
   const x = rect.left - PAD;
@@ -335,8 +335,8 @@ export function paintLayerPair(
       // 注意：不能引用裸 `toolbar`——TS 会解析成 legacy 的 window.toolbar
       //（恒为真），历史上裁剪分支因此对所有元素执行。按元素真实判断。
       const toolbar = isToolbar(el);
-      const r = el.getBoundingClientRect();
-      const clipped = visibleRectOf(el, 32);
+      const r = rawRectOf(el);
+      const clipped = visibleRectOf(el, 32, r);
       const pl = Math.max(0, r.left - 32);
       const pt = Math.max(0, r.top - 32);
       const prr = Math.min(window.innerWidth, r.right + 32);
@@ -384,8 +384,49 @@ export function paintLayerPair(
       sk.drawImage(buf.sc, buf.x, buf.y, buf.w, buf.h);
       sk.globalAlpha = 1;
       if (toolbar) sk.restore();
+      if (toolbar) {
+        // 记录本次已绘位置并解除钉住——解除与画布更新在同一任务内，
+        // 工具栏本体与它的画布在同一帧提交（「等画完再一起动」）
+        const p = ST.pinned.get(el);
+        if (p) {
+          el.style.translate = "";
+          ST.pinned.delete(el);
+        }
+        ST.toolPaintedRect = { x: r.left, y: r.top };
+      }
     }
   });
+}
+
+// 工具栏钉住守卫：工具栏位置一旦偏离上次已绘位置（滚动/框选移动），
+// 先用 translate 把它视觉钉回已绘位置、排一次工具栏重画；重画完成时
+// 在同一任务内解除钉住——本体与画布永远同帧移动，不再出现「画布慢
+// 一拍」。只作用于工具栏本体，整页滚动完全不干预。
+function guardTick(): void {
+  ST.guardRaf = 0;
+  if (!ST.running) return;
+  const painted = ST.toolPaintedRect;
+  if (painted) {
+    for (const el of ST.targets) {
+      if (!isToolbar(el)) continue;
+      const p = ST.pinned.get(el);
+      const dx0 = p ? p.dx : 0;
+      const dy0 = p ? p.dy : 0;
+      const g = el.getBoundingClientRect();
+      const realX = g.left - dx0;
+      const realY = g.top - dy0;
+      const offX = realX - painted.x;
+      const offY = realY - painted.y;
+      if (Math.abs(offX) > 1 || Math.abs(offY) > 1) {
+        const dx = painted.x - realX;
+        const dy = painted.y - realY;
+        el.style.translate = `${dx}px ${dy}px`;
+        ST.pinned.set(el, { dx, dy });
+        schedule("tool");
+      }
+    }
+  }
+  ST.guardRaf = requestAnimationFrame(guardTick);
 }
 
 export function paint(): void {
@@ -534,6 +575,7 @@ export function start(): void {
     capture: true,
     passive: true,
   });
+  ST.guardRaf = requestAnimationFrame(guardTick);
   window.addEventListener("resize", onResize);
   window.addEventListener("focus", onFocus);
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -651,6 +693,8 @@ export function stop(): void {
   ST.running = false;
   if (ST.raf) cancelAnimationFrame(ST.raf);
   ST.raf = 0;
+  if (ST.guardRaf) cancelAnimationFrame(ST.guardRaf);
+  ST.guardRaf = 0;
   window.removeEventListener("scroll", onScroll, {
     capture: true,
   } as EventListenerOptions);
