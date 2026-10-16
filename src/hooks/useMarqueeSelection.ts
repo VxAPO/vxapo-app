@@ -80,6 +80,11 @@ export function useMarqueeSelection({
   const [selGeomTick, setSelGeomTick] = useState(0);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRafRef = useRef(0);
+  /** 最后一次 pointermove 的视口坐标：框选中滚动时指针没动、pointermove
+   * 不触发，滚动回调要用它换算新的内容坐标 */
+  const lastClientRef = useRef({ x: 0, y: 0 });
+  /** 最新一版帧合并入口（每渲染刷新，供滚动回调调用） */
+  const armMarqueeRef = useRef<() => void>(() => {});
   // 拖动前是否已有工具栏：有则再次框选时工具栏保持显示
   const hadToolbarRef = useRef(false);
   const pendingMarqueeRef = useRef<{
@@ -374,6 +379,7 @@ export function useMarqueeSelection({
   };
 
   const onBodyPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    lastClientRef.current = { x: e.clientX, y: e.clientY };
     const s = marqueeStartRef.current;
     const body = bodyRef.current;
     if (!s || !body) return;
@@ -381,64 +387,97 @@ export function useMarqueeSelection({
     const x = e.clientX - rect.left + body.scrollLeft;
     const y = e.clientY - rect.top + body.scrollTop;
     pendingMarqueeRef.current = { x1: s.x, y1: s.y, x2: x, y2: y };
-    if (!marqueeRafRef.current) {
-      marqueeRafRef.current = requestAnimationFrame(() => {
-        marqueeRafRef.current = 0;
-        const m = pendingMarqueeRef.current;
-        if (m) {
-          setMarquee(m);
-          // 实时框选：拖动过程中同步高亮被框住的卡片
-          const body = bodyRef.current;
-          if (body) {
-            const hit = collectMarquee(m, body);
-            const next = hit.ids;
-            // 实时高亮直接改 DOM class，避免每帧触发 React 重渲；
-            // React 状态低频提交，松手再最终同步一次。
-            const liveSet = new Set(next);
-            const scope = body.querySelector<HTMLElement>(
-              `[data-view="${viewRef.current}"]`,
-            ) ?? body;
-            scope.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
-              const id = el.dataset.dndId;
-              el.classList.toggle("is-selected", !!id && liveSet.has(id));
-            });
-            const now = performance.now();
-            if (now - lastLiveCommitRef.current > 90) {
-              lastLiveCommitRef.current = now;
-              /**
-               * 拖动过程中**不允许**把选中集合提交成空：渲染条件里有
-               * `selectedIds.length > 0`，一旦提交空集，工具栏会被 AnimatePresence
-               * 卸载、下一帧再挂回来——观感是工具栏在拖动中忽隐忽现，
-               * 而且重挂后会走"首次出现直接就位"，出现单帧几十像素的硬跳。
-               * 抬手时才用最终结果收尾（那时允许清空，点空白=取消选择）。
-               */
-              if (next.length) setSelectedIds(next);
-            }
+    armMarqueeFrame();
+  };
+
+  /** 帧合并的框选更新：pointermove 与「框选中滚动」共用同一条路径 */
+  const armMarqueeFrame = () => {
+    if (marqueeRafRef.current) return;
+    marqueeRafRef.current = requestAnimationFrame(() => {
+      marqueeRafRef.current = 0;
+      const m = pendingMarqueeRef.current;
+      if (m) {
+        setMarquee(m);
+        // 实时框选：拖动过程中同步高亮被框住的卡片
+        const body = bodyRef.current;
+        if (body) {
+          const hit = collectMarquee(m, body);
+          const next = hit.ids;
+          // 实时高亮直接改 DOM class，避免每帧触发 React 重渲；
+          // React 状态低频提交，松手再最终同步一次。
+          const liveSet = new Set(next);
+          const scope = body.querySelector<HTMLElement>(
+            `[data-view="${viewRef.current}"]`,
+          ) ?? body;
+          scope.querySelectorAll<HTMLElement>("[data-dnd-id]").forEach((el) => {
+            const id = el.dataset.dndId;
+            el.classList.toggle("is-selected", !!id && liveSet.has(id));
+          });
+          const now = performance.now();
+          if (now - lastLiveCommitRef.current > 90) {
+            lastLiveCommitRef.current = now;
             /**
-             * 工具栏目标 = **对被框选卡片集合做 100ms 停留防抖**：
-             * 目标一变就重置定时器，只有"框住的卡 100ms 没变"才采纳一次。
-             * 这样拖动期不会去追"半张矩形"的中间态（那是入框次序造成的，
-             * 每次都不一样），停住/稳定下来之后才飞一次 —— 动画可复现。
+             * 拖动过程中**不允许**把选中集合提交成空：渲染条件里有
+             * `selectedIds.length > 0`，一旦提交空集，工具栏会被 AnimatePresence
+             * 卸载、下一帧再挂回来——观感是工具栏在拖动中忽隐忽现，
+             * 而且重挂后会走"首次出现直接就位"，出现单帧几十像素的硬跳。
+             * 抬手时才用最终结果收尾（那时允许清空，点空白=取消选择）。
              */
-            if (hadToolbarRef.current && toolbarElRef.current && hit.box) {
-              liveTargetRef.current = toolbarTargetFor(
-                hit.box.minX,
-                hit.box.maxX,
-                hit.box.minY,
-                hit.box.maxY,
-                body.clientWidth,
-                body.scrollHeight,
-              );
-              window.clearTimeout(liveTargetTimerRef.current);
-              liveTargetTimerRef.current = window.setTimeout(() => {
-                if (liveTargetRef.current) setToolbarTargetNow(liveTargetRef.current);
-              }, TOOLBAR_TARGET_SETTLE_MS);
-            }
+            if (next.length) setSelectedIds(next);
+          }
+          /**
+           * 工具栏目标 = **对被框选卡片集合做 100ms 停留防抖**：
+           * 目标一变就重置定时器，只有"框住的卡 100ms 没变"才采纳一次。
+           * 这样拖动期不会去追"半张矩形"的中间态（那是入框次序造成的，
+           * 每次都不一样），停住/稳定下来之后才飞一次 —— 动画可复现。
+           */
+          if (hadToolbarRef.current && toolbarElRef.current && hit.box) {
+            liveTargetRef.current = toolbarTargetFor(
+              hit.box.minX,
+              hit.box.maxX,
+              hit.box.minY,
+              hit.box.maxY,
+              body.clientWidth,
+              body.scrollHeight,
+            );
+            window.clearTimeout(liveTargetTimerRef.current);
+            liveTargetTimerRef.current = window.setTimeout(() => {
+              if (liveTargetRef.current) setToolbarTargetNow(liveTargetRef.current);
+            }, TOOLBAR_TARGET_SETTLE_MS);
           }
         }
-      });
-    }
+      }
+    });
   };
+  armMarqueeRef.current = armMarqueeFrame;
+
+  // 框选中滚动跟手：指针没动时 pointermove 不触发，框选矩形会停在旧的
+  // 内容坐标上（滚动把内容抽走、矩形却不跟着走）。滚动回调里用最后的
+  // client 坐标 + 当前 scroll 偏移重算，走同一条帧合并路径。
+  // 用 window 捕获监听（scroll 不冒泡但捕获可达）：滚动容器在设备切换时
+  // 会重挂载，直接绑 bodyRef 会挂在被卸载的旧节点上失效。
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const body = bodyRef.current;
+      if (!body || e.target !== body) return;
+      const s = marqueeStartRef.current;
+      if (!s) return;
+      const c = lastClientRef.current;
+      const rect = body.getBoundingClientRect();
+      pendingMarqueeRef.current = {
+        x1: s.x,
+        y1: s.y,
+        x2: c.x - rect.left + body.scrollLeft,
+        y2: c.y - rect.top + body.scrollTop,
+      };
+      armMarqueeRef.current();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () =>
+      window.removeEventListener("scroll", onScroll, {
+        capture: true,
+      } as EventListenerOptions);
+  }, []);
 
   const onBodyPointerUp = () => {
     window.cancelAnimationFrame(marqueeRafRef.current);
