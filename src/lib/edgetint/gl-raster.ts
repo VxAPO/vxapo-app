@@ -65,9 +65,10 @@ varying float vAlpha;
 varying vec3 vRgb;
 varying vec2 vPos;
 uniform float uSigma;    // 高斯 σ（设备像素；canvas2d blur(r) ≈ σ=r/2）
-uniform float uClipUse;  // >0.5：裁到面板圆角矩形内部（内光/暗部用）
+uniform float uClipUse;  // >0.5：软裁到面板圆角矩形内部（内光/暗部用）
 uniform vec4 uClipRect;  // 面板区域（缓冲画布设备像素坐标）
 uniform float uClipRadius;
+uniform float uProfile;  // 0=box⊗gauss 对称；1=circleMap 边峰内衰（liquid-glass 模型）
 float sdRoundRect(vec2 p, vec4 r, float rad) {
   vec2 d = abs(p - r.xy) - (r.zw - vec2(rad));
   return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - rad;
@@ -82,18 +83,34 @@ float erf(float x) {
   return s * y;
 }
 void main() {
-  if (uClipUse > 0.5 && sdRoundRect(vPos, uClipRect, uClipRadius) > 0.0) discard;
-  float d = abs(vSd);
-  // 精确复刻 canvas2d 的「宽 2h 描边 × 高斯模糊 σ」合成轮廓 = box⊗gauss：
-  //   A(d) = ½[erf((h−d)/(σ√2)) + erf((h+d)/(σ√2))]
-  // 曾用「平顶 + 高斯肩」分段函数：宽条带（halo 宽至 8px）的平顶边缘在多条带
-  // 叠加时呈台阶感；box⊗gauss 全程 C∞，细描边带（σ=0.3）自然退化为带 AA 的细线。
-  float s2 = 1.41421356 * max(uSigma, 0.15);
-  float a = vAlpha * 0.5 * (erf((vHalf - d) / s2) + erf((vHalf + d) / s2));
+  float a;
+  if (uProfile > 0.5) {
+    // circleMap 边峰剖面（liquid-glass 模型，Kyant0/AndroidLiquidGlass）：
+    // 锚定面板边缘（SDF 深度 0 处峰值），向面板内圈 1-√(1-u²) 长尾衰减，
+    // 外侧高斯肩防溢出；到达深度 R=vHalf+3σ 收零。光量语义不变（峰值仍
+    // 为 vAlpha，vHalf 调制衰减半径=「亮处扩散更远」），只重塑空间剖面。
+    float depth = -sdRoundRect(vPos, uClipRect, uClipRadius);
+    if (depth >= 0.0) {
+      float R = max(vHalf + 3.0 * uSigma, 0.15);
+      float u = clamp(1.0 - depth / R, 0.0, 1.0);
+      a = vAlpha * (1.0 - sqrt(max(0.0, 1.0 - u * u)));
+    } else {
+      a = vAlpha * exp(-depth * depth / (2.0 * uSigma * uSigma + 0.0001));
+    }
+  } else {
+    // box⊗gauss 对称剖面（canvas2d 参考同款）：宽环境光体/硬描边用
+    float d = abs(vSd);
+    float s2 = 1.41421356 * max(uSigma, 0.15);
+    a = vAlpha * 0.5 * (erf((vHalf - d) / s2) + erf((vHalf + d) / s2));
+  }
+  if (uClipUse > 0.5) {
+    // 软裁（替代硬 discard）：模糊尾巴先存在，再由 1.5px smoothstep 淡出——
+    // 硬裁会把尾巴齐根切断，在边界留下生硬的亮暗台阶。
+    float cd = sdRoundRect(vPos, uClipRect, uClipRadius);
+    a *= 1.0 - smoothstep(0.0, 1.5, cd);
+  }
   if (a <= 0.003) discard;
   // 预乘输出：配合 blendFunc(ONE, ONE_MINUS_SRC_ALPHA) 与 premultipliedAlpha:true。
-  // 曾用非预乘 + (SRC_ALPHA, ONE_MINUS_SRC_ALPHA)：alpha 通道被同样混合成 a²，
-  // 颜色再被浏览器乘一次 alpha → 层内容又黑又淡（maxA 15/255）不可见。
   gl_FragColor = vec4(vRgb * a, a);
 }`;
 
@@ -104,6 +121,8 @@ interface Band {
   colorAt: (i: number) => Rgb;
   sigma: number;
   clip: boolean;
+  /** circleMap 边峰剖面（贴边亮、向内柔散）；缺省 box⊗gauss 对称剖面 */
+  arc?: boolean;
 }
 
 /**
@@ -209,6 +228,7 @@ function ensureGl(): WebGLRenderingContext | null {
     uClipUse: g.getUniformLocation(prog, "uClipUse"),
     uClipRect: g.getUniformLocation(prog, "uClipRect"),
     uClipRadius: g.getUniformLocation(prog, "uClipRadius"),
+    uProfile: g.getUniformLocation(prog, "uProfile"),
   };
   g.enable(g.BLEND);
   // 预乘 alpha 的标准 over：多条带在同一画布上依次叠加也语义正确
@@ -333,6 +353,7 @@ function drawBand(
   attr("aAlpha", 1, 20);
   attr("aRgb", 3, 24);
   g.uniform1f(locs.uSigma, Math.max(0.01, band.sigma * dpr));
+  g.uniform1f(locs.uProfile, band.arc ? 1 : 0);
   g.uniform1f(locs.uClipUse, band.clip ? 1 : 0);
   g.uniform4f(locs.uClipRect, clipRect.x, clipRect.y, clipRect.w, clipRect.h);
   g.uniform1f(locs.uClipRadius, clipRect.r);
@@ -607,6 +628,7 @@ export const glTintRaster: TintRaster = {
         // 描边之间留 1px 暗接缝，直边观感也偏细偏硬。
         sigma: 1,
         clip: true,
+        arc: true,
       },
       {
         pts: mainPts,
@@ -619,6 +641,7 @@ export const glTintRaster: TintRaster = {
         colorAt: tintAt,
         sigma: MENISCUS_BLUR / 2,
         clip: false,
+        arc: true,
       },
       {
         pts: mainPts,
@@ -687,6 +710,7 @@ export const glTintRaster: TintRaster = {
       colorAt: () => darkRgb,
       sigma: 1.6 / 2,
       clip: true,
+      arc: true,
     };
     drawBand(g, darkBand, dpr, ox, oy, clipRect);
     shadeCtx2.drawImage(
