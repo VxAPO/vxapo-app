@@ -248,7 +248,19 @@ export function paintLayerPair(
   // 画布只覆盖本次真正会绘制的范围（目标矩形 ± PAD，已含外扩光晕）。
   // 绘制坐标仍是视口坐标，像素与整窗画布完全一致；但 mix-blend-mode 的混合层
   // 面积从整窗缩到面板范围，动画期间的重合成开销大幅下降（实测帧间隔 20-70ms → 10-20ms）。
-  const next = dirtyForEls(els);
+  let next = dirtyForEls(els);
+  // 64px 网格对齐（向外取整）：纯平移期脏区尺寸保持稳定、原点按格步进——
+  // 配合下方「同尺寸不重分配」，滚动期混合层零纹理分配。
+  if (next) {
+    const gx = Math.floor(next.x / 64) * 64;
+    const gy = Math.floor(next.y / 64) * 64;
+    next = {
+      x: gx,
+      y: gy,
+      w: Math.ceil((next.x + next.w) / 64) * 64 - gx,
+      h: Math.ceil((next.y + next.h) / 64) * 64 - gy,
+    };
+  }
   // ── 阶段 A：先推进各面板的复用/全量重画决策 ──
   // 配色时效的时钟在 renderToPanelBuffer 里（复用窗口到期才重算采样），
   // 必须先跑，否则滚动中的采样变化永远不会落到缓冲上（颜色冻结）。
@@ -256,23 +268,45 @@ export function paintLayerPair(
     el,
     buf: renderToPanelBuffer(el, cards, kind),
   }));
-  // ── 内容未变跳过（尖峰归因修复）──
-  // 本层本 paint 没有全量重画（全复用）+ 无淡入淡出 + 脏区与上帧一致 ⇒
-  // 层画布像素与上帧完全相同，clear+重贴只是把没变化的纹理再向 GPU 重传一遍
-  //（外加混合层重复上传）。归因实测：尖峰帧 JS 仅 ~6ms 而帧间隔 34-79ms——
-  // 大头在 GPU 侧的层重传/栅格/合成。面板钉死，滚动期这条路径每帧都在白干。
+  // ── 内容未变跳过（尖峰归因修复 + 假移动追加）──
+  // 本层本 paint 没有全量重画（全复用）+ 无淡入淡出 ⇒ 层画布像素与上帧
+  // 完全相同，clear+重贴只是把没变化的纹理再向 GPU 重传一遍（外加混合层
+  // 重复上传）。原条件还要求脏区相等——纯平移期脏区每帧都变，导致带
+  // 工具栏滚动时工具层每帧“重定位+清+重贴+混合层重传”（实测 p95
+  // 8→16）。追加 chased 条件：画布已登记滚动基准时，位置由守卫 translate
+  //（假移动补偿）负责，连重定位都可跳过——滚动期混合层纹理零更新。
   const prevDirtyNow = kind === "base" ? ST.prevBaseDirty : ST.prevToolDirty;
-  if (
-    els.length > 0 &&
-    ST.lastFullRender[kind] < ST.lastPaintAt &&
-    !els.some((el) => targetVisibility(el) < 0.999) &&
-    prevDirtyNow &&
-    next &&
+  const dirtyEqual =
+    !!prevDirtyNow &&
+    !!next &&
     prevDirtyNow.x === next.x &&
     prevDirtyNow.y === next.y &&
     prevDirtyNow.w === next.w &&
-    prevDirtyNow.h === next.h
+    prevDirtyNow.h === next.h;
+  const chased = ST.paintedScroll.has(c) && ST.paintedScroll.has(sc);
+  // 至少有一个可绘 buffer 才能跳过：工具栏滚出可视阈值时 buf 为 null，
+  // 若仍走跳过，尾帧会冻结在旧位置（translate 被后续记录清零却没重贴）；
+  // 不可绘时落到重定位+清屏路径，顺带清掉残影。
+  const anyDrawable = rendered.some(({ buf }) => !!buf);
+  // 调试：本层可绘状态（跳过/清屏路径归因）
+  (globalThis as { __vxDrawable?: unknown }).__vxDrawable = {
+    kind,
+    anyDrawable,
+    n: els.length,
+    skipped:
+      els.length > 0 &&
+      anyDrawable &&
+      ST.lastFullRender[kind] < ST.lastPaintAt &&
+      (dirtyEqual || chased),
+  };
+  if (
+    els.length > 0 &&
+    anyDrawable &&
+    ST.lastFullRender[kind] < ST.lastPaintAt &&
+    !els.some((el) => targetVisibility(el) < 0.999) &&
+    (dirtyEqual || chased)
   ) {
+    ST.stats.layerSkips += 1;
     return;
   }
   const vw = window.innerWidth;
@@ -288,12 +322,11 @@ export function paintLayerPair(
   const bw = Math.max(1, Math.round(ow * dpr));
   const bh = Math.max(1, Math.round(oh * dpr));
   const prevOrigin = kind === "base" ? ST.prevBaseOrigin : ST.prevToolOrigin;
-  const geomChanged =
-    c.width !== bw ||
-    c.height !== bh ||
-    !prevOrigin ||
-    prevOrigin.x !== ox ||
-    prevOrigin.y !== oy;
+  // 仅尺寸变化才重分配后备存储：**同尺寸的 c.width 赋值同样会销毁+重建
+  // 纹理**——原点平移（滚动）曾把它当 geomChanged 每帧触发，混合层纹理
+  // 每帧 churn + 重传，带工具栏滚动实测 p50 2.5→5 / p95 8→19ms。
+  // 原点变化只重定位 + 清脏区并集 + 重贴（零纹理分配）。
+  const realloc = c.width !== bw || c.height !== bh || !prevOrigin;
   c.style.left = `${ox}px`;
   c.style.top = `${oy}px`;
   c.style.width = `${ow}px`;
@@ -302,8 +335,8 @@ export function paintLayerPair(
   sc.style.top = `${oy}px`;
   sc.style.width = `${ow}px`;
   sc.style.height = `${oh}px`;
-  if (geomChanged) {
-    // 重新分配后备存储即等于整块清空，原点变化时不会有残留旧像素
+  if (realloc) {
+    // 重新分配后备存储即等于整块清空，首帧/尺寸变化不会有残留旧像素
     c.width = bw;
     c.height = bh;
     sc.width = bw;
@@ -312,7 +345,7 @@ export function paintLayerPair(
   k.setTransform(dpr, 0, 0, dpr, -ox * dpr, -oy * dpr);
   sk.setTransform(dpr, 0, 0, dpr, -ox * dpr, -oy * dpr);
   const prev = kind === "base" ? ST.prevBaseDirty : ST.prevToolDirty;
-  if (!geomChanged) {
+  if (!realloc) {
     // clearRect 与 drawImage 共用同一 CTM（已含 -原点 平移），这里必须传视口坐标：
     // 再减一次原点会把清屏区域整体挪走，旧像素清不掉、画面层层叠加。
     clearDirtyUnion(k, prev, next);
@@ -326,6 +359,7 @@ export function paintLayerPair(
     ST.prevToolOrigin = { x: ox, y: oy };
   }
   if (!els.length) return;
+  let blitted = false;
   rendered.forEach(({ el, buf }) => {
     if (buf) {
       // 注意：不能引用裸 `toolbar`——TS 会解析成 legacy 的 window.toolbar
@@ -380,16 +414,27 @@ export function paintLayerPair(
       sk.drawImage(buf.sc, buf.x, buf.y, buf.w, buf.h);
       sk.globalAlpha = 1;
       if (toolbar) sk.restore();
+      blitted = true;
+      if (toolbar) {
+        // 领先帧探针锚点：本次 blit 时工具栏位置与画布原点（视口坐标）——
+        // 画布描边的显示位置 = canvas.style.top + translate + (top - originY)
+        ST.toolAnchor = { originY: oy, top: r.top };
+      }
     }
   });
-  // 假移动补偿折算基准：本层两块画布刚在本任务内重定位+重贴——
-  // 清掉补偿 translate 并记录当前滚动位置，守卫从这里重新累计
-  const sc0 = scrollContainerOf();
-  const base = sc0 ? { left: sc0.scrollLeft, top: sc0.scrollTop } : null;
-  for (const cv of [c, sc]) {
-    cv.style.translate = "";
-    if (base) ST.paintedScroll.set(cv, base);
-    else ST.paintedScroll.delete(cv);
+  // 只有真实重贴过才折算基准：本层可能走到几何路径但无可绘内容（工具栏
+  // 被容器裁空等）——此时若记录新基准并清 translate，画布会冻结在旧位置
+  // 而守卫按新基准算出零位移（尾帧「停住不跟」的根因）。未重贴时保持
+  // translate 与旧基准，守卫继续按旧锚补偿。
+  if (blitted) {
+    ST.stats.layerBlits += 1;
+    const sc0 = scrollContainerOf();
+    const base = sc0 ? { left: sc0.scrollLeft, top: sc0.scrollTop } : null;
+    for (const cv of [c, sc]) {
+      cv.style.removeProperty("translate");
+      if (base) ST.paintedScroll.set(cv, base);
+      else ST.paintedScroll.delete(cv);
+    }
   }
 }
 
@@ -426,11 +471,25 @@ function guardTick(): void {
       if (!base) continue;
       const dx = sc.scrollLeft - base.left;
       const dy = sc.scrollTop - base.top;
+      // 符号：画布挂在视口坐标系（不随内容滚动），工具栏随内容滚动——
+      // 滚动增量为正（内容上移）时画布必须反向平移才追得上。
       const t =
         Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5
-          ? `translate(${dx}px, ${dy}px)`
+          ? `${-dx}px ${-dy}px`
           : "";
-      if (cv.style.translate !== t) cv.style.translate = t;
+      // 必须走 setProperty/removeProperty 且值用长度对（"0px -40px"）：
+      // 1) 本 Chromium 构建里 el.style.translate 驼峰访问器静默失效
+      //    （写入丢失）——假移动补偿死过一版的直接死因；
+      // 2) translate 属性不接受 transform 函数语法（"translate(0px,-40px)"
+      //    是非法值会被整体拒绝），只能给 x y 两个长度。
+      if (cv.style.getPropertyValue("translate") !== t) {
+        if (t) cv.style.setProperty("translate", t);
+        else cv.style.removeProperty("translate");
+      }
+      // 调试探针：守卫最近一次的计算（领先帧归因）
+      (globalThis as { __vxGuard?: unknown }).__vxGuard = {
+        dx, dy, t, scroll: sc.scrollTop, base: base.top,
+      };
     }
   }
   ST.guardRaf = requestAnimationFrame(guardTick);
@@ -638,7 +697,13 @@ export function start(): void {
         m.type === "attributes" &&
         m.attributeName === "style" &&
         m.target instanceof HTMLElement &&
-        m.target.closest(".view-stage"),
+        // 只认 view-stage 元素自身的样式变化（视图切换的滑动动画写在
+        // stage 上）。曾用 closest('.view-stage') 把所有后代都算进来——
+        // 曲线信息浮窗（curve-tip）逐 mousemove 写 style，每帧都被判成
+        // 视图动画 → 每帧全量重画，浮窗帧数被自己的联动拖垮（WebGL
+        // 接入后染色常开才暴露）。420ms 驱动链已覆盖切换窗口内的子级
+        // 变化，后代逐帧样式无需单触发。
+        m.target.classList.contains("view-stage"),
     );
     const dragStyleChanged = records.some(
       (m) =>

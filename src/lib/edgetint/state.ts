@@ -83,6 +83,8 @@ export interface EdgeTintState {
   toolMoving: boolean;
   /** 每块混合层画布上次重定位时的滚动位置：假移动补偿的基准（画布追平移） */
   paintedScroll: WeakMap<HTMLCanvasElement, { left: number; top: number }>;
+  /** 最近一次工具栏 blit 的锚点（画布原点 + 工具栏位置）：领先帧探针用 */
+  toolAnchor: { originY: number; top: number } | null;
   /** 假移动补偿守卫循环的 rAF id */
   guardRaf: number;
   /**
@@ -146,6 +148,10 @@ export interface TintStats {
   paintSum: number;
   drawSum: number;
   blurSum: number;
+  /** 层跳过（内容未变 + 位置由假移动补偿承担）次数 */
+  layerSkips: number;
+  /** 层实际重贴（clear+blit+混合层重传）次数 */
+  layerBlits: number;
 }
 
 /** 单例状态。 */
@@ -182,6 +188,7 @@ export const ST: EdgeTintState = {
   fading: new WeakSet<HTMLElement>(),
   toolMoving: false,
   paintedScroll: new WeakMap<HTMLCanvasElement, { left: number; top: number }>(),
+  toolAnchor: null,
   guardRaf: 0,
   bufGen: 1,
   paintCache: new Map<HTMLElement, PaintCacheEntry>(),
@@ -219,6 +226,8 @@ export const ST: EdgeTintState = {
     paintSum: 0,
     drawSum: 0,
     blurSum: 0,
+    layerSkips: 0,
+    layerBlits: 0,
   },
 };
 
