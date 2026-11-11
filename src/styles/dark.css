@@ -185,6 +185,13 @@
   border-color: color-mix(in srgb, var(--card-accent-dark, var(--card-accent, var(--brand))) 55%, transparent);
 }
 
+/* 参数视图：输入框焦点描边在深色下用**深色组色**，与卡片外圈同一套 token
+   （浅色基色在深底上偏亮，会和卡片描边分成两种颜色）。 */
+:root[data-theme="dark"] .sem-group .num:focus-visible,
+:root[data-theme="dark"] .sem-group .gain-input:focus-visible {
+  border-color: var(--card-accent-dark, var(--card-accent, var(--brand)));
+}
+
 
 
 :root[data-theme="dark"] .sem-group .enable-dot.on {

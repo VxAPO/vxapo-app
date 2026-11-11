@@ -15,7 +15,7 @@ import {
 } from "../lib/api";
 import type { Device, MigrationReport, StaleInstall } from "../lib/model";
 import { t } from "../lib/i18n/core";
-import { pickAutoRepairTargets } from "../lib/staleAuto";
+import { isElevationFailure, pickAutoRepairTargets } from "../lib/staleAuto";
 import { useUiStore } from "./uiStore";
 
 /** 逐项浅比较，避免轮询无变化时替换数组引用。 */
@@ -119,32 +119,46 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
       // 只在**首次**加载尝试，一次启动最多一次：driver 已判定 auto_repairable
       // （目标唯一命中 + 旧记录配置有意义 + 目标目录没有有意义的配置），
       // 这里逐条执行迁移（提权 CLI；UAC 由用户点一下即可）。
-      // 取消/失败即停（避免连续弹 UAC），余下记录继续由横幅手动处理。
+      //
+      // **逐条独立**：GUID 迁移是按设备各自触发的，一次更新后可能同时有多台设备
+      // 换了 GUID；旧实现「失败即 break」会让第一台的失败（端点正在重新枚举、
+      // 该条记录已失效……）连带吞掉后面所有设备，表现就是「只迁移了一台」。
+      // 现在只在**提权类**失败时整轮停止——那种失败下每条记录都会再弹一次 UAC、
+      // 再等满一次超时，连续弹窗比不自动更糟；其余失败只跳过这一条。
       if (first && staleRes.status === "fulfilled") {
         const targets = pickAutoRepairTargets(staleRes.value);
         if (targets.length > 0) {
           const restored: string[] = [];
+          let failed = 0;
+          let elevationBlocked = false;
           for (const item of targets) {
             try {
               await migrateStaleInstall(item.guid, item.target_guid as string, null, null);
               restored.push(item.target_name ?? item.display_name);
-            } catch {
-              break;
+            } catch (e: unknown) {
+              failed += 1;
+              if (isElevationFailure(e)) {
+                elevationBlocked = true;
+                break;
+              }
             }
           }
           if (restored.length > 0) {
-            useUiStore
-              .getState()
-              .notify(
-                restored.length === 1
-                  ? t("stale.auto.done", { name: restored[0] })
-                  : t("stale.auto.doneMany", { count: restored.length }),
-              );
+            const ui = useUiStore.getState();
+            const done =
+              restored.length === 1
+                ? t("stale.auto.done", { name: restored[0] })
+                : t("stale.auto.doneMany", { count: restored.length });
+            // 有失败的条目时补一句，避免「已恢复 N 台」把没成的那几台盖掉。
+            ui.notify(failed > 0 ? `${done} ${t("stale.auto.partial")}` : done);
             // 迁移后重拉，拿到已归并/清理的列表
             [devRes, staleRes] = await Promise.allSettled([listDevices(), listStaleInstalls()]);
             if (devRes.status === "rejected") throw devRes.reason;
           } else {
-            useUiStore.getState().notify(t("stale.auto.skipped"));
+            // 提权被拒 → 跳过提示；纯技术失败（端点重枚举等）不能说成「未获授权」。
+            useUiStore
+              .getState()
+              .notify(t(elevationBlocked ? "stale.auto.skipped" : "stale.auto.failed"));
           }
         }
       }

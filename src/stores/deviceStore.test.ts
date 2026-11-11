@@ -40,6 +40,29 @@ function dev(guid: string, name = "Dev"): Device {
   };
 }
 
+/** 一条可自动修复的旧 GUID 残留（启动自动修复的候选项）。 */
+function staleAuto(from: string, to: string): StaleInstall {
+  return {
+    guid: from,
+    device_instance_id: "USB\\VID_0000&PID_0000\\1",
+    display_name: from,
+    matched_by: "endpoint_history",
+    config_path: null,
+    config_mtime_ms: 0,
+    snapshot_path: null,
+    snapshot_mtime_ms: 0,
+    premix_slot: null,
+    postmix_slot: null,
+    inferred_mode: "SfxEfx",
+    has_child_backup: false,
+    has_sysfx_backup: false,
+    target_guid: to,
+    target_name: to,
+    target_state: "matched_partial",
+    auto_repairable: true,
+  };
+}
+
 function resetStore() {
   useDeviceStore.setState({
     devices: [],
@@ -93,6 +116,41 @@ describe("deviceStore.load 轮询与 stale 同步", () => {
     vi.mocked(api.listDevices).mockResolvedValue([dev("B")]);
     await useDeviceStore.getState().load(false);
     await vi.waitFor(() => expect(api.listStaleInstalls).toHaveBeenCalledTimes(2));
+  });
+
+  it("多台设备同时换 GUID：逐条迁移，一台失败不影响后面的", async () => {
+    vi.mocked(api.listDevices).mockResolvedValue([dev("T1"), dev("T2"), dev("T3")]);
+    vi.mocked(api.listStaleInstalls).mockResolvedValue([
+      staleAuto("A", "T1"),
+      staleAuto("B", "T2"),
+      staleAuto("C", "T3"),
+    ]);
+    // 第一条是「技术性失败」（端点正在重新枚举等），不该吞掉后面两条
+    vi.mocked(api.migrateStaleInstall)
+      .mockRejectedValueOnce("未找到旧安装记录：{A}")
+      .mockResolvedValue(null);
+
+    await useDeviceStore.getState().load(true);
+
+    expect(api.migrateStaleInstall).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(api.migrateStaleInstall).mock.calls.map((c) => c[0])).toEqual([
+      "A",
+      "B",
+      "C",
+    ]);
+  });
+
+  it("提权被拒：整轮停止（避免连续弹 UAC），余下交给横幅", async () => {
+    vi.mocked(api.listDevices).mockResolvedValue([dev("T1"), dev("T2")]);
+    vi.mocked(api.listStaleInstalls).mockResolvedValue([
+      staleAuto("A", "T1"),
+      staleAuto("B", "T2"),
+    ]);
+    vi.mocked(api.migrateStaleInstall).mockRejectedValue("E_ELEVATION: ShellExecute 失败");
+
+    await useDeviceStore.getState().load(true);
+
+    expect(api.migrateStaleInstall).toHaveBeenCalledTimes(1);
   });
 
   it("补拉失败保留现值（横幅不闪没）", async () => {

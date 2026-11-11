@@ -587,7 +587,10 @@ html[data-lang="zh"] .b-type {
 
 .num:focus-visible {
   outline: none;
-  border-color: var(--brand);
+  /* 焦点只靠**描边变色**交代，颜色取与卡片外圈同一套口径：带组卡的描边是组色
+     （见 .band-card.enabled.sem-group），焦点写死 --brand 时组卡一聚焦就跳出主题色，
+     看着像别处来的控件。改为跟随组色，无组卡回落到 --brand。 */
+  border-color: var(--card-accent, var(--brand));
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
 }
 
@@ -712,7 +715,9 @@ html[data-lang="zh"] .b-type {
 
 .gain-input:focus-visible {
   outline: none;
-  border-color: var(--brand);
+  /* 同 .num:focus-visible：跟随卡片组色（参数视图的滑块值框、效果器参数框都在
+     带组卡片里），无组卡回落到 --brand。 */
+  border-color: var(--card-accent, var(--brand));
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
 }
 

@@ -128,6 +128,8 @@ export const en: Record<string, string> = {
   "stale.auto.done": "Restored tuning for {name} automatically (old records archived)",
   "stale.auto.doneMany": "Restored tuning for {count} device(s) automatically (old records archived)",
   "stale.auto.skipped": "Auto-repair skipped (no admin authorization). Use the banner to handle it manually.",
+  "stale.auto.partial": "The remaining devices were not migrated automatically — use the banner to handle them manually.",
+  "stale.auto.failed": "Automatic migration did not complete. Use the banner to handle it manually.",
   "stale.migrate": "Migrate",
   "stale.migrate.config": "Migrate config",
   "stale.cleanup": "Clean up",

@@ -128,6 +128,8 @@ export const zh: Record<string, string> = {
   "stale.auto.done": "已自动恢复「{name}」的调音配置（旧记录已归档）",
   "stale.auto.doneMany": "已自动恢复 {count} 台设备的调音配置（旧记录已归档）",
   "stale.auto.skipped": "已跳过自动修复（未获管理员授权），可在顶部横幅手动处理",
+  "stale.auto.partial": "其余设备的旧记录未自动迁移，可在顶部横幅手动处理",
+  "stale.auto.failed": "自动迁移未完成，可在顶部横幅手动处理",
   "stale.migrate": "迁移",
   "stale.migrate.config": "迁移配置",
   "stale.cleanup": "清理旧记录",
