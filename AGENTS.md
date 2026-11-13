@@ -6,13 +6,13 @@
 
 ## 1. 仓库布局（**先看这条，容易踩**）
 
-本仓是 **Tauri + Vue** 混合仓库：
+本仓是 **Tauri + React** 混合仓库：
 
 - **仓库根不是 Cargo 包**。Rust 侧在 `src-tauri/`，配置文件也在那里：
   - `src-tauri/rustfmt.toml`
   - `src-tauri/rust-toolchain.toml`
   - `src-tauri/Cargo.toml`
-- 前端在 `src/`（Vue/TS），构建产物 `dist/`、依赖 `node_modules/` 均不入库。
+- 前端在 `src/`（React/TS），构建产物 `dist/`、依赖 `node_modules/` 均不入库。
 
 因此所有 cargo 命令**必须带 `--manifest-path src-tauri/Cargo.toml`**（在根目录跑时）。
 在 `src-tauri/` 里面跑则不需要。
@@ -25,7 +25,7 @@
   `newline_style = "Unix"`）。折行策略就是 rustfmt 默认值，**无任何自定义 width 参数**。
 - 工具链钉在 `src-tauri/rust-toolchain.toml`（`channel = "1.100.0"`）。
 - **不要手工微调格式**，也不要为局部观感引入新的格式化工具。
-- 前端（Vue/TS）的缩进/行尾由 `.editorconfig` 管；**本计划未引入前端格式化器**
+- 前端（React/TS）的缩进/行尾由 `.editorconfig` 管；**本计划未引入前端格式化器**
   （prettier 等），不要顺手加。
 
 ### 本仓库实测过的 rustfmt 行为（复审 diff 时不要误判为逻辑改动）
@@ -84,7 +84,7 @@ git config core.hooksPath .githooks
 - 行尾由 `.gitattributes` 统一为 **LF**（`*.cmd` / `*.bat` 例外保持 CRLF）。
   本仓该文件早已存在，本次只统一了注释文字。
 - `.editorconfig` 管非 Rust 文件；`.vscode/settings.json` 已入库（保存即格式化）。
-- **注意**：本仓 `.gitignore` 是 **GBK 编码**（不是 UTF-8），且 `.vscode/*` 原本被忽略。
+- **注意**：本仓 `.gitignore` 是**混合编码**（主体 GBK，第 28 行起混有 UTF-8 行），且 `.vscode/*` 原本被忽略。
   已补 `!.vscode/settings.json` 例外；**改动该文件时必须按字节处理，不要当成 UTF-8 重写**，
   否则会破坏其中的中文注释。
 
@@ -103,7 +103,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check   # 退出码 0
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings   # 退出码 101
 ```
 
-当前有 2 类告警（`needless_borrows_for_generic_args`、`unnecessary if-let`）。
+当前有 3 类告警，各 1 处：`needless_borrows_for_generic_args`、`manual_flatten`、
+`collapsible_if`。
 **这一状态在格式化之前就已存在**——已用 stash 回到 pre-fmt 状态实证，
 pre-fmt 与 post-fmt 的错误集合完全一致，格式化未引入任何新 lint。
 

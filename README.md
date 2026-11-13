@@ -190,7 +190,7 @@ Chromium 系能力。Windows 端 Tauri 2 通过 WebView2 渲染，因此可直�
 npm install
 npm run tauri dev            # 开发
 npm run tauri build          # 构建
-npm run build:win            # Windows 发布构建（含 exe 图标重嵌入）
+npm run build:win            # Windows 发布构建（图标由 Tauri build 内置嵌入）
 npm run release              # 一键出安装包：driver + cli 重编 → 拷入 resources → tauri 打包
 ```
 
@@ -199,8 +199,13 @@ npm test                     # vitest：TOML 往返 / 参数表一致性 / 预�
 npm run sync:driver-schema   # 用 driver 参数表重新生成 src/lib/effects.generated.ts
 ```
 
-`sync:driver-schema` 调用 CLI 的 `effects schema --json`。CLI 的定位顺序：先看 `VXAPO_CLI`
-环境变量，再看 App 同目录，最后看 `resources\vxapo-cli.exe`。
+除 Tauri 外，`package.json` 还提供 Electron 双轨脚本（`electron:dev` / `electron:borderless` /
+`electron:build`，入口 `electron/main.mjs`），并非只有 Tauri 一条打包线。exe 图标由 Tauri
+build 内置嵌入；如需修正 debug exe 的图标，另有独立的 `icon:fix` 脚本。
+
+`sync:driver-schema` 调用 CLI 的 `effects schema --json`。脚本先看 `VXAPO_CLI` 环境变量，
+未设置时用 `cargo run --manifest-path ../vxapo-cli/Cargo.toml` 现场编译运行。（「环境变量 →
+App 同目录 → `resources\vxapo-cli.exe`」是 src-tauri 的运行期定位顺序，不属于本脚本。）
 
 ## 9 · 两条实现约定
 
@@ -442,7 +447,7 @@ Two more structural facts:
 npm install
 npm run tauri dev            # develop
 npm run tauri build          # build
-npm run build:win            # Windows release build (includes exe icon re-embedding)
+npm run build:win            # Windows release build (icon embedded by the Tauri build)
 npm run release              # one-shot installer: rebuild driver + cli, copy to resources, tauri bundle
 ```
 
@@ -452,9 +457,15 @@ npm test                     # vitest: TOML round trip, parameter-table consiste
 npm run sync:driver-schema   # regenerate src/lib/effects.generated.ts from the driver table
 ```
 
-`sync:driver-schema` calls the CLI's `effects schema --json`. The lookup order for the CLI is
-the `VXAPO_CLI` environment variable first, then the App directory, then
-`resources\vxapo-cli.exe`.
+Besides Tauri, `package.json` also ships Electron dual-track scripts (`electron:dev` /
+`electron:borderless` / `electron:build`, entry `electron/main.mjs`), so Tauri is not the only
+packaging line. The exe icon is embedded by the Tauri build; a separate `icon:fix` script
+repairs the debug exe's icon.
+
+`sync:driver-schema` calls the CLI's `effects schema --json`. The script uses the `VXAPO_CLI`
+environment variable when set, and otherwise builds and runs the CLI via
+`cargo run --manifest-path ../vxapo-cli/Cargo.toml`. (The "env var → App directory →
+`resources\vxapo-cli.exe`" order is the src-tauri runtime lookup, not this script's.)
 
 ## 9 · Two implementation conventions
 
