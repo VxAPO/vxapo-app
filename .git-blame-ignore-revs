@@ -12,3 +12,6 @@
 
 # style: cargo fmt（无逻辑改动，仅本仓文件）
 b242f84676ac2132ab857ea49b6262229c8bc1d3
+
+# style(app): style_edition 2021→2024 重排（无逻辑改动）
+42443871e3bd4c7dcefe352a540f6ab5d00b1ada
