@@ -23,7 +23,7 @@
 
 - 风格配置在 `src-tauri/rustfmt.toml`（`style_edition = "2021"`、
   `newline_style = "Unix"`）。折行策略就是 rustfmt 默认值，**无任何自定义 width 参数**。
-- 工具链钉在 `src-tauri/rust-toolchain.toml`（`channel = "1.97.1"`）。
+- 工具链钉在 `src-tauri/rust-toolchain.toml`（`channel = "1.100.0"`）。
 - **不要手工微调格式**，也不要为局部观感引入新的格式化工具。
 - 前端（Vue/TS）的缩进/行尾由 `.editorconfig` 管；**本计划未引入前端格式化器**
   （prettier 等），不要顺手加。
