@@ -2,17 +2,40 @@
 !define VXAPO_DLL "$INSTDIR\resources\vxapo_driver.dll"
 !define VXAPO_DLL_BAK "$INSTDIR\resources\vxapo_driver.dll.old"
 
-!ifndef BUILD_UNINSTALLER
-Var vxapoNeedRestart
+Var vxapoHasOld
 
+!macro VXAPO_RESTART_AUDIO
+  nsExec::Exec 'sc stop Audiosrv'
+  Pop $R0
+  StrCpy $R1 0
+  vxapo_ra_wait:
+    Sleep 50
+    nsExec::Exec 'cmd /c sc query Audiosrv | findstr /C:"STOPPED"'
+    Pop $R0
+    StrCmp $R0 "0" vxapo_ra_go
+    IntCmp $R1 40 0 0 vxapo_ra_go
+    IntOp $R1 $R1 + 1
+    Goto vxapo_ra_wait
+  vxapo_ra_go:
+  nsExec::Exec 'sc start Audiosrv'
+  Pop $R0
+!macroend
+
+!macro VXAPO_DELETE_BAK
+  Delete "${VXAPO_DLL_BAK}"
+  IfFileExists "${VXAPO_DLL_BAK}" 0 +2
+    Delete /REBOOTOK "${VXAPO_DLL_BAK}"
+!macroend
+
+!ifndef BUILD_UNINSTALLER
 Function vxapoRenameDriver
-  StrCpy $vxapoNeedRestart "0"
+  StrCpy $vxapoHasOld "0"
   IfFileExists "${VXAPO_DLL}" 0 vxapo_ren_done
   Delete /REBOOTOK "${VXAPO_DLL_BAK}"
   ClearErrors
   Rename "${VXAPO_DLL}" "${VXAPO_DLL_BAK}"
   IfErrors vxapo_ren_done
-  StrCpy $vxapoNeedRestart "1"
+  StrCpy $vxapoHasOld "1"
   vxapo_ren_done:
 FunctionEnd
 
@@ -22,6 +45,17 @@ FunctionEnd
   Sleep 600
   Call vxapoRenameDriver
 !macroend
+!else
+Function un.vxapoRenameDriver
+  StrCpy $vxapoHasOld "0"
+  IfFileExists "${VXAPO_DLL}" 0 vxapo_unren_done
+  Delete /REBOOTOK "${VXAPO_DLL_BAK}"
+  ClearErrors
+  Rename "${VXAPO_DLL}" "${VXAPO_DLL_BAK}"
+  IfErrors vxapo_unren_done
+  StrCpy $vxapoHasOld "1"
+  vxapo_unren_done:
+FunctionEnd
 !endif
 
 !macro customInstall
@@ -30,25 +64,8 @@ FunctionEnd
   File "/oname=vxapo_driver.dll" "${PROJECT_DIR}\src-tauri\resources\vxapo_driver.dll"
   SetOutPath "$INSTDIR"
 
-  StrCmp $vxapoNeedRestart "1" 0 vxapo_no_restart
-    nsExec::Exec 'sc stop Audiosrv'
-    Pop $R0
-    StrCpy $R1 0
-    vxapo_wait:
-      Sleep 50
-      nsExec::Exec 'cmd /c sc query Audiosrv | findstr /C:"STOPPED"'
-      Pop $R0
-      StrCmp $R0 "0" vxapo_go
-      IntCmp $R1 40 0 0 vxapo_go
-      IntOp $R1 $R1 + 1
-      Goto vxapo_wait
-    vxapo_go:
-    Delete "${VXAPO_DLL_BAK}"
-    IfFileExists "${VXAPO_DLL_BAK}" 0 +2
-      Delete /REBOOTOK "${VXAPO_DLL_BAK}"
-    nsExec::Exec 'sc start Audiosrv'
-    Pop $R0
-  vxapo_no_restart:
+  !insertmacro VXAPO_RESTART_AUDIO
+  !insertmacro VXAPO_DELETE_BAK
 
   nsExec::Exec 'regsvr32 /s "${VXAPO_DLL}"'
   Pop $R9
@@ -71,4 +88,9 @@ FunctionEnd
 !macro customUnInstall
   nsExec::Exec 'regsvr32 /s /u "${VXAPO_DLL}"'
   Pop $R9
+  Call un.vxapoRenameDriver
+  StrCmp $vxapoHasOld "1" 0 vxapo_un_done
+    !insertmacro VXAPO_RESTART_AUDIO
+    !insertmacro VXAPO_DELETE_BAK
+  vxapo_un_done:
 !macroend
