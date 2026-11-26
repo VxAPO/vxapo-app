@@ -27,11 +27,16 @@ Var vxapoHasOld
     Delete /REBOOTOK "${VXAPO_DLL_BAK}"
 !macroend
 
+!macro VXAPO_CLEAR_STALE_BAK
+  IfFileExists "${VXAPO_DLL_BAK}" 0 +2
+    Delete /REBOOTOK "${VXAPO_DLL_BAK}"
+!macroend
+
 !ifndef BUILD_UNINSTALLER
 Function vxapoRenameDriver
   StrCpy $vxapoHasOld "0"
   IfFileExists "${VXAPO_DLL}" 0 vxapo_ren_done
-  Delete /REBOOTOK "${VXAPO_DLL_BAK}"
+  !insertmacro VXAPO_CLEAR_STALE_BAK
   ClearErrors
   Rename "${VXAPO_DLL}" "${VXAPO_DLL_BAK}"
   IfErrors vxapo_ren_done
@@ -49,7 +54,7 @@ FunctionEnd
 Function un.vxapoRenameDriver
   StrCpy $vxapoHasOld "0"
   IfFileExists "${VXAPO_DLL}" 0 vxapo_unren_done
-  Delete /REBOOTOK "${VXAPO_DLL_BAK}"
+  !insertmacro VXAPO_CLEAR_STALE_BAK
   ClearErrors
   Rename "${VXAPO_DLL}" "${VXAPO_DLL_BAK}"
   IfErrors vxapo_unren_done
