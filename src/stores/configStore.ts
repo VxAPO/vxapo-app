@@ -202,8 +202,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     if (get().pollPaused !== paused) set({ pollPaused: paused });
   },
 
-  // 旧 GUID 迁移由提权 CLI 完成，config.toml 可能继承管理员 ACL；
-  // 首次写入遇到权限错误时提权修一次 ACL，再重试原写入。
+  // 旧 GUID 迁移后 config.toml 可能继承管理员 ACL；首次写入遇权限错误
+  // 时修一次 ACL 再重试。这是 App 内唯一会触发提权的路径（走 CLI fix-acl）。
   async writeConfigSafe(guid, content) {
     const { aclRepairRef } = get();
     try {
@@ -211,8 +211,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       return;
     } catch (e: unknown) {
       const msg = String(e);
-      // denied 文案按后端分野：Tauri(Rust) 抛 "os error 5 / 拒绝访问"，
-      // Electron(Node libuv) 抛 "EPERM: operation not permitted"——两边都要认。
+      // 两边文案都要认：Rust 抛 "os error 5 / 拒绝访问"，
+      // Electron 抛 "EPERM: operation not permitted"（见 f494e48）。
       const denied =
         /os error 5|access is denied|拒绝访问|permission|eperm|operation not permitted/i.test(
           msg,

@@ -1,4 +1,7 @@
-﻿!define VXAPO_DATA_ROOT "C:\ProgramData\VxAPO"
+﻿# 安装器不调用 vxapo-cli、不依赖 pwsh，只用 sc/taskkill/regsvr32/icacls。
+# 安装提权由 RequestExecutionLevel admin 交给 Windows（见 installer.nsi）。
+# 下面 icacls 把 ProgramData 授权给 INTERACTIVE，标准用户才能改设备 config。
+!define VXAPO_DATA_ROOT "C:\ProgramData\VxAPO"
 !define VXAPO_DLL "$INSTDIR\resources\vxapo_driver.dll"
 !define VXAPO_DLL_BAK "$INSTDIR\resources\vxapo_driver.dll.old"
 

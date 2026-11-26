@@ -95,10 +95,15 @@ function configRevision(buf) {
   return h.toString(16).padStart(16, "0");
 }
 
-// ── 提权引擎（VBS runas + 隐藏窗口，与 Rust 侧语义同构）──
-// 控制文件（ps1/vbs/err/done/outer/log）带唯一后缀：固定文件名曾与残留的
-// 提权 PowerShell 抢同一个 ps1（reset 删不掉被锁的旧文件 → 下次写入 EPERM）。
-// progress 文件保留固定名（前端 readProgress 的路径契约）。
+// ── CLI 提权降级通道 ──
+// 仅当 CLI 返回「需要管理员权限」时启用（写 HKLM 的子命令）。
+// 链路：Node 写 ps1 → 写 vbs 用 runas 拉起 powershell 跑 ps1 → CLI，
+// 退出码经 .done/.err 文件回传。VBS 是因为 Node 没有 ShellExecute 接口；
+// powershell 只是被提权的载体；文件回传是因为 ShellExecute 不返回退出码。
+// 与 App 启动提权无关：那由 exe manifest 的 requireAdministrator 完成。
+//
+// 控制文件带唯一后缀：固定名曾与残留的提权 pwsh 抢同一个 ps1
+// （reset 删不掉被锁的旧文件 → 下次写入 EPERM）。progress 保留固定名。
 class ElevationFiles {
   constructor(tag) {
     const uid = `${Date.now().toString(36)}_${process.pid}`;
@@ -343,6 +348,8 @@ async function runCliElevatedStream(cli, args, tag, onEvent) {
   throw new Error(E_TIMEOUT);
 }
 
+// 先直连，只有失败原因是权限时才降级提权。只读命令不提权；
+// 写 HKLM 的命令（install/uninstall/stale fix-acl）在非管理员上下文才降级。
 async function runCli(cli, args, tag) {
   // 优先直连（无权限时不弹窗）；仅在「需要管理员权限」时降级隐藏提权
   const r = await new Promise((resolve) => {
@@ -405,6 +412,9 @@ async function runCliWithEvents(cli, args, tag, onEvent) {
 // ── IPC 命令（与 lib.rs 同名同语义）──
 function registerIpc(win) {
   const h = (name, fn) => ipcMain.handle(name, (_e, args = {}) => fn(args));
+  // 目录由安装器授权 INTERACTIVE:Modify（见 build/installer.nsh）。
+  // 失败仅在旧 GUID 迁移后 config.toml 继承管理员 ACL 时发生，由前端
+  // configStore.writeConfigSafe 捕获并调 repair_stale_acl 修复后重试。
   h("write_config", ({ guid, content }) => {
     fs.mkdirSync(deviceDir(guid), { recursive: true });
     const tmp = path.join(deviceDir(guid), "config.toml.tmp");
