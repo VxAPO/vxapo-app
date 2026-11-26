@@ -1,4 +1,4 @@
-// VxAPO App — 选中 / 工具栏联动（决策 4 阶段 B）。
+// VxAPO App — 选中 / 工具栏联动。
 //
 // 取代 App 里那四个「渲染期跨 hook 赋值」的 ref（accentOfRef / selectedIdsRef /
 // cancelToolbarAnimRef / bumpSelGeomTickRef）：视图动画与框选 hook 都改读本 store，

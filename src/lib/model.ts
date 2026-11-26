@@ -1,4 +1,4 @@
-// VxAPO App — 数据模型（UI 设计规范 01 契约：块 ↔ [[effects]] peq）
+// VxAPO App — 数据模型（块 ↔ [[effects]] peq）
 
 export type ViewMode = "preset" | "advanced";
 export type SideSection = "preset" | "custom" | "advanced";

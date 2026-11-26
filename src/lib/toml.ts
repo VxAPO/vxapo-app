@@ -1,4 +1,4 @@
-// VxAPO App —— config.toml 生成与解析（UI 设计规范 01 契约）
+// VxAPO App —— config.toml 生成与解析
 // 只负责自身生成的结构；外部 TOML 的非 peq 未知效果器保留为 tail。
 import type { Band, Block, EffectItem } from "./model";
 import { parse as parseToml } from "smol-toml";
@@ -45,7 +45,7 @@ export function buildToml(
   channel?: ChannelCtx,
 ): string {
   // `version` / `[meta]` 与 peq 块的 `crossover_hz` 不属效果器参数，故仍写死：
-  // driver 的 effect_param_specs() 只覆盖 [[effects]] 的可调参数（决策 2 的范围）。
+  // driver 的 effect_param_specs() 只覆盖 [[effects]] 的可调参数。
   const out: string[] = ["version = 1", `enabled = ${enabled}`, "", "[meta]", 'app = "vxapo"', "schema = 1", ""];
   const writeBlocks = channel?.mode
     ? blocks

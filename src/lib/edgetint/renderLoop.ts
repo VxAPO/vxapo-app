@@ -1,5 +1,5 @@
 // 边缘染色的渲染循环与生命周期：面板缓冲、脏区、paint/schedule、事件与 start/stop
-//（决策 5 阶段 A 第四批，从 hooks/useEdgeTintLayer.ts 原样搬出，行为零变化；状态经 state.ts 的 ST 共享）。
+// 状态经 state.ts 的 ST 共享。
 
 import {
   FADE_FRAME_MS,
@@ -213,8 +213,8 @@ export function renderToPanelBuffer(
   buf.sk.clearRect(0, 0, buf.sc.width, buf.sc.height);
   buf.sk.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
   const d0 = performance.now();
-  // 栅格后端选择：Step2 起工具栏走 WebGL（__vxGLTool=false 关）；Step3a 起
-  // 基础面板也走（__vxGLBase=false 关）。ST.raster 可整体覆盖（测试用）。
+  // 栅格后端选择：工具栏与基础面板各有一个开关（__vxGLTool / __vxGLBase=false 关闭）。
+  // ST.raster 可整体覆盖（测试用）。
   const g = globalThis as { __vxGLTool?: boolean; __vxGLBase?: boolean };
   const raster =
     ST.raster ??
@@ -259,7 +259,7 @@ export function paintLayerPair(
       h: Math.ceil((next.y + next.h) / 64) * 64 - gy,
     };
   }
-  // ── 阶段 A：先推进各面板的复用/全量重画决策 ──
+  // ── 先推进各面板的复用/全量重画决策 ──
   // 配色时效的时钟在 renderToPanelBuffer 里（复用窗口到期才重算采样），
   // 必须先跑，否则滚动中的采样变化永远不会落到缓冲上（颜色冻结）。
   const rendered = els.map((el) => ({

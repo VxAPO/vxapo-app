@@ -1,4 +1,4 @@
-// 预设库契约测试（任务 12 后续）：内容合法性 + 中英成对（applyPreset 依赖 group_en/name_en 回退）。
+// 预设库契约测试：内容合法性 + 中英成对（applyPreset 依赖 group_en/name_en 回退）。
 import { describe, expect, it } from "vitest";
 import { LIBRARY } from "./library";
 

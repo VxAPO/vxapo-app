@@ -1,4 +1,4 @@
-// normalize.ts 测试（任务 12 后续）：整链增益归一化计算（纯函数）。
+// normalize.ts 测试：整链增益归一化计算（纯函数）。
 import { describe, expect, it } from "vitest";
 import { planNormalize } from "./normalize";
 import type { Band, Block, EffectItem } from "./model";

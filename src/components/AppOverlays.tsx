@@ -94,7 +94,7 @@ export default function AppOverlays({
   styleForKey,
   effectClassForKey,
 }: AppOverlaysProps) {
-  // UI 开关与 Toast 直接订阅 uiStore（决策 4 阶段 A 收尾）；沿用原 prop 名，JSX 无需改。
+  // UI 开关与 Toast 直接订阅 uiStore；沿用原 prop 名，JSX 无需改。
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const onSettingsOpenChange = useUiStore((s) => s.setSettingsOpen);
   const installOpen = useUiStore((s) => s.installOpen);
@@ -105,7 +105,7 @@ export default function AppOverlays({
   const onSelectImportDevice = useUiStore((s) => s.setImportDeviceGuid);
   const onInstallBusyChange = useUiStore((s) => s.setInstallBusy);
   const notice = useUiStore((s) => s.notice);
-  // 设备域数据/动作直接订阅（决策 4 阶段 A）。
+  // 设备域数据/动作直接订阅。
   const devices = useDeviceStore((s) => s.devices);
   const installedDevices = devices.filter(isInstalled);
   const staleInstalls = useDeviceStore((s) => s.staleInstalls);

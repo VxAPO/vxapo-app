@@ -53,7 +53,7 @@ import TopBar from "./components/TopBar";
 const BOTTOM_BAR_PAD = 400;
 
 export default function App() {
-  // 错误条 / Toast / 对话框开关收进 uiStore（决策 4 阶段 A 收尾）。
+  // 错误条 / Toast / 对话框开关收进 uiStore。
   const loadErr = useUiStore((s) => s.loadErr);
   const notify = useUiStore((s) => s.notify);
   const installBusy = useUiStore((s) => s.installBusy);
@@ -79,7 +79,7 @@ export default function App() {
   const { channelOn, setChannelOn, setActiveChannel, effActiveChannel, firstChannel } =
     useChannelState(selectedGuid, channelNames);
 
-  // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成（决策 4 阶段 A）。
+  // 残留迁移/清理的错误上报已在 deviceStore 的 safe 动作内完成。
 
   // 配置域的「当前设备」输入：设备列表为空时按 null 传（useConfig 的 load() 对 null 早退）。
   const cfgGuid = installedDevices.length === 0 ? null : selectedGuid;
@@ -136,7 +136,7 @@ export default function App() {
     );
     return typeof p?.params?.gain_db === "number" ? p.params.gain_db : 0;
   }, [effects, channelOn, effActiveChannel]);
-  // 通道过滤后的效果器列表已由两个视图各自订阅计算（决策 4 阶段 A-2b）。
+  // 通道过滤后的效果器列表已由两个视图各自订阅计算。
   const fs = selected?.sample_rate ?? 48000;
   /**
    * 频响图的一**份数据快照**：评估频点与峰值/谷值一次算完，量程（`yTop/yBottom`）与曲线路径
@@ -208,7 +208,7 @@ export default function App() {
     };
   }, []);
 
-  // 选中集与工具栏联动改由 selectionStore 承载（决策 4 阶段 B，替代原先四个跨 hook ref）。
+  // 选中集与工具栏联动改由 selectionStore 承载。
 
   const {
     view,
@@ -315,7 +315,7 @@ export default function App() {
     notify,
     clearSelection: () => setSelectedIds([]),
   });
-  // 决策 4 阶段 B：这些联动在渲染提交后写入 selectionStore（不再渲染期写 ref）。
+  // 这些联动在渲染提交后写入 selectionStore（不再渲染期写 ref）。
   useEffect(() => {
     const s = useSelectionStore.getState();
     s.setCancelToolbarAnim(cancelToolbarAnim);

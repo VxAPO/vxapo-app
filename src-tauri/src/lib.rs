@@ -269,7 +269,7 @@ fn open_in_explorer(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 设备列表（CLI list --json，UI 设计规范 05）；Rust 侧反序列化，
+/// 设备列表（CLI list --json）；Rust 侧反序列化，
 /// 前端直接拿到强类型数组，避免字符串二次解析。
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]

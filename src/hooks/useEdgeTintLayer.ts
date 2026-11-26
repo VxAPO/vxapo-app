@@ -1,4 +1,4 @@
-// VxAPO App — 边缘染色层入口（决策 5：结构在 lib/edgetint/ 下，本文件只保留挂载点）。
+// VxAPO App — 边缘染色层入口（结构在 lib/edgetint/ 下，本文件只保留挂载点）。
 //
 // 图层实现按职责拆分：canvasPool（画布池与层级）、tint（采样与绘制）、
 // targets（目标扫描与观察者）、renderLoop（渲染循环与生命周期）；模块级状态在 state.ts。
@@ -14,7 +14,7 @@ import { startAuto, stopAuto } from "../lib/edgetint/targets";
 const EDGE_TINT_ENABLED = true;
 
 /**
- * 边缘染色入口（决策 5 阶段 B：生命周期化）。
+ * 边缘染色入口（生命周期化）。
  *
  * 挂载时启动自动扫描、卸载时停掉：
  * - 删除原先的「import 即自启动」——模块被 import（含类型引用、测试）不再有副作用；

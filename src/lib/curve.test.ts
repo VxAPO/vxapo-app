@@ -1,4 +1,4 @@
-// curve.ts 测试（任务 12 后续）：坐标映射、评估频率点、峰值/谷值。
+// curve.ts 测试：坐标映射、评估频率点、峰值/谷值。
 import { describe, expect, it } from "vitest";
 import {
   axisRange,

@@ -63,7 +63,7 @@ export interface EffectParamDef {
 }
 
 /**
- * 参数文案（UI 专属）。范围/步进/单位来自 driver 参数表（effects.generated.ts，决策 2），
+ * 参数文案（UI 专属）。范围/步进/单位来自 driver 参数表（effects.generated.ts），
  * 此处只维护 label；键为 `{effect}.{param}`，缺省回落到参数键本身。
  */
 const PARAM_LABELS: Record<string, string> = {
@@ -98,7 +98,7 @@ const PARAM_LABELS: Record<string, string> = {
 const PARAM_OPTIONS: Record<string, { value: string; label: string }[]> = {};
 
 /**
- * 参数值域覆盖（仅 UI 显示域 ≠ driver 值域的参数登记；决策 2 的显式例外）：
+ * 参数值域覆盖（仅 UI 显示域 ≠ driver 值域的参数登记）：
  * `compressor.ratio` —— App 内部（滑杆值、输入框显示、语义强度、内存存储）统一用
  * **0..1 增益削减斜率 `v = 1 − 1/ratio`**（3:1 → 0.67、20:1 → 0.95，到不了 1）；
  * 与 driver 的 x:1 值域只在**读/写 TOML 时各换算一次**（`fromDriverParam` / `toDriverParam`），

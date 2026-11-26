@@ -1,4 +1,4 @@
-// blocks.ts 测试（任务 12 后续）：标签推导、稳定 id、内容比较与分组/排序工具。
+// blocks.ts 测试：标签推导、稳定 id、内容比较与分组/排序工具。
 import { describe, expect, it } from "vitest";
 import {
   blocksEqualShape,

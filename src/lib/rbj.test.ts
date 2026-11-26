@@ -1,4 +1,4 @@
-// rbj.ts 测试（任务 12 后续）：RBJ 双二阶幅度响应 —— 与 driver biquad 对齐的预览曲线。
+// rbj.ts 测试：RBJ 双二阶幅度响应 —— 与 driver biquad 对齐的预览曲线。
 import { describe, expect, it } from "vitest";
 import { bandDb, bandDbCached, peakingDb } from "./rbj";
 

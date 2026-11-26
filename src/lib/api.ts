@@ -1,4 +1,4 @@
-// VxAPO App — Tauri 命令封装（UI 设计规范 05：文件系统 + CLI --json）
+// VxAPO App — 命令封装（文件系统 + CLI --json）
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";

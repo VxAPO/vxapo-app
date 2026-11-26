@@ -1,5 +1,4 @@
 // 边缘染色的零状态原语：网格查询、颜色/亮度采样、圆角路径、可见矩形与脏区计算。
-// 决策 5 阶段 A（第三批）：从 hooks/useEdgeTintLayer.ts 原样搬出（行为零变化）；
 // 本文件不持有任何模块状态，主模块反向 import。
 
 import { MAX_POWER, distToBorder, distToRect, rgbLuminance } from "./geometry";

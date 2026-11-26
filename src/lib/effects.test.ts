@@ -1,4 +1,4 @@
-// driver 生成表 ↔ UI 参数定义的一致性（A4 首批；锁定决策 2 的契约）
+// driver 生成表 ↔ UI 参数定义的一致性
 import { describe, expect, it } from "vitest";
 import {
   EFFECT_DEFS,

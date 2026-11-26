@@ -1,5 +1,5 @@
-// 边缘染色的目标扫描与观察者注册：卡片节点扫描、ResizeObserver 绑定、自动扫描（决策 5 阶段 A
-// 第四批，从 hooks/useEdgeTintLayer.ts 原样搬出，行为零变化；状态经 state.ts 的 ST 共享）。
+// 边缘染色的目标扫描与观察者注册：卡片节点扫描、ResizeObserver 绑定、自动扫描。
+// 状态经 state.ts 的 ST 共享。
 
 import {
   MAX_SOURCE_R,

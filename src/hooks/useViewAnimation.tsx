@@ -55,7 +55,7 @@ export function useViewAnimation({
   patchEffectSemantic,
   patchEffectParam,
 }: UseViewAnimationOptions) {
-  // 决策 4 阶段 B：选中集与工具栏联动改读 selectionStore（不再经 ref 打洞）。
+  // 选中集与工具栏联动改读 selectionStore（不再经 ref 打洞）。
   // 这里用订阅（渲染期一致），事件期读取仍走 getState()。
   const selectedIds = useSelectionStore((s) => s.selectedIds);
   const accentOf = useSelectionStore((s) => s.accentOf);

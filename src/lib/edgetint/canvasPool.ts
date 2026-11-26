@@ -1,5 +1,5 @@
-// 边缘染色的画布池：主/工具栏/阴影/超采样画布的创建、尺寸与层级（决策 5 阶段 A 第四批，
-// 从 hooks/useEdgeTintLayer.ts 原样搬出，行为零变化；状态经 state.ts 的 ST 共享）。
+// 边缘染色的画布池：主/工具栏/阴影/超采样画布的创建、尺寸与层级。
+// 状态经 state.ts 的 ST 共享。
 
 import { Z_BASE, Z_SHADE, Z_TOOL, Z_TOOL_SHADE } from "./geometry";
 import { ST } from "./state";

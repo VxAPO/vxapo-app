@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 从 driver 的效果器参数表生成 src/lib/effects.generated.ts（决策 2）。
+// 从 driver 的效果器参数表生成 src/lib/effects.generated.ts。
 //
 // 用法：npm run sync:driver-schema
 //   - cli 定位：优先 env VXAPO_CLI（指向已构建的 vxapo-cli.exe），

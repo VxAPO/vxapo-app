@@ -1,4 +1,4 @@
-// VxAPO App — 设备列表 / 选中设备的全局状态（决策 4 阶段 A）。
+// VxAPO App — 设备列表 / 选中设备的全局状态。
 //
 // 原 useDevices 的逻辑逐字搬入；错误出口（onError）由 hook 在挂载期注入，
 // 卸载即摘掉，行为与「hook 内 mountedRef 抑制」等价。

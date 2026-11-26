@@ -1,4 +1,4 @@
-// config.toml 生成/解析往返（A4 首批；同时锁定决策 3 的行为）
+// config.toml 生成/解析往返
 import { describe, expect, it, vi } from "vitest";
 import type { Block, EffectItem } from "./model";
 import { buildToml, parseConfig, parseConfigWithTail } from "./toml";

@@ -1,4 +1,4 @@
-// VxAPO App — 配置状态机适配层（决策 4 阶段 A-2：状态与动作已移入 stores/configStore）。
+// VxAPO App — 配置状态机适配层。
 //
 // 本 hook 只负责：注入错误/提示出口、把输入按值推入 store、驱动「切设备加载 / 300ms
 // 去抖保存 / 2s 轮询 / 可见性暂停」四类 React 生命周期触发，并派生 totalBands 与
@@ -26,7 +26,7 @@ export function useConfig(
   const reloadNonce = useConfigStore((s) => s.reloadNonce);
   const dirtyRef = useConfigStore((s) => s.dirtyRef);
 
-  // 出口注入：错误条与 Toast 都指向 uiStore（决策 4 阶段 A 收尾），卸载即摘掉。
+  // 出口注入：错误条与 Toast 都指向 uiStore，卸载即摘掉。
   useEffect(() => {
     const st = useConfigStore.getState();
     const ui = useUiStore.getState();

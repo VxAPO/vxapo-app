@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// configStore 动作测试（任务 12 第二批）。
+// configStore 动作测试。
 //
 // 覆盖范围：不依赖 Tauri 后端的本地动作 + 经 mock 后端驱动的 load/poll/scheduleSave。
 // store 是模块单例，每个用例前用 resetStore() 复位（含四个"ref"对象的引用）。

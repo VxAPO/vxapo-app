@@ -1,5 +1,4 @@
 // 边缘染色用到的纯函数：颜色解析/明暗判定/亮度/距离/缓动。
-// 决策 5 阶段 A：从 hooks/useEdgeTintLayer.ts 原样搬出（行为零变化），
 // 不持有任何模块状态，主模块反向 import。
 export type Rgb = { r: number; g: number; b: number };
 

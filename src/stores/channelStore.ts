@@ -1,4 +1,4 @@
-// VxAPO App — 通道选择状态（决策 4 阶段 A-2b）。
+// VxAPO App — 通道选择状态。
 //
 // 原 useChannelState 的逻辑搬入：逐设备记忆通道开关与活动声道。声道表不进 store——
 // 视图用 useChannelNames() 自行从设备取，store 只持有与设备无关的选择状态。

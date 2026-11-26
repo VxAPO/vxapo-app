@@ -1,4 +1,4 @@
-// i18n 查表（A4 首批）
+// i18n 查表
 import { afterEach, describe, expect, it } from "vitest";
 import { PERCEPTUAL_LABELS } from "./blocks";
 import { LIBRARY } from "../data/library";
