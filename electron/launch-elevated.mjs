@@ -1,5 +1,5 @@
 // 以管理员身份启动 Electron（本机 UAC 为「静默提权」配置，通常无弹窗）。
-// 为什么不能直接 spawn：electron.exe 已嵌入 requireAdministrator manifest，
+// 须经提权通道启动：electron.exe 已嵌入 requireAdministrator manifest，
 // 非提权进程 CreateProcess 会返回 740（Node 表现为 EACCES）。
 // 三级启动链：
 //   1) VBS → Shell.Application.ShellExecute runas（带真实错误透出：Err.Number/Description）

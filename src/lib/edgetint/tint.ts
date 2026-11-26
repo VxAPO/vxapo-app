@@ -585,7 +585,7 @@ export function samplePanel(
 
   const rawN = rawGl.length;
   // 主路径在圆角处点距约 2px、直边约 8px，不能用固定点数窗口算局部峰值，
-  // 否则圆角/直边的暗部形状会不一致。这里改成按路径弧长开窗。
+  // 否则圆角/直边的暗部形状会不一致。按路径弧长开窗。
   const cumLen = new Array<number>(rawN);
   cumLen[0] = 0;
   for (let i = 1; i < rawN; i++) {
@@ -655,7 +655,7 @@ export function samplePanel(
   }
   // 暗部不是压暗，而是在该处停止绘制内光（lit=0），
   // 让底层默认高光样式的暗部自己透出来；shade 只是控制这个“留空”的平滑形状。
-  // 暗部改为独立乘式层叠暗，内光不再被 shade 停光
+  // 暗部为独立乘式层叠暗，内光不受 shade 停光
   const litAt = (i: number): number => ist.gl[i];
   const tintAt = (i: number): Rgb =>
     litAt(i) > 0.02

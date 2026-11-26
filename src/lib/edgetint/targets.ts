@@ -182,7 +182,7 @@ export function startAuto(): void {
   } else {
     document.addEventListener("DOMContentLoaded", syncTargets, { once: true });
   }
-  // 兜底扫描：不依赖 MutationObserver 时序，保持与原先相同的 300ms 陈旧度上限；
+  // 兜底扫描：不依赖 MutationObserver 时序，300ms 陈旧度上限；
   // 区别是扫描本身只做「集合 + 几何指纹」比较，没有变化就完全不重绘。
   ST.autoScanTimer = window.setInterval(syncTargets, 300);
 }

@@ -101,7 +101,7 @@ export interface ConfigParse {
   enabled: boolean;
   /** 首个未知非 peq 效果器块起、到文件末尾的原始文本（保存时原样拼回，避免破坏第三方效果器） */
   tail: string;
-  /** 解析时丢弃了 driver 已移除的参数键（如 release_ms）：文件需重写一次才能被 driver 接受。 */
+  /** 解析时丢弃了 driver 不认的参数键（如 release_ms）：文件需重写一次才能被 driver 接受。 */
   droppedRemovedKeys: boolean;
 }
 /** TOML 表（smol-toml 解析结果的形态）。 */
@@ -202,7 +202,7 @@ function parseDocument(text: string): ConfigParse {
       const params: Record<string, number | string> = {};
       for (const [k, v] of Object.entries(t)) {
         if (k === "type" || k === "enabled" || k === "channels" || k === "bands") continue;
-        // driver 已移除的键（释放固定自动）：不再进模型，落盘时丢弃以便文件被 driver 接受。
+        // driver 不认的键（释放固定自动）：不进模型，落盘时丢弃以便文件被 driver 接受。
         if (k === "release_ms") {
           droppedRemovedKeys = true;
           continue;

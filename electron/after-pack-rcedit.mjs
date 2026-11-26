@@ -1,6 +1,6 @@
 // 给打包出的 exe 设置 requireAdministrator：启动时由 Windows AppInfo 服务
 // 提权，进程一创建就是管理员，CLI 子进程继承该令牌。
-// 不能改 asInvoker——CLI 的 install/uninstall/stale fix-acl 都要写 HKLM。
+// 须用 requireAdministrator：CLI 的 install/uninstall/stale fix-acl 都要写 HKLM。
 // 与 main.mjs 的 VBS/pwsh 降级通道无关，那套只在 CLI 报权限不足时启用。
 // rcedit 没有 --set-application-manifest，用 --set-requested-execution-level。
 import { execFileSync } from "node:child_process";

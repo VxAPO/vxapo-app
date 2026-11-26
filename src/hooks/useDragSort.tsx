@@ -161,7 +161,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     //
     // 坐标就是**视口坐标**：悬浮层 portal 进 `.device-body`，而那个容器只用 clip-path 裁剪、
     // 不带 transform，所以 fixed 仍相对视口定位、滚动时不位移——跟手锁定靠的就是这一点
-    // （凡是换成 transform 包含块、或挪进滚动容器，fixed 都会跟着内容滚，滚动多少偏多少）。
+    // 换成 transform 包含块、或挪进滚动容器，fixed 都会跟着内容滚。
     let left = d.originLeft + snapPx(x - d.startX);
     let top = d.originTop + snapPx(y - d.startY);
     // 再夹进内容区（`.content` 那个大圆角矩形）并留出内缩：指针可以继续往外移，卡片停在边上。
@@ -234,7 +234,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     const duration = idx < 0 ? LAYOUT_ANIM_OUTSIDE_MS : LAYOUT_ANIM_MS;
     const trans = `transform ${duration}ms ${LAYOUT_EASE}`;
-    // 一次收齐本组元素再逐卡写样式：原先每个 key 各做一次 querySelector，槽位多时是 O(卡数²)
+    // 一次收齐本组元素再逐卡写样式：逐 key 做 querySelector 在槽位多时是 O(卡数²)
     const els = new Map<string, HTMLElement>();
     cardScope()
       .querySelectorAll<HTMLElement>(`[data-dnd-group="${group}"]`)
@@ -303,7 +303,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     // ③ 再同步提交“隐藏原卡 + 起飞行副本”：同样不跨帧，避免中间出现既无悬浮层也无副本的空档。
     // 副本挂进滚动内容层，坐标要换成**内容坐标**：此刻量一次容器矩形与 scrollTop 就够，
-    // 之后内容怎么滚副本都跟着（浏览器在合成线程处理），不再需要逐帧补偿。
+    // 之后内容怎么滚副本都跟着（浏览器在合成线程处理），无需逐帧补偿。
     // from（悬浮层矩形）与 target（落点）用同一套换算，路径差值不受影响。
     const host = scrollHost();
     const hostRect = host ? host.getBoundingClientRect() : null;

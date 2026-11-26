@@ -41,10 +41,9 @@ export default function SelectionToolbar({
   useGlassRing(toolbarRef);
   useEdgeTintLayer(toolbarRef);
 
-  // 淡入淡出改由 CSS 变量 --glass-t 承担（见 drag.css）：玻璃面板的 backdrop-filter
-  // 在祖先 opacity<1 时会被浏览器整组降级——原来的 opacity 写法会让高斯模糊等淡入结束
-  // 才「啪」地出现；变量写法下模糊半径、底衬与内容同一条时间轴渐变，染色 canvas 也能读
-  // 同一个值同步淡出（canvas 是独立图层，不随 DOM 透明度变化）。
+  // 淡入淡出由 CSS 变量 --glass-t 承担（见 drag.css）：玻璃面板的 backdrop-filter
+  // 在祖先 opacity<1 时会被浏览器整组降级，高斯模糊要等淡入结束才「啪」地出现。
+  // 变量写法下模糊半径、底衬与内容同一条时间轴渐变；染色 canvas 读同一个值同步淡出。
   const [isPresent, safeToRemove] = usePresence();
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -77,9 +76,9 @@ export default function SelectionToolbar({
    * 「复制到声道」菜单的位置：它 portal 到 `document.body`（见下面的 createPortal），
    * 不能再靠 `.sel-copy` 做绝对定位，改按按钮的**视口矩形**写 `left/top/min-width`。
    *
-   * 为什么用 rAF 跟着按钮：工具栏本身会被 `useMarqueeSelection` 的跟随循环写 transform
-   * 移动（选区变化、滚动都会），原来的绝对定位天然跟随；改成 portal 后必须自己跟，否则会脱开。
-   * 只在位置真的变了才 setState，别每帧白重渲一次。
+   * 用 rAF 跟着按钮：工具栏会被 `useMarqueeSelection` 的跟随循环写 transform 移动
+   * （选区变化、滚动都会），portal 下必须自己跟，否则会脱开。
+   * 只在位置真的变了才 setState。
    */
   useLayoutEffect(() => {
     if (!copyOpen) {

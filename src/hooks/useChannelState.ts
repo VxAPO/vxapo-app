@@ -1,7 +1,7 @@
 // VxAPO App — 通道选择状态适配层。
 //
-// 本 hook 只负责把「当前设备 guid」推给 store（触发逐设备记忆的保存/恢复），并按原样
-// 暴露派生值。返回值与重构前逐字段一致。
+// 本 hook 只负责把「当前设备 guid」推给 store（触发逐设备记忆的保存/恢复），
+// 并暴露派生值。
 import { useLayoutEffect, useMemo } from "react";
 import { effectiveChannel, useChannelStore } from "../stores/channelStore";
 import { useConfigStore } from "../stores/configStore";
@@ -22,7 +22,7 @@ export function useChannelState(selectedGuid: string | null, channelNames: strin
   // ① **等新设备的配置到位**（`ready`）。`load()` 是异步的，切设备后有一小段 store 里还是上一台的
   //    `blocks`；若这时就恢复新设备的通道态，这段窗口等于「新设备的通道态 × 上一台的链」——
   //    从「开了通道选择器（preamp 按声道分成两张基准电平卡）」的设备切到「没开」的设备时，就会先
-  //    闪一下「上一台左右声道卡片被并成一份」的视图，再跳到新设备（踩过）。等配置到了再恢复，这段
+  //    闪一下「上一台左右声道卡片被并成一份」的视图，再跳到新设备。等配置到了再恢复，这段
   //    窗口里通道态与还在屏上的上一台数据是自洽的，整页只在新数据到位那一刻换一次。
   // ② **layout effect**（绘制前）：与配置同一次提交里落地，不会先画一帧错的再回正
   //    （App 里同步 `configChannelMode` 的那条同因，见那里的注释）。

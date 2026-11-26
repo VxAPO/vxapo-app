@@ -602,8 +602,8 @@ function registerIpc(win) {
 // ── 窗口 ──
 // 默认形态 = DWM 带框路径（平滑）+ titleBarStyle hidden（标题栏本体隐藏，窗口
 // 控件用应用内按钮）。无边框窗口在本机会掉出 DWM 的 vsync 调度阶梯（滚动卡顿），
-// --borderless 仅作对照实验保留。注意：带框路径自带约 1px 系统细边框，无法去除
-// ——它就是「上平滑呈现路径」的载体。
+// --borderless 仅作对照实验保留。带框路径自带约 1px 系统细边框，
+// 这条边框是「上平滑呈现路径」的载体。
 let mainWindow = null;
 function createWindow() {
   const dark = systemUsesDarkMode();
@@ -652,7 +652,7 @@ async function ensureVite() {
   } catch {
     /* start one */
   }
-  // Windows 下 npm 是 npm.cmd，裸 spawn 会 ENOENT——走 shell
+  // Windows 下 npm 是 npm.cmd，裸 spawn 会 ENOENT，故走 shell
   const child = spawn(
     process.platform === "win32" ? "npm.cmd" : "npm",
     ["run", "dev"],
@@ -682,8 +682,8 @@ async function ensureVite() {
 const cdpPort = process.env.ELECTRON_CDP_PORT;
 if (cdpPort) app.commandLine.appendSwitch("remote-debugging-port", cdpPort);
 
-// 单实例锁：重复启动不再硬拉第二个进程（提权通道对二次拉起不友好），
-// 而是唤起已有窗口。
+// 单实例锁：重复启动时唤起已有窗口，避免再拉起第二个进程
+// （提权通道对二次拉起不友好）。
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();

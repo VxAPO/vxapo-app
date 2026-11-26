@@ -126,3 +126,47 @@ pre-fmt 与 post-fmt 的错误集合完全一致，格式化未引入任何新 l
 
 > 若将来需要消费 driver/cli 的类型，**不要**直接加 path 依赖——那会把
 > 「格式化越界」与「编译顺序耦合」一并引入。应经 `vxapo-protocol` 的契约。
+
+## 9. 注释写作纪律
+
+**注释只描述「现在是什么、为什么这样」，不描述「改过什么」。**
+
+### 禁止
+
+| 类别 | 例子 | 原因 |
+|---|---|---|
+| 修改过程 | 「改由 X 承载」「原样搬出」「踩过」「原来是 A，现改为 B」 | 属于提交信息，代码里是噪音 |
+| 外部编号 | 「决策 4 阶段 A」「第 3 批」「Step 2」「UI 设计规范 05」 | 仓库内无定义可查 |
+| 否定句式 | 「不能按窗口中心算」「无需提权」「不要用 X」 | 优先正向书面陈述 |
+| 破折号 | 「……——……」 | 用句号或逗号断句 |
+| 空话开场 | 「需要注意的是：」「这里说明一下：」 | 无信息量 |
+
+### 改写示例
+
+```
+✗ 必须和 ResizeObserver 报的 contentRect.width 同一个盒模型。踩过：布局 effect 曾经用
+  getBoundingClientRect().width（含 padding），两者差 36px，表现为坐标轴细微水平抖动。
+✓ 必须和 ResizeObserver 报的 contentRect.width 同一个盒模型。getBoundingClientRect().width
+  含 padding，两者差 36px，会导致坐标轴细微水平抖动。
+
+✗ 选中集与工具栏联动改由 selectionStore 承载。
+✓ 选中集与工具栏联动由 selectionStore 承载。
+
+✗ 不能按窗口中心算。
+✓ 按窗口中心算会偏，须用左右按钮簇的实际宽度。
+```
+
+### 例外
+
+- **性能数据**（「实测 p50 从 3.5ms 涨到 14.4ms」）保留，这是依据不是过程。
+- **约束说明**（「必须…否则…」）保留，这是规则。
+- 分隔线注释与 `src/lib/generated/` 下的生成文件跳过检查。
+
+### 检查
+
+```sh
+node scripts/check-comments.mjs .          # 全仓检查
+node scripts/check-comments.mjs src/       # 只查某个目录
+```
+
+退出码 1 表示有违规。pre-commit 钩子会自动执行，未通过则拒绝提交。

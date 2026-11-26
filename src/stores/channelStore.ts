@@ -1,6 +1,6 @@
 // VxAPO App — 通道选择状态。
 //
-// 原 useChannelState 的逻辑搬入：逐设备记忆通道开关与活动声道。声道表不进 store——
+// 逐设备记忆通道开关与活动声道。声道表不进 store——
 // 视图用 useChannelNames() 自行从设备取，store 只持有与设备无关的选择状态。
 import { create } from "zustand";
 
@@ -41,7 +41,7 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
     }
     // 新设备**没有记忆**时保持当前值，不要回落成「关 + 左声道」：`load()` 是异步的，新设备的
     // `configChannelMode` 要晚一点才到，而在那之前 `blocks` 还是上一台的——回落会画出「上一台的链
-    // 按左声道过滤」，观感就是切设备时闪一下左声道的坐标轴（踩过）。磁盘值随后在绘制前校正
+    // 按左声道过滤」，观感就是切设备时闪一下左声道的坐标轴。磁盘值随后在绘制前校正
     // （App 里同步 `configChannelMode` 的那条 useLayoutEffect）。
     set((s) => ({
       prevGuid: guid,

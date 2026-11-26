@@ -165,7 +165,7 @@ export function renderToPanelBuffer(
   // 把单步补成 3 倍），观感「一段一段、到地方突然冒出来」。33ms 是旧实现
   // fadePending 续帧链的历史节奏（用户验收过的淡入平滑度）；逐 paint 重画
   // 会让滚动期全量重画每帧都跑（实测 p50 从 3.5ms 涨到 14.4ms），33ms 地板
-  // 在两者之间。已收敛的面板照旧走 100ms/MAX2 复用窗（滚动性能主战场）。
+  // 在两者之间。已收敛的面板走 100ms/MAX2 复用窗（滚动性能主战场）。
   const wasFading = ST.fading.has(el);
   // 工具栏滚动/移动中逐 paint 重画（win=0 永不复用）：描边染色是工具栏
   // 与身下掠过卡片之间逐帧变化的相对几何，任何降频都表现为滞后。
@@ -200,7 +200,7 @@ export function renderToPanelBuffer(
   // 真正要重画了：记录渲染代数；blit 位置沿用本次写入的当前 rect 值
   buf.gen = ST.bufGen;
   // 距上次真实渲染过了多少个基准步：用于把褪色插值按时间推进（复用不改褪色时长）。
-  // 仅当上帧仍在过渡（wasFading）才补偿——那是「过渡途中被跳帧」；上帧已收敛、
+  // 仅当上帧仍在过渡（wasFading）才补偿，即「过渡途中被跳帧」。上帧已收敛、
   // 本帧刚探测到的新过渡从 1× 步长起步，避免以 3 倍步长起跳形成突变。
   const frameScale =
     wasFading && buf.at > 0 ? (now - buf.at) / FADE_FRAME_MS : 1;
@@ -458,8 +458,8 @@ function scrollContainerOf(): HTMLElement | null {
   return null;
 }
 
-// translate 写入约定（两坑都踩过）：必须 setProperty/removeProperty
-//（驼峰访问器静默失效），值必须是长度对（"0px -40px"，函数语法被拒）。
+// translate 写入约定：必须 setProperty/removeProperty（驼峰访问器静默失效），
+// 值必须是长度对（"0px -40px"，函数语法被拒）。
 function applyTranslate(cv: HTMLCanvasElement | null, t: string): void {
   if (!cv) return;
   if (cv.style.getPropertyValue("translate") !== t) {

@@ -53,7 +53,7 @@ run("cargo build --release", join(ROOT, "vxapo-cli"));
 
 // 3) 拷贝进 app resources（tauri.conf.json bundle.resources 引用这两个路径）。
 //
-// 占用语义（踩过的坑）：本机 APO 注册（CLSID→DLL）指向的就是这个 resources
+// 占用语义：本机 APO 注册（CLSID→DLL）指向的就是这个 resources
 // 下的 vxapo_driver.dll（register.rs 分支 A：exe 同级存在 DLL 即优先注册它），
 // 音频端点活跃时 **audiodg 会映射它** → EBUSY。持有者是音频引擎，关应用没用。
 // 处置：① 内容没变（构建未改动）直接跳过——多数 release 根本不需要碰它；
@@ -121,7 +121,7 @@ for (const [repo, file] of [
 run("npx tauri build", APP_DIR);
 
 // 前端重建守卫：cmd 的 `if` 会吞掉整行 && 链，条件为假时 tsc/vite 被静默跳过、
-// 旧 dist 打进包（踩过：整轮 lift/分段滑块都没进安装包）。dist 必须是本次生成的。
+// 会把旧 dist 打进包。dist 必须是本次生成的。
 const distMtime = statSync(join(APP_DIR, "dist", "index.html")).mtimeMs;
 if (distMtime < startedAt) {
   console.error(

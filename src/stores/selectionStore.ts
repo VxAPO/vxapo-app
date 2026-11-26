@@ -1,8 +1,8 @@
 // VxAPO App — 选中 / 工具栏联动。
 //
 // 取代 App 里那四个「渲染期跨 hook 赋值」的 ref（accentOfRef / selectedIdsRef /
-// cancelToolbarAnimRef / bumpSelGeomTickRef）：视图动画与框选 hook 都改读本 store，
-// 写入方（App）只在渲染提交后写入。默认值与原本 ref 的初值一致。
+// cancelToolbarAnimRef / bumpSelGeomTickRef）：视图动画与框选 hook 都读本 store，
+// 写入方（App）只在渲染提交后写入。
 import { create } from "zustand";
 import type { Block } from "../lib/model";
 

@@ -1,8 +1,8 @@
 // VxAPO App — 配置状态机。
 //
-// 原 useConfig 的状态与动作**逐字**搬入；三处需要 React 生命周期的触发
-// （切设备后加载、300ms 去抖保存、2s 轮询、可见性暂停）仍由 hook 驱动本 store。
-// 输入（selectedGuid / channelCtx / deviceGuids）由 hook 每次渲染后按值推入。
+// 需要 React 生命周期的触发（切设备后加载、300ms 去抖保存、2s 轮询、可见性暂停）
+// 由 hook 驱动本 store。输入（selectedGuid / channelCtx / deviceGuids）
+// 由 hook 每次渲染后按值推入。
 import { create } from "zustand";
 import {
   friendlyError,
@@ -247,7 +247,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           displayGuid: guid,
         });
         get().tailRef.current = parsed.tail;
-        // 自愈：文件含 driver 已移除的键（如 release_ms）→ driver 拒载该文件（降级
+        // 自愈：文件含 driver 不认的键（如 release_ms）→ driver 拒载该文件（降级
         // passthrough 无 EQ）。置脏后 useConfig 的保存 effect 会用净化后的模型重写一次。
         if (parsed.droppedRemovedKeys) get().dirtyRef.current = true;
         set((s) => ({
@@ -638,7 +638,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       // 这条与 buildToml 在 mode=false 时的落盘口径完全相同（只写首声道的块、且不写 channels），于是
       // 内存与文件同一步到位。若只合并 effects，别的声道的块会继续留在内存里、等 2s 轮询读到新文件才
       // 消失——那期间语义视图会把它们画出来、随后又消失，表现为「关掉选择器后右声道的卡片显示一会再消失」
-      // （踩过）。代价是这些块连同它们的频段一起被丢弃，这是「关闭＝真合并」的既定语义。
+      // 代价是这些块连同它们的频段一起被丢弃，这是「关闭＝真合并」的既定语义。
       const merged = prev.blocks.some((b) => b.channel)
         ? prev.blocks
             .filter((b) => !b.channel || b.channel === first)

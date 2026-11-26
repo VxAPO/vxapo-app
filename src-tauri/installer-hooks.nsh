@@ -35,8 +35,8 @@
 
 !macro NSIS_HOOK_POSTINSTALL
   ; 语言：只在**首次安装**（lang.txt 不存在）时按安装器语言写入。
-  ; 已装过（重装 / 覆盖升级）必须沿用用户当前设置——原来无条件用 "w" 覆盖，
-  ; 会把 app 里改过的语言冲回安装器语言（重装后默认变英文）。
+  ; 已装过（重装 / 覆盖升级）必须沿用用户当前设置，
+  ; 否则会把 app 里改过的语言冲回安装器语言（重装后默认变英文）。
   IfFileExists "C:\ProgramData\VxAPO\lang.txt" vbx_lang_keep
     ; 安装器语言为简体中文（LCID 2052）→ zh，否则 en
     StrCpy $0 "en"

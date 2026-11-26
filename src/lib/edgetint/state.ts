@@ -1,8 +1,8 @@
 // 边缘染色的模块级可变状态。
 //
-// 从 hooks/useEdgeTintLayer.ts 原样搬出、原样取名（行为零变化），只是收进一个对象：
-// ESM 的导入绑定不可赋值——`let x` 搬到别的模块后 `x = …` 会直接报错，
-// 只有对象属性（`ST.x = …`）才能被 tint / renderLoop / targets / canvasPool 共享。
+// 收进一个对象而非导出多个 `let`：ESM 的导入绑定不可赋值，
+// 跨模块写 `x = …` 会直接报错，只有对象属性（`ST.x = …`）才能被
+// tint / renderLoop / targets / canvasPool 共享。
 import type { ColorSource, Rgb } from "./geometry";
 import type { CardNode, InnerState } from "./primitives";
 import type { TintRaster } from "./raster";
@@ -130,7 +130,7 @@ export interface EdgeTintState {
    * 与上帧完全一致，跳过 clear+重贴（不向 GPU 重传未变纹理）。
    */
   lastFullRender: { base: number; tool: number };
-  /** 栅格后端（缺省 canvas2d，可替换为 WebGL）。 */
+  /** 栅格后端：缺省 canvas2d，可为 WebGL。 */
   raster: TintRaster | null;
 }
 

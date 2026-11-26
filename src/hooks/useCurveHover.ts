@@ -131,7 +131,7 @@ export function useCurveHover({
     });
   };
 
-  // 悬浮窗几何只在 hover 点/曲线尺寸变化时算一次：原先每次渲染都要跑两遍全段求和
+  // 悬浮窗几何只在 hover 点/曲线尺寸变化时算一次，避免每次渲染跑两遍全段求和
   const tipPos: TipPos | null = useMemo(() => {
     if (!hoverPt) return null;
     const g = geomRef.current ?? measureGeom();

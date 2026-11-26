@@ -28,10 +28,10 @@ interface CurvePanelProps {
 /**
  * `curveW`（→ `<svg viewBox>` 的宽度）的**唯一来源**：`.curve-wrap` 的**内容盒**宽度 + 20。
  *
- * 必须和 ResizeObserver 报的 `contentRect.width` 同一个盒模型。踩过：布局 effect 曾经用
- * `getBoundingClientRect().width`（**含 padding**，而 `.curve-wrap` 左右各 18px），RO 用 content box，
- * 两者差 36px —— 每次设备页重挂载都是「先按 border box 渲染一帧 → RO 报回 content box → viewBox
- * 宽度变 36 → 所有 x 坐标整体重新缩放」，表现为坐标轴（尤其是 x=40 那条纵轴与刻度）**细微水平抖动**。
+ * 必须和 ResizeObserver 报的 `contentRect.width` 同一个盒模型。`getBoundingClientRect().width`
+ * **含 padding**（`.curve-wrap` 左右各 18px），RO 用 content box，两者差 36px 会导致
+ * 每次重挂载先按 border box 渲染一帧、RO 报回后所有 x 坐标整体重缩放，
+ * 表现为坐标轴**细微水平抖动**。
  *
  * 那个 +20 与 `<svg>` 的 CSS 宽度 `calc(100% + 28px)` 有 8px 出入，只影响整体缩放约 1%，与稳定性无关；
  * 要动它得同时改 `logX` 的 40px 边距，别单改一边。
@@ -63,7 +63,7 @@ function CurvePanel({
   const latestWRef = useRef(0);
   // 画什么由 App 决定：传进来的 `blocks` 已经是曲线快照里目标声道的那一份（通道模式=选中声道，
   // 关闭选择器=首声道）。**不要**在这里按 channelOn/curveChannel 再过一遍：快照滞后一档，
-  // 与当前声道现算比对会在切声道的那一档把整条曲线滤空（踩过）。
+  // 与当前声道现算比对会在切声道那一档把整条曲线滤空。
   // 选项列表**始终**是各声道：关闭选择器时不再有「全部声道」这一档（曲线目标始终是单个声道）
   const channelOptions = useMemo(
     () => channelNames.map((c) => ({ value: c, label: channelLabel(c) })),

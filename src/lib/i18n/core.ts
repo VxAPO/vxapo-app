@@ -129,7 +129,7 @@ export function perceptualLabelPair(label: string): { zh: string; en: string } |
 /**
  * 自定义预设一行的语义描述 → 入库字段。
  *
- * - 空串：不写 name（沿用原先「留空」语义）。
+ * - 空串：不写 name（「留空」语义）。
  * - 认得出是语义视图的默认映射（感知标签，中英任意写法）：**成对**写入
  *   `name` / `name_en`，语言切换时任意一侧都能反查出另一侧。
  * - 其余＝用户自己写的：原样保留，且**不**补 `name_en`——切语言不改用户文字。

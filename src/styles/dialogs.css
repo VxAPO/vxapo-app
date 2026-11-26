@@ -340,8 +340,7 @@
 
 .preset-band-tag {
   flex: none;
-  /* 列宽按最长标签（`16.00 kHz · +10.5 dB`，等宽数字）在 12px 下的实测宽度留余量：
-     原来 11px + 110px 既字小、列里又空。 */
+  /* 列宽按最长标签（`16.00 kHz · +10.5 dB`，等宽数字）在 12px 下的实测宽度留余量。 */
   width: 122px;
   font-size: 12px;
   color: var(--text-weak);

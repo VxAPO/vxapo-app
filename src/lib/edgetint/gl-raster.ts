@@ -1,4 +1,4 @@
-// WebGL 栅格后端（自包含渲染重构 Step 2：工具栏环带原型）。
+// WebGL 栅格后端（工具栏环带原型）。
 //
 // 语义契约：只消费 samplePanel 的产物——采样/淡入时钟/失效全部由调用方推进，
 // 本文件零采样逻辑（染色逻辑不因后端而变）。
@@ -10,7 +10,7 @@
 // - 输出画进共享离屏 WebGL 画布，再由调用方 drawImage 进既有 PanelBuffer——
 //   下游（复用窗口、混合层、脏区、贴回）原样不动。
 // - 保留 blend 模型（原型阶段不预混色）：与 canvas2d 路径逐像素同语义，视觉对齐；
-//   「删混合层」是 Step 3 的事。
+//   「删混合层」不在本文件范围内。
 import { ST } from "./state";
 import { rootColorCached } from "./state";
 import {

@@ -16,10 +16,8 @@ const EDGE_TINT_ENABLED = true;
 /**
  * 边缘染色入口（生命周期化）。
  *
- * 挂载时启动自动扫描、卸载时停掉：
- * - 删除原先的「import 即自启动」——模块被 import（含类型引用、测试）不再有副作用；
- * - 删除 `import.meta.hot.dispose` 自救——HMR 更新时 React Fast Refresh 会走 hook 的
- *   cleanup 卸载旧实例，自救逻辑已冗余。
+ * 挂载时启动自动扫描、卸载时停掉。import 本模块不产生副作用（含类型引用与测试）；
+ * HMR 更新时 React Fast Refresh 会走 hook 的 cleanup 卸载旧实例。
  */
 export function useEdgeTintLayer(_ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {

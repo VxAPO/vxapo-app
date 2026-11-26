@@ -2,7 +2,7 @@
 //
 // 本 hook 只负责：注入错误/提示出口、把输入按值推入 store、驱动「切设备加载 / 300ms
 // 去抖保存 / 2s 轮询 / 可见性暂停」四类 React 生命周期触发，并派生 totalBands 与
-// channelBandCounts。返回值与重构前逐字段一致，消费方无需改动。
+// channelBandCounts。
 import { useCallback, useEffect, useMemo } from "react";
 import type { Block, EffectItem, PeqBandKind, PresetLibraryEntry } from "../lib/model";
 import { useConfigStore } from "../stores/configStore";

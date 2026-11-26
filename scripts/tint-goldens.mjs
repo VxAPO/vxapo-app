@@ -1,4 +1,4 @@
-// 视觉金样：固定场景截图集（重构前后语义对照的裁判）
+// 视觉金样：固定场景截图集（语义对照的裁判）
 const CDP = "http://127.0.0.1:9226";
 const fs = await import("node:fs");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -119,9 +119,9 @@ export default function App() {
   const { isMax, minimize, toggleMaximize, close } = useWindowControls();
 
   // 峰值增益、量程与曲线都跟随**同一个目标声道**：通道模式取当前选中声道，关闭选择器时回退首声道（左）。
-  // 判据与两个视图、与 buildToml 的落盘口径同源（lib/filters.visibleBlockFor）——非通道模式**不是**
-  // 「算整条链」：各声道的块各自带 channel、驱动侧分开作用，叠出来的那条响应在真实链路里并不存在，
-  // 关掉选择器那一瞬间会先画出一条叠加曲线、下一档才回正（踩过）。
+  // 判据与两个视图、与 buildToml 的落盘口径同源（lib/filters.visibleBlockFor）。
+  // 非通道模式**不是**「算整条链」：各声道的块各自带 channel、驱动侧分开作用，
+  // 叠出来的那条响应在真实链路里并不存在。
   const visibleBlocks = useMemo(
     () => visibleBlocksFor(blocks, channelOn, firstChannel, effActiveChannel),
     [blocks, channelOn, firstChannel, effActiveChannel],
@@ -140,17 +140,16 @@ export default function App() {
   const fs = selected?.sample_rate ?? 48000;
   /**
    * 频响图的一**份数据快照**：评估频点与峰值/谷值一次算完，量程（`yTop/yBottom`）与曲线路径
-   * **必须取自同一份**——`useThrottledCompute` 按设计让渲染侧滞后一档，而绘制侧原先按当前 blocks
-   * 现算评估点，两者档位就会不一致：关掉通道选择器那一帧里路径已是新目标、量程还是旧值，曲线于是
-   * 按错量程补间一档、下一档才回正——观感就是「过渡第一次取到错误值 / 坐标轴波动」（形状一直是对的，
-   * 错的是坐标轴，踩过）。曲线**宽度**仍每次现算（保证与网格/viewBox 一致，拖拽改宽度不越界）。
+   * **必须取自同一份**。`useThrottledCompute` 让渲染侧滞后一档，绘制侧若按当前 blocks 现算
+   * 评估点，两者档位就不一致：路径已是新目标、量程还是旧值，曲线会按错量程补间一档，
+   * 观感是过渡帧坐标轴波动。曲线**宽度**仍每次现算（保证与网格/viewBox 一致）。
    */
   const liveCurve = useMemo(() => {
     const freqs = buildEvalFreqs(visibleBlocks);
     const range = curveRange(freqs, visibleBlocks, fs, preampGainDb);
     // 基准电平（preamp）也**收进快照**：它是曲线路径的纵向偏移，量程同样按它算。
-    // 只把 blocks/freqs 快照化、preamp 仍按实时值传给绘制侧，切设备（尤其「关通道 → 开通道」）那一档
-    // 会画出「旧设备的链 + 新设备的基准电平」这条并不存在的曲线，过渡中间就是错的（踩过）。
+    // 只快照 blocks/freqs 而 preamp 用实时值，切设备那一档会画出
+    // 「旧设备的链 + 新设备的基准电平」这条并不存在的曲线。
     return {
       blocks: visibleBlocks,
       freqs,
@@ -208,7 +207,7 @@ export default function App() {
     };
   }, []);
 
-  // 选中集与工具栏联动改由 selectionStore 承载。
+  // 选中集与工具栏联动由 selectionStore 承载。
 
   const {
     view,
@@ -253,10 +252,9 @@ export default function App() {
   // 避免界面停在“关”而配置实际是分通道的（还会在保存时丢掉非首通道块）。
   // 从磁盘配置读出的通道模式同步到 store。**不再强制切到参数视图**：语义视图同样按声道过滤内容
   // （`PresetView` 的 `visible`），声道切换入口是曲线卡上的选择器——它在两个视图里都在。
-  // 用 useLayoutEffect（绘制前）而不是 useEffect：`load()` 解析完成的那一次提交里，`blocks`/`effects`
-  // 已经换成新设备的，而 `channelOn` 还是上一台的值 —— 若在绘制后才改，会先画出一帧「新设备的链按旧
-  // 通道过滤」（关着通道时就是左声道那一份），下一帧才回正：现象是切设备时**闪一下左声道的坐标轴**
-  // （硬切之后没有淡入遮挡，这一帧就露出来了，踩过）。
+  // 用 useLayoutEffect（绘制前）而不是 useEffect：`load()` 解析完成的那次提交里，
+  // `blocks`/`effects` 已是新设备、`channelOn` 还是上一台的值。在绘制后才改会先画出
+  // 一帧「新设备的链按旧通道过滤」，现象是切设备时闪一下左声道的坐标轴。
   useLayoutEffect(() => {
     if (!loaded) return;
     setChannelOn(configChannelMode);
@@ -343,8 +341,8 @@ export default function App() {
    * 设备页换页的 key：跟**数据归属**（displayGuid）走，不跟点击（selectedGuid）走。
    *
    * load() 是异步的：点标签到 readConfig 回来之间，store 里还是上一台的 blocks。
-   * 若点下即换页，新容器（scrollTop=0）会先渲染这段窗口里的上一台旧内容——旧页滚在
-   * 半空时，观感就是「旧页被生硬切到顶部」闪一下、数据到位后再换一次（踩过）。
+   * 若点下即换页，新容器（scrollTop=0）会先渲染上一台旧内容，旧页滚在半空时
+   * 观感是「旧页被生硬切到顶部」闪一下、数据到位后再换一次。
    * displayGuid 与 blocks 在 configStore.load() 里同一步写入，因此「换数据」与「换页」
    * 落在同一帧：退场元素带着的仍是上一台的 props，旧页连同滚动位置原地驻留到新数据
    * 就绪才硬切——与通道态恢复（useChannelState 等 loadedGuid）同一门槛。
@@ -354,7 +352,7 @@ export default function App() {
   // 设备页是**硬切**（不补间），换页只产生一次 childList 变更，MutationObserver 已会排一次全量重绘；
   // 这段窗口是保险：新页面首帧的几何/配色若晚一两帧才稳定，画布不至于停在上一轮的染色上。
   // 画布是独立图层（`mix-blend-mode: screen` 压在内容之上），晚一帧就是「页面已经换掉、画布还在显示旧染色」。
-  // 用 useLayoutEffect（绘制前）而不是 useEffect：rAF 仍在这一帧绘制前跑，画布与换页同帧对齐（踩过）。
+  // 用 useLayoutEffect（绘制前）而不是 useEffect：rAF 仍在这一帧绘制前跑，画布与换页同帧对齐。
   // 滚动位置不必显式复位：`.device-page` 仍按设备重挂载，`.tuning-scroll` 在它内部，天然回顶。
   // 依赖是 pageGuid（真正换页的时刻）而不是 selectedGuid（点标签时刻，换页还没发生）。
   useLayoutEffect(() => {

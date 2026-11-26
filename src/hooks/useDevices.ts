@@ -1,7 +1,7 @@
 // VxAPO App — 设备列表 / 选中设备。
 //
 // 本 hook 只负责三件事：把错误出口与卸载回调注入 store、驱动首次加载与轮询、
-// 按原样暴露派生值（installedDevices / selected）。返回值与重构前逐字段一致。
+// 暴露派生值（installedDevices / selected）。
 import { useCallback, useEffect, useMemo } from "react";
 import { isInstalled } from "../lib/api";
 import { t } from "../lib/i18n/core";
@@ -24,8 +24,7 @@ export function useDevices(paused?: boolean) {
   const migrateStaleSafe = useDeviceStore((s) => s.migrateStaleSafe);
   const cleanupStaleSafe = useDeviceStore((s) => s.cleanupStaleSafe);
 
-  // 错误出口指向 uiStore：挂载期注入、卸载即摘掉——
-  // 等价于重构前用 mountedRef 抑制卸载后的上报。
+  // 错误出口指向 uiStore：挂载期注入、卸载即摘掉，抑制卸载后的上报。
   useEffect(() => {
     useDeviceStore.getState().setErrorSink(useUiStore.getState().setLoadErr);
     return () => useDeviceStore.getState().setErrorSink(null);

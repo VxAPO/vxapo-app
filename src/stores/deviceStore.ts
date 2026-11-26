@@ -1,7 +1,6 @@
 // VxAPO App — 设备列表 / 选中设备的全局状态。
 //
-// 原 useDevices 的逻辑逐字搬入；错误出口（onError）由 hook 在挂载期注入，
-// 卸载即摘掉，行为与「hook 内 mountedRef 抑制」等价。
+// 错误出口（onError）由 hook 在挂载期注入、卸载即摘掉。
 import { create } from "zustand";
 import {
   cleanupStaleInstall,
@@ -177,8 +176,7 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
   },
 
   /** 低频兜底：重拉 stale 残留列表（外部 APO 安装器等造成的漂移）。
-   *  失败静默保留现值——原轮询实现失败时会把列表清成 []，横幅闪没再闪回，
-   *  现改为不动，避免抖动。 */
+   *  失败静默保留现值，不清空列表，避免横幅闪没再闪回。 */
   async loadStale() {
     try {
       const nextStale = await listStaleInstalls();

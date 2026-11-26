@@ -155,9 +155,9 @@
 
 /* 深色模式：组色/预设色使用预存的深色基础色与深色 hover 色 */
 
-/* 侧栏预设 pill（预设区 / 自定义区共用）同样要走深色映射：色点、描边、组名三处原先只写了
-   浅色的 `--preset-accent`，深色下就停在亮色上、与调音卡片的组色口径不一致
-   （`presetCardStyle()` 早就把 `--preset-accent-dark` 注入了，是 CSS 没取用）。
+/* 侧栏预设 pill（预设区 / 自定义区共用）同样要走深色映射：色点、描边、组名三处
+   须用 `--preset-accent-dark`（由 `presetCardStyle()` 注入），否则深色下停在亮色上、
+   与调音卡片的组色口径不一致。
    选择器带 `:not(.disabled)`：`.preset-pill.disabled` 那几条灰色态是浅/深共用的，
    这里特异性一旦盖过它们，禁用态就会重新染上彩色。 */
 :root[data-theme="dark"] .preset-pill:not(.disabled) .preset-dot {
@@ -357,7 +357,7 @@
 
 
 
-/* 工具栏高光带跟随玻璃进度：基底不透明度改由 --ring-op 承担（基础规则见 curve.css）。
+/* 工具栏高光带跟随玻璃进度：基底不透明度由 --ring-op 承担（基础规则见 curve.css）。
    必须写在文件末尾覆盖上面那条三合一规则里的 opacity: 0.8 —— 它会盖掉基础规则的
    calc()，高光就不再跟 --glass-t 一起淡（表现为「canvas 淡了、默认高光还在」）。 */
 :root[data-theme="dark"] .fx-toolbar::after {

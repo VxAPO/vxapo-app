@@ -29,7 +29,7 @@ const TOOLBAR_TARGET_SETTLE_MS = 50;
  * 飞行时长随**距离**缩放（与视图收窄"260ms + 2ms/px、上限 800ms"同思路）：
  * 固定 480ms 的问题是——远距离在 480ms 内冲完（加速太快、刹车太猛），
  * 近距离也用掉 480ms（离近了停得太慢）。
- * 缓动仍是原来那套 easeOut、指数 2.6（先快后慢、收尾柔）。
+ * 缓动为 easeOut、指数 2.6（先快后慢、收尾柔）。
  */
 const TOOLBAR_FLIGHT_MIN_MS = 300;
 const TOOLBAR_FLIGHT_BASE_MS = 300;
@@ -508,9 +508,9 @@ export function useMarqueeSelection({
     /**
      * 只有"拖动前工具栏已经存在"时才在这里补写目标。
      *
-     * 实测：把门槛去掉（无条件写 + 强制重测几何）会让**原本正确**的"先下后上"
-     * 从 10px 变成 6px——说明这两条写入路径在同一帧里还会互相覆盖，不能简单叠加。
-     * 反向路径（先上后下）的 6px 是另一处成因，尚未定论，先恢复已验证正确的行为。
+     * 去掉门槛（无条件写 + 强制重测几何）会让"先下后上"从 10px 变成 6px，
+     * 说明这两条写入路径在同一帧里会互相覆盖，不能简单叠加。
+     * 反向路径（先上后下）的 6px 是另一处成因，尚未定论。
      */
     if (hadToolbarRef.current && hit.box) {
       setToolbarTargetNow(
@@ -587,7 +587,7 @@ export function useMarqueeSelection({
    * 元素还不存在的那个 commit 跑一次、`el` 为 null 直接 return，之后再也不会重跑，尺寸就
    * 永远停在兜底值（280×64）。通道选择器会把工具栏拉宽到远超兜底值，首次框选的右边界便按
    * 280 去算，工具栏直接顶出 8px 内缩线；等取消一次时退场动画期间元素还挂着，effect 才补上
-   * ResizeObserver，所以第二次就正常——这个"只有首次出界"的现象就是这么来的（踩过）。
+   * ResizeObserver，所以第二次才正常——"只有首次出界"由此而来。
    */
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
   const toolbarRoElRef = useRef<Element | null>(null);
