@@ -99,7 +99,7 @@ const PARAM_OPTIONS: Record<string, { value: string; label: string }[]> = {};
 
 /**
  * 参数值域覆盖（仅 UI 显示域 ≠ driver 值域的参数登记）：
- * `compressor.ratio` —— App 内部（滑杆值、输入框显示、语义强度、内存存储）统一用
+ * `compressor.ratio`：App 内部（滑杆值、输入框显示、语义强度、内存存储）统一用
  * **0..1 增益削减斜率 `v = 1 − 1/ratio`**（3:1 → 0.67、20:1 → 0.95，到不了 1）；
  * 与 driver 的 x:1 值域只在**读/写 TOML 时各换算一次**（`fromDriverParam` / `toDriverParam`），
  * 渲染时不从 ratio 反推滑杆位置。
@@ -120,7 +120,7 @@ export function fromDriverParam(type: string, key: string, raw: number): number 
 /**
  * 写 TOML / `effectsEqual` 比较（一次性换算）：内部斜率 v → driver x:1，
  * `ratio = 1/(1−v)`，超过 20 一律 clamp 到 20（v = 1 时 `1/0` 是无穷，直接取 20）。
- * 0.95~1.0 这段写盘都是 20:1，往返比较因此相等——拖满的 1.0 不会读回 0.95 弹回。
+ * 0.95~1.0 这段写盘都是 20:1，往返比较因此相等，拖满的 1.0 不会读回 0.95 弹回。
  */
 export function toDriverParam(type: string, key: string, v: number): number {
   if (type !== "compressor" || key !== "ratio") return v;
@@ -149,7 +149,7 @@ export function effectParams(type: string): EffectParamDef[] {
 }
 
 /**
- * UI 起点（新增效果器时写入的初值）——**app 自有取舍，不跟随 driver 默认值**：
+ * UI 起点（新增效果器时写入的初值），由 app 自行取舍，区别于 driver 默认值：
  * - 起点值一律 ≤2 位小数（输入框显示精度即 2 位，长浮点会直接暴露在输入框里；
  *   driver 的全精度默认值见 effects.generated.ts，未列出的参数回落时按步进位数取整）；
  * - 个别参数有意偏置以获得更好的初始听感（如 wide.gain 0.05，driver 默认 0）；

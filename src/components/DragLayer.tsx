@@ -13,7 +13,7 @@ interface DragLayerProps {
   flyElRef: RefObject<HTMLDivElement | null>;
   /** 飞行副本的挂载容器（滚动内容层 `.tuning-scroll`）：副本挂进去才能随内容滚 */
   flyHost: HTMLElement | null;
-  /** 抓取悬浮层的挂载容器（`.device-body`）：只吃它的 clip-path 裁剪 + 层级归属，**不能**是滚动容器 */
+  /** 抓取悬浮层的挂载容器（`.device-body`）：只吃它的 clip-path 裁剪与层级归属，须为非滚动容器 */
   overlayHost: HTMLElement | null;
   activeContent: ReactNode;
   classForKey: (key: string) => string;
@@ -42,8 +42,8 @@ export default function DragLayer({
           //
           // portal 进 `.device-body`（**不是**滚动容器 `.tuning-scroll`），只图两件事：
           // ① 层级落进那个被标签栏压住的层叠上下文；② 吃 `.device-body` 的 clip-path 裁剪。
-          // 它仍是 fixed、也不在滚动容器里，所以不随内容滚动位移 —— 跟手锁定靠的就是这一点；
-          // 一旦挂进滚动容器或套上 transform 祖先，fixed 的包含块会跟着内容滚（滚动多少偏多少）。
+          // 它仍是 fixed、也在滚动容器之外，所以不随内容滚动位移，跟手锁定靠的就是这一点；
+          // 挂进滚动容器或套上 transform 祖先，fixed 的包含块会跟着内容滚（滚动多少偏多少）。
           <div
             ref={overlayRef}
             className={`drag-fly overlay-fixed ${classForKey(activeKey)}`}
@@ -92,7 +92,7 @@ function FlyPath({
   const dy = fly.to.top - fly.from.top;
   const len = Math.hypot(dx, dy) || 1;
   const arc = Math.min(32, len * 0.25);
-  // 弧线起手方向：控制点放在起点正左/正右，保证先水平再竖直——
+  // 弧线起手方向：控制点放在起点正左/正右，先水平再竖直。
   // 起点在轴线左侧 → 先向右；右侧 → 先向左；然后才弯向占位框
   const side = fly.from.left + fly.from.width / 2 - (fly.to.left + fly.to.width / 2);
   const dir = side < 0 ? 1 : -1;
@@ -110,12 +110,12 @@ function FlyPath({
   /**
    * 位置改用 transform 驱动（x / y），left / top 只作静态基准：
    * - 逐帧改 left/top 属于布局属性，浏览器无法合成，整张卡每帧重排 + 重绘
-   *   （含文字重新折行、阴影重画）——卡片多时就是掉帧的来源。
+   *   （含文字重新折行、阴影重画），卡片多时就是掉帧的来源。
    * - transform 只走合成：栅格内容重用，一帧只剩一次合成。
    *
    * **基准放在落点、路径偏移相对落点算，末帧 x/y = 0**：
    * 若反过来（基准在起点、末帧偏移 = 落点差），一旦 framer 在动画结束后用缓存再写一次
-   * transform，就会在落点上又叠一次偏移——表现为落点漂移、副本卸载时闪回原位。
+   * transform，就会在落点上又叠一次偏移，表现为落点漂移、副本卸载时闪回原位。
    * 末帧为 0 时，重写多少次都是原值。
    * 基准与每帧偏移都吸附到设备像素栅格，合成偏移才是整数设备像素，文字栅格才与静止卡片一致。
    */
@@ -132,9 +132,9 @@ function FlyPath({
    * 让副本从合成层回到常规绘制（合成层的文字抗锯齿与栅格分辨率和常规层不同，
    * 整段停在合成层上、落地静止时看着发虚，飞行中则被运动掩盖）。
    *
-   * 交接是**幂等**的：元素基准本来就是落点，末帧偏移为 0，所以这里不需要再改坐标——
-   * 即便 framer 之后用缓存重写一次 transform，写回的也是 0 偏移。落点漂移的 bug 正是
-   * "基准在起点 + 末帧偏移 = 落点差" 造成的。
+   * 交接是**幂等**的：元素基准本来就是落点，末帧偏移为 0，所以这里保持坐标不变。
+   * framer 之后用缓存重写一次 transform，写回的也是 0 偏移。落点漂移源于
+   * "基准在起点 + 末帧偏移 = 落点差"。
    */
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -195,7 +195,7 @@ function FlyPath({
     </motion.div>
   );
   // 必须 portal 进滚动内容层：副本在容器内才会被浏览器的滚动一起带走（合成线程，零延迟）。
-  // 留在容器外就只能靠 JS 逐帧补偿——补偿天然晚一帧，滚动快时就是肉眼可见的抖。
+  // 留在容器外只能靠 JS 逐帧补偿，补偿天然晚一帧，滚动快时就是肉眼可见的抖。
   // PresenceContext 穿透 portal，AnimatePresence 的退场淡出照常生效。
   // 容器还没就绪（首帧/设备页重建中）就不渲染：以内容坐标画在视口层会错位，宁可这一轮没有副本。
   if (!host) return null;

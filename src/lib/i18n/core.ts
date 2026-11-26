@@ -6,7 +6,7 @@ import { PERCEPTUAL_LABELS } from "../blocks";
 export type Lang = "zh" | "en";
 
 // 语言统一以 C:\ProgramData\VxAPO\lang.txt 为准（安装器写入默认，设置切换写回），
-// 不再使用 localStorage，避免历史残留导致安装器选择不生效。
+// 语言选择存文件（lang.txt），避开 localStorage 的历史残留。
 let currentLang: Lang = "zh";
 try {
   document.documentElement.dataset.lang = currentLang;
@@ -92,7 +92,7 @@ for (const p of LIBRARY) {
 
 // 语义视图的「默认映射」标签：感知区间名（`PERCEPTUAL_LABELS`）中英成对。
 // 词条本身就在 zh/en 里（键是中文字面量），这里按那份权威表展开成双向查表，
-// **不手抄第二份标签**——清单只源自 PERCEPTUAL_LABELS，译名只源自 i18n 词条。
+// 清单只源自 PERCEPTUAL_LABELS，译名只源自 i18n 词条，避免维护第二份标签。
 const PERCEPTUAL_EN: Record<string, string> = {};
 const PERCEPTUAL_ZH: Record<string, string> = {};
 for (const label of PERCEPTUAL_LABELS) {
@@ -117,7 +117,7 @@ export function displayBandName(label: string): string {
 
 /**
  * 感知标签的中英对照：认得出的返回 `{ zh, en }`，认不出（用户自己写的文字）返回 null。
- * 保存自定义预设时用它判断「这一行是没动过的默认映射，还是用户手写的」——
+ * 保存自定义预设时用它判断「这一行是没动过的默认映射，还是用户手写的」。
  * 前者成对入库供语言切换反查，后者原样保留。
  */
 export function perceptualLabelPair(label: string): { zh: string; en: string } | null {
@@ -132,7 +132,7 @@ export function perceptualLabelPair(label: string): { zh: string; en: string } |
  * - 空串：不写 name（「留空」语义）。
  * - 认得出是语义视图的默认映射（感知标签，中英任意写法）：**成对**写入
  *   `name` / `name_en`，语言切换时任意一侧都能反查出另一侧。
- * - 其余＝用户自己写的：原样保留，且**不**补 `name_en`——切语言不改用户文字。
+ * - 其余＝用户自己写的：原样保留，且不补 `name_en`，切语言时保留用户文字。
  */
 export function customBandNameFields(raw: string): { name?: string; name_en?: string } {
   const text = raw.trim();
@@ -170,7 +170,7 @@ export function customPresetDefaultName(seq: number): { zh: string; en: string }
 }
 
 /**
- * 文本是否仍是「未编辑的默认名」——`自定义预设` / `自定义预设 3` / `Custom preset` /
+ * 文本是否仍是「未编辑的默认名」，例如 `自定义预设` / `自定义预设 3` / `Custom preset` /
  * `Custom preset 3` / 空串都算。认得出才成对入库，用户自己写的名字一律原样保留。
  */
 export function isDefaultPresetName(text: string): boolean {

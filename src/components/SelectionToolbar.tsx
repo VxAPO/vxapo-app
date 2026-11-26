@@ -74,7 +74,7 @@ export default function SelectionToolbar({
 
   /**
    * 「复制到声道」菜单的位置：它 portal 到 `document.body`（见下面的 createPortal），
-   * 不能再靠 `.sel-copy` 做绝对定位，改按按钮的**视口矩形**写 `left/top/min-width`。
+   * 位置按按钮的**视口矩形**写 `left/top/min-width`，绝对定位失效。
    *
    * 用 rAF 跟着按钮：工具栏会被 `useMarqueeSelection` 的跟随循环写 transform 移动
    * （选区变化、滚动都会），portal 下必须自己跟，否则会脱开。
@@ -109,7 +109,7 @@ export default function SelectionToolbar({
 
   return (
     // 位置（transform）由 useMarqueeSelection 的跟随循环独占；居中与入场 6px 抬升
-    // 交给 CSS 的 translate/动画，这里不再用 motion，避免两个所有者写同一属性。
+    // 交给 CSS 的 translate/动画，这里避开 motion，避免两个所有者写同一属性。
     <div
       className={`fx fx-toolbar${shown ? " is-in" : ""}`}
       ref={toolbarRef}

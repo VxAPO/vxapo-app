@@ -300,7 +300,7 @@
 
 .vx-text-input:focus-visible {
   outline: none;
-  /* 焦点只用**描边变色**交代，不再画外圈光晕——与 `.vx-select:focus-visible` 同套。
+  /* 焦点只用**描边变色**交代，与 `.vx-select:focus-visible` 同套。
      外圈试过两种（`0 0 0 3px var(--brand-soft)` 硬环、1px 细环 + 6px 模糊晕），
      都不如描边本身干净；而且**任何外圈都会被外层滚动容器裁掉**（见下面 .preset-band-list）。 */
   border-color: var(--brand);
@@ -312,8 +312,8 @@
   gap: 6px;
   max-height: 220px;
   overflow-y: auto;
-  /* 横向不留余量：焦点只用描边交代、不往外画光晕，所以没有会被裁到的东西。
-     留个提醒——它是滚动容器，`overflow-y:auto` 会把**横向也一并裁在 padding box 上**，
+  /* 横向不留余量：焦点只用描边交代、不往外画光晕，没有会被裁到的内容。
+     注意它是滚动容器，`overflow-y:auto` 会把**横向也一并裁在 padding box 上**，
      而输入框是 `flex:1`、右缘正好压着这个边界：**一旦再给焦点加外圈，右侧就会缺一节**
      （左缘前面有频段标签、本来就有余量，所以只有右边看得出来）。要加外圈就得同时留等宽内缩。 */
   padding: 10px 0;

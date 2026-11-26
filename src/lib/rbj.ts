@@ -1,6 +1,6 @@
 import type { PeqBandKind } from "./model";
 
-/** RBJ 双二阶幅度响应（dB）——与 driver biquad 计算对齐（app 曲线预览用）。 */
+/** RBJ 双二阶幅度响应（dB），与 driver biquad 计算对齐（app 曲线预览用）。 */
 
 export function peakingDb(freq: number, fc: number, gainDb: number, q: number, fs: number): number {
   const f = Math.max(10, Math.min(fs * 0.49, freq));

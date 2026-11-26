@@ -13,7 +13,7 @@ interface NumInputProps {
   ariaLabel?: string;
   /**
    * 显示与失焦收口的小数位（默认 2，输入框不暴露长浮点）。
-   * Hz 类频率参数传 0——频率输入一律整数（失焦时四舍五入入 store）。
+   * Hz 类频率参数传 0，频率输入一律整数（失焦时四舍五入入 store）。
    */
   precision?: number;
   /** 提交键入的原始数值（不夹取；越界收口在失焦时完成） */
@@ -23,7 +23,7 @@ interface NumInputProps {
 /**
  * 调音卡片的数字输入框：非受控（defaultValue + 失焦同步）。
  *
- * type=number 的键入中间态（"-"、清空）在浏览器的 value 读取里是空串——
+ * type=number 的键入中间态（"-"、清空）在浏览器的 value 读取里是空串，
  * 受控回写会把 Number("")=0 立刻顶进输入框，负号根本打不进来。这里键入期间
  * 既不回写 DOM 也不提交 store：中间态解析失败一律丢弃（清空也不归零），
  * 外部值（滑块、回读）聚焦期间不同步；失焦时把最终值夹到 [min,max] 回显并回写，
@@ -52,7 +52,7 @@ function NumInput({
   const shown = round(show);
 
   // 非聚焦时把外部变化（滑块拖动、轮询回读、切设备）同步进输入框；
-  // 聚焦期间跳过——DOM 里是键入中的文本，回写会打断输入。
+  // 聚焦期间跳过：DOM 里是键入中的文本，回写会打断输入。
   useEffect(() => {
     const el = ref.current;
     if (!el || document.activeElement === el) return;
@@ -82,7 +82,7 @@ function NumInput({
       }}
       onBlur={(e) => {
         // 失焦收口：按 precision 收敛（频率整数、其余 2 位），再夹到 [min,max]。
-        // 非法/空输入退回原显示值；收口值与 store 不一致才回写——键入合法值、
+        // 非法/空输入退回原显示值；收口值与 store 不一致时才回写，键入合法值、
         // 未改动的字段不触发 markDirty；store 里残留的长浮点在首次失焦时被规整。
         const el = e.currentTarget;
         const n = Number(el.value);

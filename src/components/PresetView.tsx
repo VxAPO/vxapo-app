@@ -18,7 +18,7 @@ interface PresetViewProps {
   /** 滤波器/效果器的拖拽 API（useDragSort 返回值子集）。 */
   blocksDrag: DragApi;
   effectsDrag: DragApi;
-  /** 设备页数据：由 App 经 ViewStage 传入（**不要**改回订阅 store，见下方注释）。 */
+  /** 设备页数据：由 App 经 ViewStage 传入，避免在本组件订阅 store（见下方注释）。 */
   blocks: Block[];
   effects: EffectItem[];
   channelOn: boolean;
@@ -32,7 +32,7 @@ interface PresetViewProps {
  * 语义视图：滤波器与效果器分区，组内卡只保留组标识。
  *
  * **数据走 props，动作仍直连 store**：动作是与设备无关的 store 单例；而数据若直连
- * store，设备页过渡就失效——过渡靠 AnimatePresence mode="wait" 保留**上一轮的旧元素
+ * store，设备页过渡就失效。过渡靠 AnimatePresence mode="wait" 保留**上一轮的旧元素
  * 实例**，它带着旧设备的 props 淡出（拆分前原样）。store 是全局实时的，旧元素一旦
  * 订阅它，淡出途中就会渲染成新设备的内容（连页面高度都一起变），整段过渡就不对了。
  */
@@ -64,7 +64,7 @@ function PresetView({
     [effects, channelOn, effActive],
   );
   // 显示哪些块由**共享判据**决定（与参数视图完全一致，见 lib/filters.visibleBlockFor）：通道模式看当前
-  // 声道，关闭选择器时回退首声道。**不再是**「非通道模式全部显示」——那样关掉选择器会把别的声道的卡
+  // 声道，关闭选择器时回退首声道。「非通道模式全部显示」会让关掉选择器后把别的声道的卡
   // 也画出来（关掉选择器时 store 已把块合并到首声道，这里再按同一判据过一遍，内存与文件不一致的那一瞬
   // 也不会冒出别的声道的卡）。
   // 用 `blocks.map` + `return null` 过滤而不是先 filter 成数组：`bi` 必须是 store 里的**真实下标**，

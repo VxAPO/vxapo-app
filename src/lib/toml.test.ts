@@ -89,7 +89,7 @@ describe("buildToml ↔ parseConfigWithTail", () => {
     expect(parsed.droppedRemovedKeys).toBe(true);
     expect(parsed.effects[0].params?.release_ms).toBeUndefined();
     expect(parsed.effects[0].params?.ratio).toBe(0.67);
-    // 重写后不再含 release_ms，driver 方可接受该文件
+    // 重写后的文件不含 release_ms，driver 方可接受
     const rewritten = buildToml(parsed.blocks, parsed.enabled, parsed.effects);
     expect(rewritten).not.toContain("release_ms");
     expect(parseConfigWithTail(rewritten).droppedRemovedKeys).toBe(false);

@@ -20,8 +20,8 @@ export type PanelBuffer = {
   /**
    * 本帧的贴回（blit）位置：始终取元素**当前** rect 推出的视口坐标。
    * 缓冲像素以元素自身 rect 为基准绘制（见 renderToPanelBuffer 的 transform），
-   * 内容对元素是「锚定」的——元素平移后按当前位置贴回即对齐，因此复用
-   * 不再要求位置与渲染时一致（动画/滚动期间复用窗口才能真正命中）。
+   * 内容对元素是「锚定」的，元素平移后按当前位置贴回即对齐。因此复用
+   * 允许位置与渲染时不同，动画/滚动期间复用窗口才能命中。
    */
   x: number;
   y: number;
@@ -75,14 +75,14 @@ export interface EdgeTintState {
   fadePending: boolean;
   /**
    * 淡入淡出仍在收敛中的面板。samplePanel 每次采样后写入；
-   * renderToPanelBuffer 据此豁免复用——否则滚动期采样时钟被复用窗冻结，
+   * renderToPanelBuffer 据此豁免复用。否则滚动期采样时钟被复用窗冻结，
    * 过渡以 ~100ms 粒度跳变（frameScale 补偿单步 3 倍），观感「一段一段」。
    */
   fading: WeakSet<HTMLElement>;
   /** 每块混合层画布上次重定位时的滚动位置：假移动补偿的基准（画布追平移） */
   paintedScroll: WeakMap<HTMLCanvasElement, { left: number; top: number }>;
   /** 最近一次工具栏 blit 的锚点（画布原点 + 工具栏视口位置）：
-   * 工具层位移补偿的真源——按「当前位置 − 锚点」逐帧 translate，
+   * 工具层位移补偿的真源，按「当前位置 − 锚点」逐帧 translate，
    * 覆盖滚动/框选飞行等一切位移来源（纯滚动增量只解释得了滚动）。 */
   toolAnchor: { originX: number; originY: number; left: number; top: number } | null;
   /** 假移动补偿守卫循环的 rAF id */
@@ -91,8 +91,8 @@ export interface EdgeTintState {
   toolMovedAt: number;
   /**
    * 结构代数：卡片增减/视图舞台切换等配色源集合变化时 +1。
-   * 面板缓冲记录渲染时的代数，代数不同禁止复用——放宽复用窗口后
-   * 防止「结构已变、旧配色滞留」。
+   * 面板缓冲记录渲染时的代数，代数不同即放弃复用，避免放宽复用窗口后
+   * 「结构已变、旧配色滞留」。
    */
   bufGen: number;
   /** 本次 paint 的元素样式缓存（paint() 入口清空）。 */
@@ -125,9 +125,9 @@ export interface EdgeTintState {
   /** 归因埋点（perf 分支）：耗时统计，经 window.__vxTint 供 CDP 采样。 */
   stats: TintStats;
   /**
-   * 各层最近一次全量重画的时间戳：paintLayerPair 的"内容未变跳过"判据——
-   * 本 paint 开始后该层没有发生过全量重画（且无淡入淡出、脏区未动）⇒ 层像素
-   * 与上帧完全一致，跳过 clear+重贴（不向 GPU 重传未变纹理）。
+   * 各层最近一次全量重画的时间戳，作为 paintLayerPair 的"内容未变跳过"判据：
+   * 本 paint 开始后该层没有全量重画（且无淡入淡出、脏区未动）⇒ 层像素
+   * 与上帧一致，跳过 clear+重贴（避免向 GPU 重传未变纹理）。
    */
   lastFullRender: { base: number; tool: number };
   /** 栅格后端：缺省 canvas2d，可为 WebGL。 */
@@ -249,7 +249,7 @@ export function csOf(el: HTMLElement): CSSStyleDeclaration {
 
 /**
  * 同一帧内的元素级 paint 缓存（可见度/面板底色等复合读数）。
- * Map 不存在或缺少该元素时创建条目；调用方在 paint() 入口无需逐项清理。
+ * Map 不存在或缺少该元素时创建条目；调用方在 paint() 入口省去逐项清理。
  */
 export function paintEntryOf(el: HTMLElement): PaintCacheEntry {
   let e = ST.paintCache.get(el);

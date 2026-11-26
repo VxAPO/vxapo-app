@@ -3,7 +3,7 @@
  *
  * 平移、高度收窄、滚动条长度变形三者必须同源：数值散落在各文件里迟早漂移，
  * 于是统一放这里。改这里的数字等于改时序契约。
- * 曲线本身单源在 lib/motionEase.ts —— 卡片拖拽避让共用同一条，改一处即三处生效。
+ * 曲线本身单源在 lib/motionEase.ts，卡片拖拽避让共用同一条，改一处即三处生效。
  */
 
 import { EASE_OUT_SOFT, EASE_OUT_SOFT_P1, EASE_OUT_SOFT_P2 } from "./motionEase";
@@ -12,7 +12,7 @@ import { EASE_OUT_SOFT, EASE_OUT_SOFT_P1, EASE_OUT_SOFT_P2 } from "./motionEase"
 export const VIEW_SLIDE_MS = 320;
 /** 设备页切换后给染色画布的收尾窗口（ms）。
     换页是**硬切**（不补间 opacity，见 App 里设备页的注释）：瞬时换页只产生一次 childList 变更，
-    MutationObserver 已会排一次全量重绘；这段窗口是保险——新页面首帧的几何/配色若晚一两帧才稳定，
+    MutationObserver 已会排一次全量重绘；这段窗口是保险：新页面首帧的几何/配色若晚一两帧才稳定，
     画布不至于停在上一轮的染色上（它是独立图层，不跟着 DOM 走）。 */
 export const DEVICE_SETTLE_MS = 200;
 /** 高度收窄动画时长上限（ms） */

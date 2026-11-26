@@ -20,7 +20,7 @@ interface ViewStageProps {
   accentOf: (b: Block) => string;
   blocksDrag: DragApi;
   effectsDrag: DragApi;
-  /** 设备页数据：透传给两套视图。不在这里订阅 store——设备页过渡要靠旧元素实例保留
+  /** 设备页数据：透传给两套视图。数据由 props 传入而非在此订阅 store，因为设备页过渡要靠旧元素实例保留
       旧数据淡出（详见 PresetView / AdvancedView 的注释）。 */
   blocks: Block[];
   effects: EffectItem[];
@@ -33,7 +33,7 @@ interface ViewStageProps {
 
 /**
  * 两套视图常驻 DOM：非当前视图 display:none。切换只做动画与显隐，
- * 不再重建 31 张卡的 DOM（反复切换的挂载/首帧布局尖峰因此消失）。
+ * 复用同一批 DOM（反复切换的挂载/首帧布局尖峰因此消失）。
  * 退场那套先用 is-exiting（绝对定位让出文档流）演完，再收成 is-hidden。
  */
 export default function ViewStage({
@@ -61,7 +61,7 @@ export default function ViewStage({
       className="view-stack"
       style={{
         minHeight: viewTransitionH ?? undefined,
-        // 先快后慢：起步就带走大部分距离，尾巴只做收敛——慢起曲线在高度差
+        // 先快后慢：起步就带走大部分距离，尾巴只做收敛。慢起曲线在高度差
         // 小时前段几乎不动，看起来像平移完了先停一下
         transition: viewCollapsing ? `min-height ${viewCollapseMs}ms ${COLLAPSE_EASE}` : "none",
       }}
@@ -80,7 +80,7 @@ export default function ViewStage({
               active ? { x: 0, opacity: 1 } : { x: v === "preset" ? "-100%" : "100%", opacity: 0 }
             }
             onAnimationComplete={() => onStageAnimationComplete(v)}
-            // 进场与退场都是「平移 + 淡入淡出」：错峰已删除，不再把进场 opacity 设成 0 时长
+            // 进场与退场都是「平移 + 淡入淡出」，进场 opacity 由完整时长走完
             transition={{ duration: VIEW_SLIDE_MS / 1000, ease: "easeInOut" }}
           >
             {v === "preset" ? (

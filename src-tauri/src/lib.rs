@@ -63,7 +63,7 @@ fn cli_path() -> &'static str {
 
         // release：优先找 App exe 同目录的 vxapo-cli.exe（随包版本），
         // Tauri bundle.resources 可能放到 exe 同级或 resources 子目录。
-        // 注意：CARGO_MANIFEST_DIR 只在 debug 构建使用——release 下它会固化到
+        // 注意：CARGO_MANIFEST_DIR 只在 debug 构建使用，release 下它会固化到
         // 开发目录，导致安装版 App 误用开发目录的 CLI/DLL（CLSID 注册错路径）。
         #[cfg(not(debug_assertions))]
         if let Ok(exe) = std::env::current_exe() {
@@ -849,7 +849,7 @@ fn rollback_install(guid: String) -> Result<String, String> {
     run_cli(cli, &["uninstall", "-d", &guid], &tag)
 }
 
-/// 旧 GUID 残留列表（只读，无需提权）。
+/// 旧 GUID 残留列表（只读操作，不涉及提权）。
 #[tauri::command]
 fn list_stale_installs() -> Result<serde_json::Value, String> {
     let cli = cli_path();

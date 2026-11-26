@@ -62,7 +62,7 @@ export function collectCards(): LightSet {
       const sr = sub.getBoundingClientRect();
       if (sr.width < 2 || sr.height < 2) return;
       // enable-dot 曾为 2.4：√p 半径×1.55 再叠权重×2.4，在「取最强」
-      // 语义下形成远超其他光源的高地——开关旁的描边亮度阶梯感的来源。
+      // 语义下形成远超其他光源的高地，是开关旁描边亮度阶梯感的来源。
       const power = sub.classList.contains("enable-dot")
         ? 1.8
         : sub.classList.contains("effect-dot")
@@ -130,7 +130,7 @@ export function syncTargets(): void {
       changed = true;
     }
   });
-  // 集合本身没变时不再无条件重绘：只有几何指纹（目标/卡片/强调块的位置尺寸）
+  // 集合本身没变时跳过重绘：只有几何指纹（目标/卡片/强调块的位置尺寸）
   // 真的变化时才需要一次全量重绘，其余情况保持上一帧画面。
   const sig = targetScanSignature();
   if (changed || sig !== ST.scanSig) {

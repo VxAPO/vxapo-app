@@ -32,7 +32,7 @@ function TopBar({
   onToggleMaximize,
   onClose,
 }: TopBarProps) {
-  // 设备状态直接订阅 store。通道状态不再需要——打开通道选择器不再禁用语义视图。
+  // 设备状态直接订阅 store。通道状态由 store 内部维护，打开通道选择器不禁用语义视图。
   const noDevices = useDeviceStore((s) => s.devices.filter(isInstalled).length === 0);
   return (
     <div className="topbar" data-tauri-drag-region>

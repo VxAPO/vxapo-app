@@ -489,7 +489,7 @@ describe("load", () => {
     vi.mocked(api.readConfig).mockReturnValueOnce(new Promise<string>((r) => (resolve = r)));
     setInputs({ selectedGuid: "B" });
     const p = useConfigStore.getState().load();
-    // 读盘期间：loadedGuid 已清空（通道态据此推迟恢复），但 displayGuid 仍指 A——设备页不换
+    // 读盘期间：loadedGuid 已清空（通道态据此推迟恢复），但 displayGuid 仍指 A，设备页不换
     expect(useConfigStore.getState().loadedGuid).toBeNull();
     expect(useConfigStore.getState().displayGuid).toBe("A");
     resolve(cfgText(200, false));

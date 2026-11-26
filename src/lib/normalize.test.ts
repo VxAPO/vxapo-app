@@ -35,7 +35,7 @@ describe("planNormalize（非通道模式）", () => {
   });
 
   it("压到 0 附近时写入的是 0 而不是 -0（否则输入框/文案会显示 -0）", () => {
-    // 空链：滤波器峰值为 0，补偿量就是 `-0`——`Math.round(-0) / 10` 仍是 `-0`
+    // 空链：滤波器峰值为 0，补偿量就是 `-0`，`Math.round(-0) / 10` 仍是 `-0`
     const effects = [preamp({ params: { gain_db: -0.2 } })];
     const { updates } = planNormalize([], effects, ["L"], false, FS);
     expect(updates).toHaveLength(1);

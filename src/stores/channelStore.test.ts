@@ -1,6 +1,6 @@
 // 逐设备通道记忆：**没有记忆的新设备继承当前值**，不回落成「关 + 左声道」。
 // 原因见 channelStore.setSelectedGuid 的注释：`load()` 是异步的，新设备的 configChannelMode 要晚一点
-// 才到，而在那之前 blocks 还是上一台的 —— 回落会画出「上一台的链按左声道过滤」（切设备闪左声道坐标轴）。
+// 才到，而在那之前 blocks 还是上一台的，回落会画出「上一台的链按左声道过滤」（切设备闪左声道坐标轴）。
 import { beforeEach, describe, expect, it } from "vitest";
 import { effectiveChannel, useChannelStore } from "./channelStore";
 

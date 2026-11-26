@@ -3,7 +3,7 @@
 //
 // 用法：npm run sync:driver-schema
 //   - cli 定位：优先 env VXAPO_CLI（指向已构建的 vxapo-cli.exe），
-//     否则用 cargo run 跑 ../vxapo-cli（开发机最省事，无需先出二进制）。
+//     否则用 cargo run 跑 ../vxapo-cli（开发机最省事，省去先出二进制）。
 //   - driver 改参数后手动重跑，生成物入库（不做构建钩子）。
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";

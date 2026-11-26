@@ -27,7 +27,7 @@
 }
 
 .drag-fly.fly-anim.effect-card {
-  /* 与 .drag-fly.fly-anim 一致：副本在滚动内容层里，不能退回 fixed */
+  /* 与 .drag-fly.fly-anim 一致：副本在滚动内容层里，须保持 absolute */
   position: absolute;
 }
 
@@ -150,7 +150,7 @@
 }
 
 /* 满值时 thumb（16px、center 在轨道右缘）向外探出 8px，正好吃掉行 gap 贴住输入框：
-   滑杆右侧补 4px——只拉大「进度条右端 → 输入框」这一段，label 侧不动。
+   滑杆右侧补 4px，只拉大「进度条右端 → 输入框」这一段，label 侧保持原样。
    2px 时 thumb 的 hover 描边仍会外扩压到输入框，故再加 2px。 */
 .effect-param-row .gs-root,
 .band-param-row .gs-root {
@@ -226,7 +226,7 @@
   box-shadow: var(--hover-shadow);
 }
 
-/* 被框选的卡片拖拽成占位框时：不再用描边覆盖，虚线统一用普通灰色 */
+/* 被框选的卡片拖拽成占位框时：虚线用普通灰色 */
 .drag-card.is-dragging.is-selected {
   outline: none;
   border-color: var(--border-strong);
@@ -239,7 +239,7 @@
   border-left-color: var(--border-strong);
 }
 
-/* 玻璃进度（0→1）：选中工具栏的淡入淡出用它，而不是 opacity——祖先 opacity<1 会让
+/* 玻璃进度（0→1）：选中工具栏的淡入淡出用它。祖先 opacity<1 会让
    面板自身的 backdrop-filter 整组降级，表现为「高斯模糊等淡入结束才出现」。
    注册成 <number> 才能被 transition 插值；inherits 让面板与内容共用同一个进度。 */
 @property --glass-t {
@@ -297,7 +297,7 @@
   content: "";
   position: absolute;
   /* 必须盖住面板那圈 1px 透明边框：绝对定位子元素的 inset:0 对齐的是 **padding box**，
-     只铺 inset:0 会留下 1px 没上底色的环——描边（::after，落在 -2px）与模糊底之间就会
+     只铺 inset:0 会留下 1px 没上底色的环，描边（::after，落在 -2px）与模糊底之间就会
      露出一圈缝隙色。border-radius 作用在 border box 上，故这里按 -1px 对齐同一圈。 */
   inset: -1px;
   border-radius: inherit;
@@ -309,7 +309,7 @@
   opacity: var(--glass-t);
 }
 
-/* 内容与玻璃同一条时间轴：不能给 .sel-toolbar 自身加 opacity（会再次压掉 backdrop-filter） */
+/* 内容与玻璃同一条时间轴：.sel-toolbar 自身的 opacity 留给 CSS（它会影响 backdrop-filter） */
 .sel-toolbar-label,
 .sel-toolbar-actions {
   /* 必须压在底衬 ::before 之上：伪元素是定位元素，会盖住未定位的文字

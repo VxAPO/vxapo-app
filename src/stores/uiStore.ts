@@ -1,7 +1,7 @@
 // VxAPO App — UI 级状态（错误条 / Toast / 对话框开关与导入目标）。
 //
 // 从 App 的本地 state 收敛而来：错误出口与提示出口直接指向本 store，
-// 对话框组件自行订阅开关，App 不再逐项透传。
+// 对话框组件自行订阅开关，App 省去逐项透传。
 import { create } from "zustand";
 
 interface UiStore {

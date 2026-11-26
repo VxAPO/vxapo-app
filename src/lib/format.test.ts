@@ -1,4 +1,4 @@
-// dB 数值格式化：先四舍五入再定符号（归一化把峰值压到 0 附近时不能显示成 "-0.0"）。
+// dB 数值格式化：先四舍五入再定符号（归一化把峰值压到 0 附近时须显示 "0.0"）。
 import { describe, expect, it } from "vitest";
 import { fmtDb1 } from "./format";
 

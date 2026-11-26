@@ -49,7 +49,7 @@ function normalizeEffects(list: EffectItem[]): EffectItem[] {
 }
 
 /** 屏上是否有聚焦的数字输入框（调音卡片的数值框）。键入中间态允许越界、
- *  写盘会夹取，磁盘值因此可能暂与输入框里的半截数字不同——此时回读会把
+ *  写盘会夹取，磁盘值因此可能暂与输入框里的半截数字不同。此时回读会把
  *  正在输入的值替换掉，失焦收口后两者一致再恢复回读。 */
 function numberInputFocused(): boolean {
   const el = typeof document !== "undefined" ? document.activeElement : null;
@@ -78,7 +78,7 @@ interface ConfigStore {
   loadedGuid: string | null;
   /** 屏上内容（blocks/effects）当前归属的设备：**与 blocks 同一步 set() 写入，`load()` 开始不清空**。
       设备页换页的 key 跟它走（App 的 pageGuid）：旧页带原滚动位置一直驻留到新数据就绪才硬切；
-      若点标签就换页，新容器（scrollTop=0）会先渲染这段窗口里的上一台旧内容——旧页滚在半空时
+      若点标签就换页，新容器（scrollTop=0）会先渲染这段窗口里的上一台旧内容，旧页滚在半空时
       观感就是「旧页被生硬切到顶部」闪一下（与 loadedGuid 的分工：loadedGuid 表示「新数据是否到位」，
       displayGuid 表示「屏上现在该是谁的数据」）。 */
   displayGuid: string | null;
@@ -232,7 +232,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     if (!guid) return;
     const seq = get().loadSeq + 1;
     // 只清 loadedGuid（新数据归属），不清 displayGuid：页面继续显示上一台的数据与滚动位置，
-    // 直到下面与 blocks 同一步写入新设备——换数据与换页必须原子，否则会闪旧内容帧。
+    // 直到下面与 blocks 同一步写入新设备。换数据与换页必须原子，否则会闪旧内容帧。
     set({ loadSeq: seq, loaded: false, loadedGuid: null });
     get().configRevisionRef.current = null;
     try {
@@ -281,8 +281,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       .then((res) => {
         if (!res) return;
         configRevisionRef.current = res.revision;
-        // 内容未变：后端已短路，不回传文本，前端也无需解析
-        // 数字输入框聚焦时也不回读：写盘夹取后磁盘值可能 ≠ 输入中的临时值
+        // 内容未变：后端已短路，不回传文本，前端省去解析
+        // 数字输入框聚焦时同样不回读：写盘夹取后磁盘值可能 ≠ 输入中的临时值
         //（如想打 50、先按了 5），回读会把半截数字替换掉；失焦收口后两者一致再恢复。
         if (res.text == null || dirtyRef.current || numberInputFocused())
           return;
@@ -349,7 +349,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   },
 
   // 设备列表加载后：为每个未缓存的设备读取启用状态，
-  // 保证标签页调音开关初次打开就显示正确（不再默认“开”）。
+  // 保证标签页调音开关初次打开就显示正确，避免停在默认“开”。
   initDeviceTuning() {
     const { inputs, initReq } = get();
     if (inputs.deviceGuids.length === 0) return;
@@ -437,7 +437,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           return {
             id: crypto.randomUUID(),
             group,
-            // 段名缺省**就留缺省**——不拿预设名兜底：`semanticName` 会回退到按 fc 推出的
+            // 段名缺省**就留缺省**，不拿预设名兜底：`semanticName` 会回退到按 fc 推出的
             // 感知标签（语义视图的默认映射），那条路径与语言无关，切语言时由
             // `displayBandName` 翻成当前语言，所以「留空」的段同样能反查。
             // 若这里兜底成预设名，段卡会显示预设名（既不是默认映射、也无从翻译）。
@@ -634,10 +634,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           ],
         };
       }
-      // 关闭通道选择器：块与基准电平一起**合并到首声道**——只留无声道标识或首声道的块，并抹掉声道标识。
+      // 关闭通道选择器：块与基准电平一起**合并到首声道**，只留无声道标识或首声道的块，并抹掉声道标识。
       // 这条与 buildToml 在 mode=false 时的落盘口径完全相同（只写首声道的块、且不写 channels），于是
       // 内存与文件同一步到位。若只合并 effects，别的声道的块会继续留在内存里、等 2s 轮询读到新文件才
-      // 消失——那期间语义视图会把它们画出来、随后又消失，表现为「关掉选择器后右声道的卡片显示一会再消失」
+      // 消失，那期间语义视图会把它们画出来、随后又消失，表现为「关掉选择器后右声道的卡片显示一会再消失」。
       // 代价是这些块连同它们的频段一起被丢弃，这是「关闭＝真合并」的既定语义。
       const merged = prev.blocks.some((b) => b.channel)
         ? prev.blocks

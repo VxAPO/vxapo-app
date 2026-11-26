@@ -27,7 +27,7 @@ interface UseMarqueeSelectionOptions {
 const TOOLBAR_TARGET_SETTLE_MS = 50;
 /**
  * 飞行时长随**距离**缩放（与视图收窄"260ms + 2ms/px、上限 800ms"同思路）：
- * 固定 480ms 的问题是——远距离在 480ms 内冲完（加速太快、刹车太猛），
+ * 固定 480ms 的问题是：远距离在 480ms 内冲完（加速太快、刹车太猛），
  * 近距离也用掉 480ms（离近了停得太慢）。
  * 缓动为 easeOut、指数 2.6（先快后慢、收尾柔）。
  */
@@ -152,7 +152,7 @@ export function useMarqueeSelection({
    * 启动一段飞行：从"当前实际位置"沿二次贝塞尔飞到最新目标，easeOutQuart、400ms。
    *
    * 拖动期目标是逐帧写入的（提帧数那部分），所以这里每次都会取消上一段、
-   * 以当前位置重新起算——小位移时控制点几乎贴着起点，路径就是直线；
+   * 以当前位置重新起算。小位移时控制点几乎贴着起点，路径就是直线；
    * 大跳（例如抬手后目标切换）才看得见弧线。
    */
   const startToolbarFlight = useCallback(() => {
@@ -160,7 +160,7 @@ export function useMarqueeSelection({
     const target0 = toolbarTargetRef.current;
     if (!node0 || !target0) return;
     if (toolbarAnimRef.current) cancelAnimationFrame(toolbarAnimRef.current.raf);
-    // 位置真源：跟随循环自己维护的 ref（transform 由循环独占，不再读 style.left/top）
+    // 位置真源：跟随循环自己维护的 ref（transform 由循环独占，与 style.left/top 无关）
     const start = toolbarPosRef.current
       ? { ...toolbarPosRef.current }
       : { x: target0.x, y: target0.y };
@@ -231,7 +231,7 @@ export function useMarqueeSelection({
    * 事件期/React 期通用的目标更新入口。
    *
    * 一次指针事件里卡片是**逐个**进入选区的（命中顺序取决于几何与遍历顺序），
-   * 而"每次选区变化就推一次目标"会让工具栏先看到"半张矩形"的目标、再看到完整目标——
+   * 而"每次选区变化就推一次目标"会让工具栏先看到"半张矩形"的目标、再看到完整目标，
    * 于是每次触发工具栏的动画起点/路径都不一样。
    * 所以这里只记录**最新**目标，真正写进跟随循环的那一步合并到下一帧执行：
    * 每一帧工具栏只看到该帧**最终**的选区包围盒，跟"卡片入框顺序"解耦。
@@ -262,7 +262,7 @@ export function useMarqueeSelection({
       if (!node) return;
       if (toolbarBoundElRef.current !== node) {
         // 元素重挂载（乱晃时选中集清空又填上，工具栏经 AnimatePresence 卸载/重挂）：
-        // 从**上次的位置**起步飞过去，而不是直接就位 —— 直接就位会让单帧位移冲到
+        // 从**上次的位置**起步飞过去，直接就位会让单帧位移冲到
         // 100px 量级（实测 6200px/s，远超速度上限），看起来就是"瞬移"。
         toolbarBoundElRef.current = node;
         const prev = toolbarPosRef.current;
@@ -305,7 +305,7 @@ export function useMarqueeSelection({
     if (t.closest("[data-dnd-id], button, input, select, .bottom-row, .gs-root, [role='slider']")) return;
     const body = bodyRef.current;
     if (!body) return;
-    // Portal（下拉选项等）不在滚动容器的 DOM 树内，不能从这里开始框选/捕获指针，
+    // Portal（下拉选项等）不在滚动容器的 DOM 树内，从这里开始框选/捕获指针
     // 否则会把下拉选项的 pointerup 吸走，导致选项点不中
     if (!body.contains(t)) return;
     try {
@@ -329,9 +329,9 @@ export function useMarqueeSelection({
   /**
    * 框选命中：返回命中的卡片 id **以及它们的包围盒**（内容坐标系）。
    *
-   * 包围盒必须由**卡片**算，不能用框选矩形本身：矩形跟着鼠标走，而工具栏落点
-   * 要对齐的是"选中卡片的宽高范围"。早先拖动期用矩形中心做目标、React 那条通路
-   * 用卡片包围盒，两套目标互相打架，工具栏就会在两者之间来回被拽。
+   * 包围盒必须由**卡片**算：矩形跟着鼠标走，而工具栏落点
+   * 要对齐的是"选中卡片的宽高范围"。矩形中心与卡片包围盒两套目标会互相打架，
+   * 工具栏于是在两者之间来回被拽。
    */
   const collectMarquee = (
     m: { x1: number; y1: number; x2: number; y2: number },
@@ -419,7 +419,7 @@ export function useMarqueeSelection({
             /**
              * 拖动过程中**不允许**把选中集合提交成空：渲染条件里有
              * `selectedIds.length > 0`，一旦提交空集，工具栏会被 AnimatePresence
-             * 卸载、下一帧再挂回来——观感是工具栏在拖动中忽隐忽现，
+             * 卸载、下一帧再挂回来，观感是工具栏在拖动中忽隐忽现，
              * 而且重挂后会走"首次出现直接就位"，出现单帧几十像素的硬跳。
              * 抬手时才用最终结果收尾（那时允许清空，点空白=取消选择）。
              */
@@ -429,7 +429,7 @@ export function useMarqueeSelection({
            * 工具栏目标 = **对被框选卡片集合做 100ms 停留防抖**：
            * 目标一变就重置定时器，只有"框住的卡 100ms 没变"才采纳一次。
            * 这样拖动期不会去追"半张矩形"的中间态（那是入框次序造成的，
-           * 每次都不一样），停住/稳定下来之后才飞一次 —— 动画可复现。
+           * 每次都不一样），停住/稳定下来之后才飞一次，动画可复现。
            */
           if (hadToolbarRef.current && toolbarElRef.current && hit.box) {
             liveTargetRef.current = toolbarTargetFor(
@@ -502,14 +502,14 @@ export function useMarqueeSelection({
      * 抬手时**必须**用最终命中集合再写一次目标。
      *
      * 否则最后一次写入可能仍是拖动途中某一帧的旧包围盒（例如少算一张卡），
-     * 而拖动期的实时目标不会再被刷新——观感就是"松手后工具栏离卡片更近/更远"，
+     * 而拖动期的实时目标不会再次刷新，观感就是"松手后工具栏离卡片更近/更远"，
      * 且稳定复现（往下框一行再往上框时最明显）。
      */
     /**
      * 只有"拖动前工具栏已经存在"时才在这里补写目标。
      *
      * 去掉门槛（无条件写 + 强制重测几何）会让"先下后上"从 10px 变成 6px，
-     * 说明这两条写入路径在同一帧里会互相覆盖，不能简单叠加。
+     * 说明这两条写入路径在同一帧里会互相覆盖，叠加无效。
      * 反向路径（先上后下）的 6px 是另一处成因，尚未定论。
      */
     if (hadToolbarRef.current && hit.box) {
@@ -569,7 +569,7 @@ export function useMarqueeSelection({
       const t = e.target;
       // 菜单是 portal 到 body 的（见 SelectionToolbar），不在 `.sel-copy` 子树里：
       // 漏了 `.sel-copy-menu` 这一条，点在菜单项上会先被判成"点外面"而卸载菜单，
-      // 后面的 click 就没元素可派了——复制直接失效。
+      // 后面的 click 就没元素可派，复制直接失效。
       if (t instanceof Element && (t.closest(".sel-copy") || t.closest(".sel-copy-menu")))
         return;
       setCopyOpen(false);
@@ -581,13 +581,13 @@ export function useMarqueeSelection({
   /**
    * 工具栏尺寸实测（宽度/高度都参与"内缩 8px"的夹取）。
    *
-   * 盯的是**元素本身**，所以没有 deps、每轮渲染只做一次 ref 比较——**不能**拿
+   * 盯的是**元素本身**，所以没有 deps、每轮渲染只做一次 ref 比较。避免拿
    * `selectedIds.length > 0` 之类当 deps：工具栏要等 `selGeom` 算出来才挂载，而 `selGeom`
    * 是**被动** effect 的产物，比 layout effect 晚一轮；按布尔量做 deps 的话，effect 会在
    * 元素还不存在的那个 commit 跑一次、`el` 为 null 直接 return，之后再也不会重跑，尺寸就
    * 永远停在兜底值（280×64）。通道选择器会把工具栏拉宽到远超兜底值，首次框选的右边界便按
    * 280 去算，工具栏直接顶出 8px 内缩线；等取消一次时退场动画期间元素还挂着，effect 才补上
-   * ResizeObserver，所以第二次才正常——"只有首次出界"由此而来。
+   * ResizeObserver，所以第二次才正常。"只有首次出界"由此而来。
    */
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
   const toolbarRoElRef = useRef<Element | null>(null);
@@ -689,8 +689,8 @@ export function useMarqueeSelection({
   /**
    * 目标位置来自 React 的那条通路：选中集合/尺寸变化时更新目标。
    *
-   * 位移本身**不再**是"每次换目标重启一段 400ms 缓出飞行"——那会让工具栏在
-   * 框选拖动中反复加速/停顿（观感既卡又生硬）。现在只有一条连续的弹簧跟随，
+   * 位移由一条连续的弹簧跟随驱动。每换目标重启一段 400ms 缓出飞行会让工具栏在
+   * 框选拖动中反复加速/停顿（观感既卡又生硬）。
    * 目标可以随时被覆盖（拖动期甚至逐帧覆盖，见 onBodyPointerMove）。
    */
   useLayoutEffect(() => {

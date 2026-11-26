@@ -51,7 +51,7 @@ export async function readConfig(guid: string): Promise<string> {
 
 export interface ConfigReadChecked {
   revision: string;
-  /** 内容与传入 revision 相同时为 null（后端已短路，无需回传/解析）。 */
+  /** 内容与传入 revision 相同时为 null（后端已短路，省去回传/解析）。 */
   text: string | null;
 }
 

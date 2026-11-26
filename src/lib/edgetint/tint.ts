@@ -297,7 +297,7 @@ export interface PanelSample {
 
 /**
  * 面板采样阶段：淡入插值、复用
- * 时钟的 frameScale 补偿、光源采样与暗部平滑全部在此推进——canvas2d 与
+ * 时钟的 frameScale 补偿、光源采样与暗部平滑全部在此推进。canvas2d 与
  * WebGL 栅格后端共用同一份采样，保证「染色逻辑不因后端而变」。
  */
 export function samplePanel(
@@ -345,15 +345,15 @@ export function samplePanel(
     ? Math.max(0, Math.min(1, parseFloat(cs.opacity) || 0))
     : 1;
   const glowAlpha = 1;
-  // movingTool（快照跟随）：仅滚动中——滚动期工具栏与光源相对几何不变，
+  // movingTool（快照跟随）：仅滚动中。滚动期工具栏与光源相对几何不变，
   // 染色无真实变化，快照只是防御。框选飞行动画**不走**快照（位置在动但
-  // 背景在变，需要0.3 平滑插值——快照曾让它以100ms 顿挫硬跳）。
+  // 背景在变，需要 0.3 平滑插值；快照会让它以 100ms 顿挫硬跳）。
   const movingTool = tool && ST.scrollingNow;
   // 按时间推进：frameScale=1（正常 33ms 补帧）时与原常数逐字等价；
   // 复用跳帧时按经过的步数放大，保证褪色总时长不变（只是步数更少、每步更大）。
   const scale = Math.max(1, frameScale);
   // 位移中收敛提速（真源：守卫观测到工具栏位移时刷新 ST.toolMovedAt）：
-  // 运动中 K 提到 ~0.54（0.3×1.8，远低于历史硬跳1）——否则颜色一直
+  // 运动中 K 提到 ~0.54（0.3×1.8，远低于硬跳 1）。否则颜色一直
   // 落后于移动中的目标，停稳后还要再收敛一段，「快停下 vs 完全停下」
   // 两个状态颜色可见地不同。仅加速插值，不跳变，平滑度保留。
   const toolRecent = tool && performance.now() - ST.toolMovedAt < 140;
@@ -416,7 +416,7 @@ export function samplePanel(
         ? { ...curveSample, s: curveSample.s * CURVE_RING_DIM }
         : curveSample;
     // 多光混色：强度取最强者（不叠加，防选多爆亮），颜色按强度加权
-    // 混合——赢家通吃会在曲线与背景光强度相近处产生色彩突变。
+    // 混合。赢家通吃会在曲线与背景光强度相近处产生色彩突变。
     let sample: { c: Rgb; s: number } | null;
     if (overPanel && curveLit && cardSample) {
       const sa = curveLit.s;
@@ -448,7 +448,7 @@ export function samplePanel(
   }
   // 描边亮度沿路径平滑：高强小半径（开关塔）与低强宽半径（边框基底）
   // 并存时，逐点取最强光源会在两者交替主导的区域产生暗亮分层。
-  // 与暗部平滑同款的弧长加权窗（12px）抹平沿路径的亮度起伏——
+  // 与暗部平滑同款的弧长加权窗（12px）抹平沿路径的亮度起伏。
   // 光源的空间分布不变，只让描边的衰减过渡连续。
   {
     const n = st.a.length;
@@ -488,13 +488,13 @@ export function samplePanel(
       for (let i = 0; i < n; i++) st.a[i] = out[i];
     }
   }
-  // 内光直接在内圈路径上逐点采样，不再从外圈做序号映射，
+  // 内光直接在内圈路径上逐点采样，省去外圈的序号映射，
   // 圆角处的采样点与绘制点一一对应。
   // 外圈→内圈序号映射：描边染色联动内泛光用（同暗部的映射方式）
   const mapMain = mapRingToReference(mainPts, pts);
   // 曲线内圈采样半径按面板尺度放大：内圈采样点都贴着边，而曲线是从
-  // 面板中间穿过的线光源——固定 16px 半径永远够不到（工具栏悬浮在
-  // 曲线卡上时内泛光全程看不见曲线的根因）。取面板短边的0.8，
+  // 面板中间穿过的线光源，固定 16px 半径够不到（工具栏悬浮在曲线卡上时
+  // 内泛光看不到曲线）。取面板短边的 0.8，
   // 让「线穿过面板中央」也能被边界点采到，且保留位置疏密（离线远的
   // 一侧自然衰减）。
   const curveR = Math.max(
@@ -512,7 +512,7 @@ export function samplePanel(
     );
     const lum = lumSample?.lum ?? panelBase;
     const prox = lumSample?.prox ?? 0;
-    // 只有比玻璃更亮的部分才算“光”；暗色滑块/描边不能把玻璃染脏。
+    // 只有比玻璃更亮的部分才算“光”，暗色滑块/描边不参与。
     const contrast = Math.max(0, lum - panelBase) / 255;
     const innerTint = sampleColorGrid(
       glowP.x,
@@ -523,14 +523,14 @@ export function samplePanel(
       outsideFade,
     );
     // 曲线光源：工具栏玻璃盖在曲线卡上时，曲线本身作为 inner 光源参与
-    // 内泛光（与环带同规则——仅玻璃覆盖时参与，按玻璃厚度衰减）。
+    // 内泛光（与环带同规则：仅玻璃覆盖时参与，按玻璃厚度衰减）。
     // 必须短路：无条件采样会让每个内圈点遍历整条曲线点集，视图切换
-    // 全量重画时每帧都吃 O(内圈点×曲线点)——实测视图切换掉帧的元凶。
+    // 全量重画时每帧都吃 O(内圈点×曲线点)，这是视图切换掉帧的元凶。
     const curveSample = toolOverPanel
       ? sampleColor(glowP.x, glowP.y, nearCurve, curveR)
       : null;
     const curveLit = curveSample;
-    // 多光混色：同环带——强度取 max，颜色按强度加权
+    // 多光混色：同环带，强度取 max，颜色按强度加权
     let tint: { c: Rgb; s: number } | null;
     if (innerTint && curveLit) {
       const sa = curveLit.s;
@@ -550,8 +550,8 @@ export function samplePanel(
     const colorEnergy = tint ? Math.min(1, (tint.s * innerFade) / 1.1) : 0;
     const lumEnergy =
       Math.min(1, contrast * 1.6) * Math.pow(prox, 0.8) * innerFade;
-    // 描边被染色即出内泛光：外圈 st.a 映射为内光目标的附加项——
-    // 不再要求内圈必须采到比玻璃更亮的光源。
+    // 描边被染色即出内泛光：外圈 st.a 映射为内光目标的附加项，
+    // 内圈采集的光源可以比玻璃暗。
     const ringIdx = mapMain[j] ?? 0;
     const ringA = st.a[ringIdx];
     const targetGl = Math.min(
@@ -584,7 +584,7 @@ export function samplePanel(
   }
 
   const rawN = rawGl.length;
-  // 主路径在圆角处点距约 2px、直边约 8px，不能用固定点数窗口算局部峰值，
+  // 主路径在圆角处点距约 2px、直边约 8px，固定点数窗口算出的局部峰值
   // 否则圆角/直边的暗部形状会不一致。按路径弧长开窗。
   const cumLen = new Array<number>(rawN);
   cumLen[0] = 0;
@@ -629,7 +629,7 @@ export function samplePanel(
     if (Math.abs(glDelta) > 0.004) ST.fadePending = true;
     if (Math.abs(glDelta) > maxDelta) maxDelta = Math.abs(glDelta);
     // 暗部只贴在内光带与外光交界处：强度直接跟内光能量走，
-    // 不再沿圆周在亮点两侧做 bump（那会围着内光包一圈）。
+    // 沿圆周在亮点两侧做 bump 会围着内光包一圈。
     rawSh[i] = smoothstep(0.08, 0.5, shadeGl[i]);
   }
   // 对暗部目标本身做一次沿路径的宽窗平滑：
@@ -662,7 +662,7 @@ export function samplePanel(
       ? { r: ist.ir[i], g: ist.ig[i], b: ist.ib[i] }
       : { r: 255, g: 255, b: 255 };
 
-  // 外圈染色高光（根级取色每帧缓存一次，不再逐面板读根 computed style）
+  // 外圈染色高光（根级取色每帧缓存一次，省去逐面板读根 computed style）
   const baseRgb = rootColorCached("ringBase", ringBaseRgb);
   if (maxDelta > 0.004) ST.fading.add(el);
   else ST.fading.delete(el);
@@ -723,7 +723,7 @@ export function rasterPanel2d(
     toolFade,
   );
   // 完整内光 blur：工具栏滚动期间由离屏 buffer 复用承担成本。
-  // __vxNoBlur：运行时二分开关（perf 归因）——关掉全部模糊带绘制
+  // __vxNoBlur：运行时二分开关（perf 归因），关闭全部模糊带绘制
   if (
     glowAlpha > 0.002 &&
     !(globalThis as { __vxNoBlur?: boolean }).__vxNoBlur

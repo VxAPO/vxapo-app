@@ -20,7 +20,7 @@ interface AdvancedViewProps {
   /** 滤波器/效果器的拖拽 API（useDragSort 返回值子集）。 */
   blocksDrag: DragApi;
   effectsDrag: DragApi;
-  /** 设备页数据：由 App 经 ViewStage 传入（**不要**改回订阅 store，见下方注释）。 */
+  /** 设备页数据：由 App 经 ViewStage 传入，避免在本组件订阅 store（见下方注释）。 */
   blocks: Block[];
   effects: EffectItem[];
   channelOn: boolean;
@@ -32,7 +32,7 @@ interface AdvancedViewProps {
  * 参数视图：滤波器与效果器分区，通道选择只属于滤波器。
  *
  * **数据走 props，动作仍直连 store**：动作是与设备无关的 store 单例；数据若直连 store，
- * 设备页过渡就失效——过渡靠 AnimatePresence mode="wait" 保留**上一轮的旧元素实例**，
+ * 设备页过渡就失效。过渡靠 AnimatePresence mode="wait" 保留**上一轮的旧元素实例**，
  * 它带着旧设备的 props 淡出（拆分前原样）。store 是全局实时的，旧元素一旦订阅它，
  * 淡出途中就会渲染成新设备的内容（连页面高度都一起变），整段过渡就不对了。
  */

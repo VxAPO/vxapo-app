@@ -46,7 +46,7 @@ interface CurvePlotProps {
   yTop: number;
   yBottom?: number;
   preampGainDb?: number;
-  /** 与 blocks 同档的评估频点（App 的曲线快照里算好的）；缺省按 blocks 现算，单独用本组件时不必传 */
+  /** 与 blocks 同档的评估频点（App 的曲线快照里算好的）；缺省按 blocks 现算，单独使用本组件时省略 */
   evalFreqs?: number[];
 }
 
@@ -70,15 +70,15 @@ function CurvePlot({
   );
   const pathRef = useRef<SVGPathElement | null>(null);
   const morphAnimRef = useRef<Animation | null>(null);
-  /** 上一次的**目标**路径。不能靠 getComputedStyle 拿旧值：layout 阶段 React 已经写入新 d 了 */
+  /** 上一次的**目标**路径。getComputedStyle 拿不到旧值：layout 阶段 React 已经写入新 d 了 */
   const prevDRef = useRef<string | null>(null);
   // 用 layout effect：必须在浏览器绘制**之前**接管，否则新 d 会先画一帧再被动画拉回去（闪一下）
   useLayoutEffect(() => {
     const el = pathRef.current;
     if (!el) return;
     /**
-     * 曲线自己变自己的形状：只要路径变了就平滑补间过去，不区分场景——切声道、开关/增删滤波器、
-     * 拖频段参数、切设备全走这一条路，调用方不必再特判「该不该动画」。
+     * 曲线自己变自己的形状：只要路径变了就平滑补间过去，不区分场景。切声道、开关/增删滤波器、
+     * 拖频段参数、切设备全走这一条路，调用方省略「该不该动画」的特判。
      *
      * 补间全程在**像素空间**做，不换算 dB↔量程、也不夹边界。曲线和坐标轴是两件独立的事：
      * 纵轴量程（按峰值自适应、每 2dB 一档）该瞬时变就瞬时变，网格由 React 直接重画；
@@ -89,7 +89,7 @@ function CurvePlot({
     /**
      * 起点取「上一条动画的当前位置」：先 `commitStyles()` 把动画当前值定格进内联样式，再取消。
      * 这样变形途中目标又变时会从当前位置接着跑，不会跳回旧值（连续拖动＝指数式平滑跟随）。
-     * 没有在跑的动画时退回「上一个目标」——**不能**读 `getComputedStyle(el).d`，
+     * 没有在跑的动画时退回「上一个目标」。**须避开** `getComputedStyle(el).d`，
      * 那时 React 已写入新 d，拿到的是新值本身，补间会退化成「新值→新值」＝完全看不到动画。
      */
     let from: string | null = null;

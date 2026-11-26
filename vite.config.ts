@@ -11,7 +11,7 @@ export default defineConfig(async () => ({
   // 相对 base 对 Tauri 的 tauri:// 协议同样成立（应用无客户端路由）。
   base: "./",
   build: {
-    // Tauri 桌面应用无需像 Web 端那样强制拆包，提高阈值避免 500KB 警告
+    // Tauri 桌面应用与 Web 端拆包策略不同，提高阈值以避开 500KB 警告
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
@@ -28,7 +28,7 @@ export default defineConfig(async () => ({
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     // vapo-bench-profile = perf bench 的隔离 Electron profile（内含锁文件，
-    // 被 watch 崩过 vite）——必须排除
+    // 会崩 vite 的 watch 目标），必须排除
     watch: { ignored: ["**/src-tauri/**", "**/vapo-bench-profile/**"] },
   },
 }));

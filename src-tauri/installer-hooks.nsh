@@ -1,6 +1,6 @@
 ; VxAPO NSIS installer hooks
 ; 安装/卸载前先释放被 audiodg 映射的 driver DLL 映像（结束进程 + 轮询等待 + 可写打开校验，
-; 全部 NSIS 原生指令，安装包自给自足——不依赖也不调用 CLI），再停音频服务；
+; 全部 NSIS 原生指令，安装包自给自足（不依赖也不调用 CLI），再停音频服务；
 ; 安装完成后恢复音频服务，并把安装时选择的界面语言写入 C:\ProgramData\VxAPO\lang.txt
 ; （与 config 同目录约定，注意 NSIS 没有 $COMMONAPPDATA 变量，路径需硬编码）。
 ;

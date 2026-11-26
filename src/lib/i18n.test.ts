@@ -102,7 +102,7 @@ describe("displayBandName / 默认映射反查", () => {
   });
 
   // 反查优先级：库内建段名表在前、感知标签表在后。两者若撞名，优先级会决定显示结果，
-  // 所以钉住「不撞名」这一前提（撞了就得重新想优先级，不能默默盖掉）。
+  // 所以钉住「不撞名」这一前提（撞了就得重新定优先级）。
   it("库内建段名与感知标签不撞名（否则反查优先级会互相盖）", () => {
     for (const zhLabel of PERCEPTUAL_LABELS) {
       const pair = perceptualLabelPair(zhLabel)!;

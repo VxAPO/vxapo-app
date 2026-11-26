@@ -29,7 +29,7 @@ export function yStepFor(top: number, bottom: number): number {
  *
  * 为什么必须对齐到步长：网格线与刻度是按步长一路铺下来的，量程若不是步长的整数倍，
  * 最上面一条网格线就压不到绘图区顶沿（绘制侧只能 `floor`，于是缩进来半格），刻度标签随之整体
- * 偏移——观感就是「虚线没贴住纵轴顶端、数字莫名往下偏」。对齐之后各端点都落在步长倍数上；
+ * 偏移，观感就是「虚线没贴住纵轴顶端、数字莫名往下偏」。对齐之后各端点都落在步长倍数上；
  * 0dB 是任意步长的倍数，于是也必然正好落在某条刻度线上（跨度的段数奇偶都成立）。
  *
  * 步长本身由量程跨度决定，对齐可能小幅放宽量程、从而跨过 `Y_STEP_SPAN` 这个界，故迭代两次收敛；
@@ -102,7 +102,7 @@ export function curveMax(freqs: number[], blocks: Block[], fs: number, preampGai
   return m;
 }
 
-/** 整条曲线的最小值（dB）——Y 轴负侧自适应展宽依据。 */
+/** 整条曲线的最小值（dB），Y 轴负侧自适应展宽依据。 */
 export function curveMin(freqs: number[], blocks: Block[], fs: number, preampGainDb = 0): number {
   let m = Infinity;
   for (const f of freqs) {

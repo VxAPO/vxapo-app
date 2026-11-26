@@ -37,7 +37,7 @@ import { driveFor } from "./lib/edgetint/renderLoop";
 /**
  * 设备卡"静置重绘"心跳（只针对这一张卡）。
  * Chromium 在滚动后只对设备卡的 backdrop 背板做增量重采，blur outset 覆盖的右缘一圈会残留
- * 旧 texel（4~7px、外强内弱的白边），并一直挂着——因为性能优化把静置期重绘去掉了，没人再
+ * 旧 texel（4~7px、外强内弱的白边），并一直挂着：性能优化把静置期重绘去掉了，没有人再
  * 清它。这里只给设备卡恢复一次低频率的真实 paint 变更（全透明渐变 ↔ none），
  * 让该卡所在 chunk 周期性重新光栅化、背板重采；其余元素仍是 0 静置重绘。
  */
@@ -185,7 +185,7 @@ export default function App() {
 
   const [hintShift, setHintShift] = useState(0);
 
-  // 空态提示行水平对齐顶栏视图切换的真实中心（左右按钮簇宽度不同，不能按窗口中心算）
+  // 空态提示行水平对齐顶栏视图切换的真实中心（左右按钮簇宽度不同，须按控件中心算）
   useLayoutEffect(() => {
     const scrollEl = bodyRef.current;
     const segEl = document.querySelector<HTMLElement>(".view-seg");
@@ -193,7 +193,7 @@ export default function App() {
     const update = () => {
       const sRect = scrollEl.getBoundingClientRect();
       const v = segEl.getBoundingClientRect();
-      // 提示行实际居中在滚动内容区（clientWidth 已排除滚动条），不能拿 border-box 中心算
+      // 提示行实际居中在滚动内容区（clientWidth 已排除滚动条），须用内容区中心算
       const sCenter = sRect.left + scrollEl.clientLeft + scrollEl.clientWidth / 2;
       setHintShift(snapPx(v.left + v.width / 2 - sCenter));
     };
@@ -250,8 +250,8 @@ export default function App() {
 
   // 通道选择器开关跟随磁盘配置：重启/切换设备后从 per-channel 数据还原，
   // 避免界面停在“关”而配置实际是分通道的（还会在保存时丢掉非首通道块）。
-  // 从磁盘配置读出的通道模式同步到 store。**不再强制切到参数视图**：语义视图同样按声道过滤内容
-  // （`PresetView` 的 `visible`），声道切换入口是曲线卡上的选择器——它在两个视图里都在。
+  // 从磁盘配置读出的通道模式同步到 store，语义视图同样按声道过滤内容
+  // （`PresetView` 的 `visible`）。声道切换入口是曲线卡上的选择器，两个视图里都在。
   // 用 useLayoutEffect（绘制前）而不是 useEffect：`load()` 解析完成的那次提交里，
   // `blocks`/`effects` 已是新设备、`channelOn` 还是上一台的值。在绘制后才改会先画出
   // 一帧「新设备的链按旧通道过滤」，现象是切设备时闪一下左声道的坐标轴。
@@ -313,7 +313,7 @@ export default function App() {
     notify,
     clearSelection: () => setSelectedIds([]),
   });
-  // 这些联动在渲染提交后写入 selectionStore（不再渲染期写 ref）。
+  // 这些联动在渲染提交后写入 selectionStore。
   useEffect(() => {
     const s = useSelectionStore.getState();
     s.setCancelToolbarAnim(cancelToolbarAnim);
@@ -345,7 +345,7 @@ export default function App() {
    * 观感是「旧页被生硬切到顶部」闪一下、数据到位后再换一次。
    * displayGuid 与 blocks 在 configStore.load() 里同一步写入，因此「换数据」与「换页」
    * 落在同一帧：退场元素带着的仍是上一台的 props，旧页连同滚动位置原地驻留到新数据
-   * 就绪才硬切——与通道态恢复（useChannelState 等 loadedGuid）同一门槛。
+   * 就绪才硬切，与通道态恢复（useChannelState 等 loadedGuid）同一门槛。
    */
   const pageGuid = cfgGuid === null ? null : displayGuid;
 
@@ -353,7 +353,7 @@ export default function App() {
   // 这段窗口是保险：新页面首帧的几何/配色若晚一两帧才稳定，画布不至于停在上一轮的染色上。
   // 画布是独立图层（`mix-blend-mode: screen` 压在内容之上），晚一帧就是「页面已经换掉、画布还在显示旧染色」。
   // 用 useLayoutEffect（绘制前）而不是 useEffect：rAF 仍在这一帧绘制前跑，画布与换页同帧对齐。
-  // 滚动位置不必显式复位：`.device-page` 仍按设备重挂载，`.tuning-scroll` 在它内部，天然回顶。
+  // 滚动位置由重挂载天然复位：`.device-page` 按设备重挂载，`.tuning-scroll` 在它内部。
   // 依赖是 pageGuid（真正换页的时刻）而不是 selectedGuid（点标签时刻，换页还没发生）。
   useLayoutEffect(() => {
     driveFor(DEVICE_SETTLE_MS, "full");
@@ -388,7 +388,7 @@ export default function App() {
     // 基准电平的拆分/合并（配置域逻辑）在 configStore 内完成；传入切换前的 channelOn。
     setChannelPreampMode(channelOn, channelNames);
     setChannelOn((v) => !v);
-    // 不再强制切到参数视图：语义视图也按声道过滤（`PresetView` 的 `visible`），
+    // 语义视图也按声道过滤（`PresetView` 的 `visible`），
     // 声道切换入口是曲线卡上的选择器，两个视图都能用。
     blocksDragApi.cancelDrag();
     effectsDragApi.cancelDrag();

@@ -1,4 +1,4 @@
-// VxAPO App —— config.toml 生成与解析
+// VxAPO App：config.toml 生成与解析
 // 只负责自身生成的结构；外部 TOML 的非 peq 未知效果器保留为 tail。
 import type { Band, Block, EffectItem } from "./model";
 import { parse as parseToml } from "smol-toml";
@@ -14,7 +14,7 @@ function num(n: number): string {
 /**
  * 写盘收口：数值参数按 driver 参数表范围夹取，非有限值回该参数默认。
  * driver `finite_range` 对单值越界是**拒收整份配置**（降级 passthrough、EQ 整体失效），
- * 所以输入框失焦收口之外，这里再兜一层——覆盖输入中途去抖保存、语义写回、
+ * 所以输入框失焦收口之外，这里再兜一层，覆盖输入中途去抖保存、语义写回、
  * 归一化写 preamp（`-filterPeak` 可超出 +48）与手改文件回写等所有落盘路径。
  * 未知键原样带出（去留由 driver 侧 `check_keys` 决定）。
  */
@@ -152,7 +152,7 @@ function warnOutOfRange(type: string, key: string, v: number): void {
 /**
  * 解析 config.toml（smol-toml）→ UI 模型。
  *
- * 与手写行解析器的差异：畸形 TOML 不再被静默吞掉半张表——解析失败时放弃解析并把
+ * 与手写行解析器的差异：畸形 TOML 不会被静默吞掉半张表，解析失败时放弃解析并把
  * 原文放进 `tail`（保存时原样写回，不破坏用户文件），错误打到控制台。
  */
 function parseDocument(text: string): ConfigParse {

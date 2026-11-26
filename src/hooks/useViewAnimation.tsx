@@ -75,7 +75,7 @@ export function useViewAnimation({
   const [viewMorph, setViewMorph] = useState<{ token: number; ms: number } | null>(null);
   /**
    * 非当前视图的显隐：切换完成后把它 display:none，两套视图常驻 DOM 但只有当前视图参与
-   * 布局与绘制，于是反复切换不再重建 31 张卡的 DOM（挂载尖峰消失）。
+   * 布局与绘制，于是反复切换复用同一批 DOM（挂载尖峰消失）。
    */
   const [hiddenStage, setHiddenStage] = useState<ViewMode | null>("advanced");
   const viewAnimTimerRef = useRef<number | undefined>(undefined);
@@ -119,7 +119,7 @@ export function useViewAnimation({
 
   /**
    * 启动高度收窄。由「切换后 VIEW_SLIDE_MS」的定时器触发，正好落在平移最后一帧上，
-   * 不再等 framer-motion 的动画完成回调（回调会晚 1 帧，观感就是平移完了先停一下再滚）。
+   * 由自身计时驱动，不等 framer-motion 的动画完成回调（回调会晚 1 帧，观感就是平移完了先停一下再滚）。
    */
   const startCollapse = useCallback(
     (token: number) => {
@@ -129,9 +129,9 @@ export function useViewAnimation({
         setViewCollapsing(false);
         return;
       }
-      // 终点必须是新视图的**自然高度**，不能是 0：
+      // 终点必须是新视图的**自然高度**，取 0 会让:
       // min-height 只在「大于内容高度」时才影响渲染高度，终点给 0 的话，
-      // 高度动画走到新内容高度那一刻就停了——高度差越小，这段可见动画占比越小，
+      // 高度动画走到新内容高度那一刻就停了。高度差越小，这段可见动画占比越小，
       // 看起来就像瞬移。终点给新内容高度，收窄才会按 800ms 完整走完。
       const stage = bodyRef.current?.querySelector<HTMLElement>(
         ".view-stage.is-active",
@@ -194,7 +194,7 @@ export function useViewAnimation({
       // 无论旧内容是否可滚动，都记录当前滚动位置；
       // 低→高切换时旧 scrollTop 为 0，恢复后仍停在新视图顶部。
       viewScrollTopRef.current = body.scrollTop;
-      // 仅当旧内容确实可滚动时才锁高并收窄；否则不要硬加一段高度动画。
+      // 仅当旧内容确实可滚动时才锁高并收窄，其余情况跳过高度动画。
       viewHeightLockRef.current = body.scrollHeight > body.clientHeight + 1;
       // 只取 view-stack 的内容高度，而不是整个滚动容器的 scrollHeight；
       // 这样过渡期间的滚动条长度是 max(旧内容, 新内容)，不会先变短再变长。

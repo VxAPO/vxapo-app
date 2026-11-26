@@ -226,7 +226,7 @@
   --ring-hover: rgba(15, 23, 42, 0.14);
   --hover-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 4px 10px rgba(15, 23, 42, 0.08);
   /* 模态窗（Radix Dialog）阴影。设计稿里写的是
-     `inset 1px solid var(--dsw-alias-border-inverted), …`——`solid` 是 border 的语法，
+     `inset 1px solid var(--dsw-alias-border-inverted), …`。`solid` 是 border 的语法，
      box-shadow 里没有它，等效写法是 `inset 0 0 0 1px <color>`（当前 token 值为 transparent，
      所以那一圈不显形，留着是为了跟设计稿的 token 对齐、将来改 token 就能显出来）。
      三个外阴影自内向外：1px 描边感 / 4px 近场 / 32px 抬升。 */
@@ -382,7 +382,7 @@
   transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0s;
 }
 
-/* 主题切换期间隐藏所有阴影。侧栏为胶囊条目，无需为预设卡留例外。 */
+/* 主题切换期间隐藏所有阴影。侧栏为胶囊条目，统一适用同一条规则。 */
 .theme-transition * {
   box-shadow: none !important;
 }

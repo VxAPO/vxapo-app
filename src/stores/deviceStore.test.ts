@@ -3,8 +3,8 @@
 // deviceStore 轮询与 stale 同步测试。
 //
 // 核心不变量：5s 轮询稳态只拉设备列表（单 CLI spawn）；**设备列表内容变化
-// （插拔信号）当拍补拉 stale**——list_stale_installs 按活跃端点分类，拔盘必须
-// 同步响应，不能等 60s 兜底。store 为模块单例，每用例前复位。
+// （插拔信号）当拍补拉 stale**。list_stale_installs 按活跃端点分类，拔盘必须
+// 同步响应，避开 60s 兜底。store 为模块单例，每用例前复位。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Device, StaleInstall } from "../lib/model";
 

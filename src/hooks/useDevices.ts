@@ -44,7 +44,7 @@ export function useDevices(paused?: boolean) {
 
   // stale 残留列表的低频兜底（60s）：只对齐**无设备列表变化**的外部漂移
   // （外部安装器改写已有端点的配置）。安装/卸载/迁移（refresh()）与
-  // 插拔（deviceStore.load 内部按列表变化当拍补拉）都不走这里——
+  // 插拔（deviceStore.load 内部按列表变化当拍补拉）都绕过这里，
   // 5s 顺带重拉等于每轮白付一次 CLI 子进程 spawn（App 最大周期开销）。
   useInterval(() => void useDeviceStore.getState().loadStale(), paused ? null : 60000);
 

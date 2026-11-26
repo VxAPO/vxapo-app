@@ -85,7 +85,7 @@ export function renderToPanelBuffer(
   const y = rect.top - PAD;
   const w = rect.width + PAD * 2;
   const h = rect.height + PAD * 2;
-  // 工具栏被滚动容器裁掉/淡出后不再生成 buffer，让上一帧脏区被清掉。
+  // 工具栏被滚动容器裁掉/淡出后停止生成 buffer，让上一帧脏区被清掉。
   if (isToolbar(el)) {
     if (targetVisibility(el) <= 0.02) return null;
     if (
@@ -118,12 +118,11 @@ export function renderToPanelBuffer(
     ST.panelBuffers.set(el, buf);
   }
   // 假移动（滚动平移）不触发重画：滚动时面板/工具栏与光源的相对几何
-  // 不变，缓冲像素本来就是对的——位移由混合层画布的 translate 补偿
+  // 不变，缓冲像素本来就是对的，位移由混合层画布的 translate 补偿
   //（guardTick 假移动守卫）。只有真实变化（fading/bufGen/选中/主题）
   // 才走重画。
-  // 注：曾按「元素自上次渲染移动过」给工具栏染色做移动快照（fadeK=1
-  // 硬跳）——那是「停住再变亮」成因未明时代的补丁；真因（防抖+补偿
-  // 失效）修掉后，快照反而让框选飞行动画期间颜色以100ms 顿挫硬跳
+  // 工具栏染色按元素移动与否做移动快照（fadeK=1 硬跳）会让框选飞行动画
+  // 期间颜色以 100ms 顿挫硬跳，因此走连续采样。
   //（快照清收敛标志→踢回复用窗）。已撤，飞行期间恢复0.3 平滑插值。
   // 贴回位置每帧按当前 rect 计算：像素锚定元素，复用/重画两条路径都用它
   buf.x = x;
@@ -145,11 +144,11 @@ export function renderToPanelBuffer(
   /**
    * 复用上一帧离屏 buffer：面板绘制（超采样描边 + 最多 4 次整张模糊）是
    * 重绘的固定大头。缓冲像素以**元素自身 rect** 为基准绘制（下方 drawPanel 的
-   * transform 就是按 x/y 平移的），内容对元素是锚定的——贴回位置每帧按当前
-   * rect 计算（buf.x/y 在进入本函数时已写成本次值），所以位置变化不再失效复用。
+   * transform 就是按 x/y 平移的），内容对元素是锚定的。贴回位置每帧按当前
+   * rect 计算（buf.x/y 在进入本函数时已写成本次值），位置变化因此不影响复用。
    *
    * 复用窗口与旧实现同节奏：静止 PANEL_REUSE_MS + PANEL_REUSE_MAX 每 3 帧强制
-   * 重算（工具栏滚动期 140ms）；唯一放宽是视图平移（viewAnimUntil 窗口内）——
+   * 重算（工具栏滚动期 140ms）。放宽的仅限视图平移（viewAnimUntil 窗口内）：
    * 面板与光源整体同移、采样相对几何不变，重画纯属浪费，到期由 paint() 的
    * 终态分支 bufGen+1 强制全量收敛。结构代数（bufGen）不同直接禁用复用。
    */
@@ -157,12 +156,12 @@ export function renderToPanelBuffer(
   const slide = now < ST.viewAnimUntil;
   // 重画节奏 = 旧节奏（每 3 帧/100ms 窗口，配色最新鲜）：GL 栅格后把单次
   // 全量重画的成本压没之后，旧节奏在 60卡/646px 滚动实测 p50=3.4ms
-  // p95=11.7ms、>34ms 帧=0（此前 canvas2d 同场景 p95=55/尖峰78）——
-  // 「新鲜+顺滑」不再互斥，无需缩频折衷。__vxWin/__vxMax 旋钮保留。
+  // p95=11.7ms、>34ms 帧=0（canvas2d 同场景 p95=55/尖峰78），
+  // 「新鲜+顺滑」可以兼得，缩频折衷已取消。__vxWin/__vxMax 旋钮保留。
   //
   // 过渡中的面板按 30fps（FADE_FRAME_MS=33）重画：采样时钟（st/ist 插值）长在
-  // drawPanel 里，复用会把它冻结——滚动期过渡以 ~100ms 粒度跳变（frameScale
-  // 把单步补成 3 倍），观感「一段一段、到地方突然冒出来」。33ms 是旧实现
+  // drawPanel 里，复用会把它冻结，滚动期过渡以 ~100ms 粒度跳变（frameScale
+  // 把单步补成 3 倍），观感「一段一段、到地方突然冒出来」。33ms 与既有节奏一致。
   // fadePending 续帧链的历史节奏（用户验收过的淡入平滑度）；逐 paint 重画
   // 会让滚动期全量重画每帧都跑（实测 p50 从 3.5ms 涨到 14.4ms），33ms 地板
   // 在两者之间。已收敛的面板走 100ms/MAX2 复用窗（滚动性能主战场）。
@@ -173,7 +172,7 @@ export function renderToPanelBuffer(
   // 基础面板滚动期按3相错开重画：全部 fading 面板同33ms节奏会在
   // 帧内集中爆发（全量重画 ~10-15ms），超帧 → 该帧画布贴不上 →
   // 描边/泛光整体「慢一拍」。按元素哈希把 fading 面板分到
-  // 33/50/67ms 三个相位：每帧只重画 ~1/3，帧成本均匀，不再超帧；
+  // 33/50/67ms 三个相位：每帧只重画 ~1/3，帧成本均匀，控制在单帧预算内；
   // 单面板更新仍有15-30fps（时间补偿插值保总收敛时长）。
   const wasFadingWin = wasFading
     ? FADE_FRAME_MS +
@@ -247,7 +246,7 @@ export function paintLayerPair(
   // 绘制坐标仍是视口坐标，像素与整窗画布完全一致；但 mix-blend-mode 的混合层
   // 面积从整窗缩到面板范围，动画期间的重合成开销大幅下降（实测帧间隔 20-70ms → 10-20ms）。
   let next = dirtyForEls(els);
-  // 64px 网格对齐（向外取整）：纯平移期脏区尺寸保持稳定、原点按格步进——
+  // 64px 网格对齐（向外取整）：纯平移期脏区尺寸保持稳定、原点按格步进，
   // 配合下方「同尺寸不重分配」，滚动期混合层零纹理分配。
   if (next) {
     const gx = Math.floor(next.x / 64) * 64;
@@ -269,10 +268,10 @@ export function paintLayerPair(
   // ── 内容未变跳过（尖峰归因修复 + 假移动追加）──
   // 本层本 paint 没有全量重画（全复用）+ 无淡入淡出 ⇒ 层画布像素与上帧
   // 完全相同，clear+重贴只是把没变化的纹理再向 GPU 重传一遍（外加混合层
-  // 重复上传）。原条件还要求脏区相等——纯平移期脏区每帧都变，导致带
+  // 重复上传）。若同时要求脏区相等，纯平移期脏区每帧都变，会导致带
   // 工具栏滚动时工具层每帧“重定位+清+重贴+混合层重传”（实测 p95
   // 8→16）。追加 chased 条件：画布已登记滚动基准时，位置由守卫 translate
-  //（假移动补偿）负责，连重定位都可跳过——滚动期混合层纹理零更新。
+  //（假移动补偿）负责，连重定位都可跳过，滚动期混合层纹理零更新。
   const prevDirtyNow = kind === "base" ? ST.prevBaseDirty : ST.prevToolDirty;
   const dirtyEqual =
     !!prevDirtyNow &&
@@ -321,7 +320,7 @@ export function paintLayerPair(
   const bh = Math.max(1, Math.round(oh * dpr));
   const prevOrigin = kind === "base" ? ST.prevBaseOrigin : ST.prevToolOrigin;
   // 仅尺寸变化才重分配后备存储：**同尺寸的 c.width 赋值同样会销毁+重建
-  // 纹理**——原点平移（滚动）曾把它当 geomChanged 每帧触发，混合层纹理
+  // 纹理**，原点平移（滚动）若被当成 geomChanged 每帧触发，混合层纹理
   // 每帧 churn + 重传，带工具栏滚动实测 p50 2.5→5 / p95 8→19ms。
   // 原点变化只重定位 + 清脏区并集 + 重贴（零纹理分配）。
   const realloc = c.width !== bw || c.height !== bh || !prevOrigin;
@@ -360,8 +359,8 @@ export function paintLayerPair(
   let blitted = false;
   rendered.forEach(({ el, buf }) => {
     if (buf) {
-      // 注意：不能引用裸 `toolbar`——TS 会解析成 legacy 的 window.toolbar
-      //（恒为真），历史上裁剪分支因此对所有元素执行。按元素真实判断。
+      // 须用元素属性判断裁剪分支：裸 `toolbar` 在 TS 里解析成 legacy 的
+      // window.toolbar（恒为真），会让裁剪分支对所有元素执行。
       const toolbar = isToolbar(el);
       const r = el.getBoundingClientRect();
       const clipped = visibleRectOf(el, 32);
@@ -414,15 +413,15 @@ export function paintLayerPair(
       if (toolbar) sk.restore();
       blitted = true;
       if (toolbar) {
-        // 领先帧探针锚点：本次 blit 时工具栏位置与画布原点（视口坐标）——
+        // 领先帧探针锚点：本次 blit 时工具栏位置与画布原点（视口坐标），
         // 画布描边的显示位置 = canvas.style.top + translate + (top - originY)
         ST.toolAnchor = { originX: ox, originY: oy, left: r.left, top: r.top };
       }
     }
   });
   // 只有真实重贴过才折算基准：本层可能走到几何路径但无可绘内容（工具栏
-  // 被容器裁空等）——此时若记录新基准并清 translate，画布会冻结在旧位置
-  // 而守卫按新基准算出零位移（尾帧「停住不跟」的根因）。未重贴时保持
+  // 被容器裁空等）。此时若记录新基准并清 translate，画布会冻结在旧位置
+  // 而守卫按新基准算出零位移（尾帧「停住不跟」）。未重贴时保持
   // translate 与旧基准，守卫继续按旧锚补偿。
   if (blitted) {
     ST.stats.layerBlits += 1;
@@ -438,7 +437,7 @@ export function paintLayerPair(
 
 // ── 假移动补偿（用户方案）─────────────────────────────────────────
 // 滚动时工具栏/面板与卡片的相对位置不变，离屏缓冲像素本来就是对的；
-// 唯一变化是绝对位置——纯平移（假移动），不应触发任何重画。守卫每帧
+// 唯一变化是绝对位置，属纯平移（假移动），跳过重画。守卫每帧
 // 把「当前滚动位置 − 画布已绘时的滚动位置」作为 translate 写到混合层
 // 画布上：与 DOM 同帧合成，零重画、零延迟；真实光源变化照旧走重画，
 // 重画完成时折算归零。
@@ -490,8 +489,8 @@ function guardTick(): void {
   if (!ST.running) return;
   // ── 工具层：锚点位移补偿（真源）──
   // 位移 = 当前工具栏视口位置 − 上次已绘锚点。滚动、框选飞行 transform、
-  // 任何来源的位移都逐帧覆盖——「位移动画帧不匹配」的根修：跳过重贴的
-  // 帧里画布靠这个逐帧贴着本体走，飞行不再出现本体先飞、画布隔帧猛追。
+  // 任何来源的位移都逐帧覆盖。跳过重贴的帧里画布靠这个逐帧贴着本体走，
+  // 飞行时本体与画布同步。
   const anchor = ST.toolAnchor;
   let tbRaw: DOMRect | null = null;
   if (anchor) {
@@ -573,7 +572,7 @@ export function paint(): void {
       window.setTimeout(() => schedule(fadingBase ? "full" : "tool"), 16);
     }
     // driveFor 的截止期：在窗口内无条件逐帧重绘（不依赖采样值），保证 canvas 跟得上 DOM 过渡。
-    //（链节奏与旧实现一致：setTimeout(16)——rAF 直连在 400Hz 屏上会让淡出链跑出远超旧版的频率。）
+    // 链节奏用 setTimeout(16)：rAF 直连在 400Hz 屏上会让淡出链频率失控。
     if (ST.toolAnimUntil > performance.now()) {
       window.setTimeout(() => schedule("tool"), 16);
     } else if (ST.toolAnimUntil) {
@@ -623,7 +622,7 @@ export function schedule(mode: "tool" | "full" = "full"): void {
  * 必需的原因：DOM 侧的淡入淡出只改 class/内联样式，**不产生 childList 变更**，
  * 也就不会有 MutationObserver 回调；仅靠"采样到透明度 < 1 再续帧"也不可靠
  * （过渡刚开始那一帧取到的还是起始值 1）。没人推的话，独立图层的 canvas 会一直停在
- * 上一帧，直到元素卸载才被清掉——表现为「canvas 比 DOM 慢一截才消失」。
+ * 上一帧，直到元素卸载才被清掉，表现为「canvas 比 DOM 慢一截才消失」。
  *
  * `mode="tool"` 只刷工具栏画布；页面内目标在淡用 `"full"`（底图也在变）。
  */
@@ -635,8 +634,8 @@ export function driveFor(ms: number, mode: "tool" | "full" = "tool"): void {
 }
 
 export function onScroll(): void {
-  // 位移补偿同步应用：scroll 事件与 DOM 位移同帧到达，画布平移不再
-  // 等下一次 rAF（差一帧的微弱跳帧感来源）；guard 仍每帧兜底。
+  // 位移补偿同步应用：scroll 事件与 DOM 位移同帧到达，画布平移立即生效，
+  // 省去等下一次 rAF 的差一帧跳帧感；guard 仍每帧兜底。
   applyScrollTranslate();
   // 绘制本身已足够快：滚动期间直接全量刷新，
   // 避免底卡/曲线染色要等停顿后才更新。
@@ -732,11 +731,11 @@ export function start(): void {
         m.attributeName === "style" &&
         m.target instanceof HTMLElement &&
         // 只认 view-stage 元素自身的样式变化（视图切换的滑动动画写在
-        // stage 上）。曾用 closest('.view-stage') 把所有后代都算进来——
+        // stage 上）。用 closest('.view-stage') 会把所有后代算进来：
         // 曲线信息浮窗（curve-tip）逐 mousemove 写 style，每帧都被判成
         // 视图动画 → 每帧全量重画，浮窗帧数被自己的联动拖垮（WebGL
         // 接入后染色常开才暴露）。420ms 驱动链已覆盖切换窗口内的子级
-        // 变化，后代逐帧样式无需单触发。
+        // 变化，后代逐帧样式由父级驱动覆盖。
         m.target.classList.contains("view-stage"),
     );
     const dragStyleChanged = records.some(
@@ -748,15 +747,15 @@ export function start(): void {
     );
     if (structureChanged) {
       refreshCardNodes();
-      // 卡片增减会改变光源集合，必须重绘一次（原逻辑依赖 300ms 轮询兜底）；
-      // 代数 +1 让所有面板缓冲失效——复用窗口放宽后，光靠重绘调度拦不住旧配色滞留
+      // 卡片增减会改变光源集合，必须重绘一次。代数 +1 让所有面板缓冲失效，
+      // 复用窗口放宽后光靠重绘调度拦不住旧配色滞留。
       ST.bufGen += 1;
       schedule("full");
     }
     if (toolbarMoved) {
       // 位移的同帧对齐已由锚点补偿守卫承担（guard 逐帧 translate，帧 dump
-      // 实证 锚点+translate==本体 每帧相等）——这里曾对每次 transform 写入
-      // 做同步全量重画，飞行期等于每帧两次 paint（同步 tool + 选中链 full），
+      // 实证 锚点+translate==本体 每帧相等）。对每次 transform 写入做同步
+      // 全量重画会让飞行期每帧两次 paint（同步 tool + 选中链 full），
       // 是「呼出工具栏帧数暴降」的主因之一。降级为合并调度（每帧至多一次）。
       schedule("tool");
       return;
@@ -774,7 +773,7 @@ export function start(): void {
     if (selectionChanged) {
       // 真移动（框选对象改变 = 光源集合变化）：立即全量触发。
       // 工具栏逐帧驱动（本体跟随）；原120ms 防抖是 canvas2d 时代「全量
-      // 重画很贵」的遗留——现在未变化面板走复用零成本、变化面板走
+      // 重画很贵」的遗留。现在未变化面板走复用零成本、变化面板走
       // fading 分相重画，防抖只会给真移动贡献一拍延迟。尾部保留一次
       // 扫描兜底（连续切换时清掉半截状态）。
       driveFor(320, "tool");

@@ -56,7 +56,7 @@ run("cargo build --release", join(ROOT, "vxapo-cli"));
 // 占用语义：本机 APO 注册（CLSID→DLL）指向的就是这个 resources
 // 下的 vxapo_driver.dll（register.rs 分支 A：exe 同级存在 DLL 即优先注册它），
 // 音频端点活跃时 **audiodg 会映射它** → EBUSY。持有者是音频引擎，关应用没用。
-// 处置：① 内容没变（构建未改动）直接跳过——多数 release 根本不需要碰它；
+// 处置：① 内容没变（构建未改动）直接跳过，多数 release 都走这条路径；
 //      ② 内容变了且持续 EBUSY → 给出真实出路（切注册/停音频端点）。
 import { createHash } from "node:crypto";
 

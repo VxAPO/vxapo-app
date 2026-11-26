@@ -60,7 +60,7 @@ await ev(`(() => {
 })()`);
 await sleep(1300);
 await shot("tint-selected");
-// 尝试切暗色主题（设置弹窗）——失败则记为 light-only
+// 尝试切暗色主题（设置弹窗），失败则记为 light-only
 const theme = await ev(`(async () => {
   const btn = [...document.querySelectorAll('button')].find(b => (b.textContent || '').includes('设置'));
   if (!btn) return 'no-settings-btn';

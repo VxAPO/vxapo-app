@@ -54,7 +54,7 @@ interface AppOverlaysProps {
   effectsDrag: DragSourceApi;
   /** 飞行副本的挂载容器（滚动内容层 `.tuning-scroll`）：副本必须挂进容器才随内容滚 */
   flyHost: HTMLElement | null;
-  /** 抓取悬浮层的挂载容器（`.device-body`）：吃它的 clip-path 裁剪，且不能是滚动容器 */
+  /** 抓取悬浮层的挂载容器（`.device-body`）：吃它的 clip-path 裁剪，须为非滚动容器 */
   overlayHost: HTMLElement | null;
   classForKey: (key: string) => string;
   styleForKey: (key: string) => React.CSSProperties | undefined;
@@ -62,8 +62,8 @@ interface AppOverlaysProps {
 }
 
 /**
- * 退场动画期间的值不能跟着被清空：Radix 的 Presence 会把元素多留一个动画时长（0.15s），
- * 而父级/Store 通常在这一刻就把目标对象置 null 了——内容会先变成空值或回退文案、窗口才开始淡出，
+ * 退场动画期间的值须保留：Radix 的 Presence 会把元素多留一个动画时长（0.15s），
+ * 而父级/Store 通常在这一刻就把目标对象置 null 了，内容会先变成空值或回退文案、窗口才开始淡出，
  * 观感是「设备名先消失、窗口再退出」。开着的时候跟着实时值走，关掉之后保持最后一次的值，
  * 等元素真正卸载（`open` 再变 true 时会立刻跟上新值）。
  */
@@ -94,7 +94,7 @@ export default function AppOverlays({
   styleForKey,
   effectClassForKey,
 }: AppOverlaysProps) {
-  // UI 开关与 Toast 直接订阅 uiStore；沿用原 prop 名，JSX 无需改。
+  // UI 开关与 Toast 直接订阅 uiStore；沿用原 prop 名，JSX 保持原样。
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const onSettingsOpenChange = useUiStore((s) => s.setSettingsOpen);
   const installOpen = useUiStore((s) => s.installOpen);

@@ -1,13 +1,13 @@
 // WebGL 栅格后端（工具栏环带原型）。
 //
-// 语义契约：只消费 samplePanel 的产物——采样/淡入时钟/失效全部由调用方推进，
+// 语义契约：只消费 samplePanel 的产物。采样/淡入时钟/失效全部由调用方推进，
 // 本文件零采样逻辑（染色逻辑不因后端而变）。
 //
 // 渲染模型（替代 canvas2d 的超采样描边 + 离屏模糊）：
 // - 环带条带三角化：几何由点集决定（与 canvas2d 同一套 ringPoints/insetRing），
 //   每顶点携带 符号距离/实际半宽/alpha/rgb；条带外扩 3σ+1px 覆盖模糊溢出与抗锯齿。
-// - 片元解析衰减：blur(r) 的高斯 ≈ 片元里按 |距离| 直接算 exp 衰减——零模糊 pass。
-// - 输出画进共享离屏 WebGL 画布，再由调用方 drawImage 进既有 PanelBuffer——
+// - 片元解析衰减：blur(r) 的高斯近似为片元里按 |距离| 直接算 exp 衰减，零模糊 pass。
+// - 输出画进共享离屏 WebGL 画布，再由调用方 drawImage 进既有 PanelBuffer，
 //   下游（复用窗口、混合层、脏区、贴回）原样不动。
 // - 保留 blend 模型（原型阶段不预混色）：与 canvas2d 路径逐像素同语义，视觉对齐；
 //   「删混合层」不在本文件范围内。
@@ -92,7 +92,7 @@ void main() {
     float depth = -sdRoundRect(vPos, uClipRect, uClipRadius);
     if (depth >= 0.0) {
       // R=4σ + 0.8 次幂提升中段：circleMap 原始衰减偏陡，改弧线后
-      // 泛光整体偏弱（体感反馈）——峰值不变，只补中场与触及距离。
+      // 泛光整体偏弱（体感反馈）。峰值保持不变，补的是中场与触及距离。
       float R = max(vHalf + 4.0 * uSigma, 0.15);
       float u = clamp(1.0 - depth / R, 0.0, 1.0);
       float circ = 1.0 - sqrt(max(0.0, 1.0 - u * u));
@@ -107,7 +107,7 @@ void main() {
     a = vAlpha * 0.5 * (erf((vHalf - d) / s2) + erf((vHalf + d) / s2));
   }
   if (uClipUse > 0.5) {
-    // 软裁（替代硬 discard）：模糊尾巴先存在，再由 1.5px smoothstep 淡出——
+    // 软裁：模糊尾巴先存在，再由 1.5px smoothstep 淡出。
     // 硬裁会把尾巴齐根切断，在边界留下生硬的亮暗台阶。
     float cd = sdRoundRect(vPos, uClipRect, uClipRadius);
     a *= 1.0 - smoothstep(0.0, 1.5, cd);
@@ -131,7 +131,7 @@ interface Band {
 /**
  * 复刻 canvas2d strokeChunkBand 的「段内均宽」语义：可变宽条带在每条直边/
  * 圆弧段内以整段平均宽度画一条匀宽带（而非逐点变宽）。逐点变宽会让带缘
- * 随 litAt 起伏——带间出现暗谷/亮脊（用户所见衰减带起点的亮点）；匀宽
+ * 随 litAt 起伏，带间出现暗谷/亮脊（衰减带起点的亮点）；匀宽
  * 把这些结构抹平，与 canvas2d 参考一致。
  */
 function meanWidthFn(
@@ -148,7 +148,7 @@ function meanWidthFn(
     for (let i = s; i <= e; i++) raw[i] = mean;
   }
   // 沿闭合路径弧长做一次小窗平滑：canvas2d 段均宽画完还有整带 isotropic
-  // blur，段界宽度台阶被顺带沿路径抹平；GL 剖面逐截面独立不会抹——
+  // blur，段界宽度台阶被顺带沿路径抹平。GL 剖面逐截面独立，不参与该平滑，
   // 圆角段（短、均宽贴局部光照）与直边段（长、大范围平均）在接缝处
   // 硬台阶，观感「圆角泛光与直边不一样」。窗口 2×blurPx 与参考模糊
   // 的抹平范围同阶。
@@ -264,7 +264,7 @@ function buildStrip(
     const nx = -dy;
     const ny = dx;
     // alpha=0 的点也必须占位：跳过会让条带跨接成弦，闭合环跨角的弦
-    // 切进环内（sd≈0 → 满 alpha）——曾出现贯穿面板的对角亮带。
+    // 切进环内（sd≈0 → 满 alpha），形成贯穿面板的对角亮带。
     // 片元里 a<=0.003 会 discard，零 alpha 顶点只是几何占位。
     const a = band.alphaAt(i);
     const c = band.colorAt(i);
@@ -279,7 +279,7 @@ function buildStrip(
     verts.push(px - nx * ext, py - ny * ext, -1, -ext, half, a, rgb[0], rgb[1], rgb[2]);
   };
   // 闭合环（ringPoints/insetRing 产物首尾同点）：单条带绕环一周，切线用环回
-  // 中心差分——圆角矩形直边→圆弧本就切向连续，brk 处不再切断，两段端帽
+  // 中心差分。圆角矩形直边→圆弧切向连续，brk 处不切断，两段端帽
   // 对顶留下的接缝竖线随之消失。
   const closed =
     n > 3 &&
@@ -290,7 +290,7 @@ function buildStrip(
     for (let i = 0; i < m; i++) {
       emit(i, i === 0 ? m - 1 : i - 1, i === m - 1 ? 0 : i + 1);
     }
-    // 封口：TRIANGLE_STRIP 是线性序列不会自动环回——只重复第一对顶点，
+    // 封口：TRIANGLE_STRIP 是线性序列，无法自动环回，故重复第一对顶点，
     // 让末段（pts[m-1]→pts[0]）被四边形覆盖。曾重复了两对，多出的
     // (0',1') 四边形与首段 (0,1) 完全重合 → 首段画两遍，预乘 over
     // 双份 alpha，在左缘→圆弧接缝处形成亮点。

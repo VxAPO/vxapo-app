@@ -15,10 +15,10 @@ import { bandDbCached } from "../lib/rbj";
 /**
  * 跟随响应：**临界阻尼弹簧**，FOLLOW_SETTLE_MS 约等于"基本停稳"的时间。
  *
- * 为什么不用指数趋近（k = 1 - e^(-dt/τ)）：
+ * 指数趋近（k = 1 - e^(-dt/τ)）的问题：
  * - 指数尾巴极长（τ=280ms 时最后 1px 要爬 1s 以上），观感是"先快后极慢、非线形"；
  * - 弹簧带速度项，中段推进更快、停稳时间有界，且不会过冲。
- * 也不能用"每帧补足剩余距离的比例"：那与帧率强相关（本机 rAF ≈400Hz）。
+ * 用"每帧补足剩余距离的比例"会与帧率强相关（本机 rAF ≈400Hz）。
  */
 const FOLLOW_SETTLE_MS = 240;
 /** 到位判定：位移与速度都足够小就直接贴上，省掉无意义的最后一帧帧微调 */
@@ -183,13 +183,13 @@ export function useCurveHover({
       above = distY < 0;
     }
     // 垂直与水平独立补偿：
-    // 垂直边距恒为 R（斜→平 不再缩水），水平 gH = R·|m| / √(1+m²) 随斜率增加
+    // 垂直边距恒为 R（斜→平 保持），水平 gH = R·|m| / √(1+m²) 随斜率增加
     const denom = Math.sqrt(1 + slope * slope);
     const gV = R;
     const gH = (R * Math.abs(slope)) / denom;
     // 水平避让：悬浮窗以左上角为基准，左右两侧都使用固定频率停止点。
     // 右侧最远停到 12 kHz（等效于 20k 线左侧的固定间距 + 悬浮窗宽度）；
-    // 左侧有 Y 轴刻度留白，不需要避让到 20 Hz，停在 23 Hz 即可。
+    // 左侧有 Y 轴刻度留白，停在 23 Hz 即可。
     const sign = slope >= 0 ? 1 : -1;
     const base = cx + sign * gH;
     const minLeft = sx + logX(23, curveW) * scaleX;
@@ -250,7 +250,7 @@ export function useCurveHover({
       const now = performance.now();
       /**
        * 目标跳变（含极值处的避让夹紧、上下/左右基准切换）一律走同一条弹簧，
-       * 不再有"满速平移"分支——那条分支会让极值附近的慢跟随直接被绕过。
+       * 统一的弹簧驱动，省去"满速平移"分支（那条分支会让极值附近的慢跟随被绕过）。
        */
       const cur = tipPosRef.current ?? t;
       const prevTs = tipLastTsRef.current || now;

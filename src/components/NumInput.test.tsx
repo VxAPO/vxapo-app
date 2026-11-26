@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // NumInput 行为测试：核心是 type=number 的键入中间态（"-"、清空）读出为空串，
-// 受控回写会把它顶成 0——负号根本打不进来。这里验证中间态不入 store、
+// 受控回写会把它顶成 0，负号因此打不进来。这里验证中间态不入 store、
 // 不被回写，失焦才收口。
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -12,7 +12,7 @@ import NumInput from "./NumInput";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // 用原型 setter 直写绕过 React 挂在实例上的 value tracker，
-// 再派发 input 事件——等价于真实键入（浏览器改值不走 JS setter）。
+// 再派发 input 事件，等价于真实键入（浏览器改值不走 JS setter）。
 const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
 
 let container: HTMLDivElement;

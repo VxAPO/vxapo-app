@@ -126,7 +126,7 @@
     var(--hover-shadow),
     0 0 0 1px rgba(255, 255, 255, 0.05);
   --glass-blur: 8px;
-  /* 不用高对比度的整圈白描边：极淡边界勾勒外形，光只从顶部打进来、
+  /* 用极淡边界勾勒外形（高对比度整圈白描边会抢视觉），光只从顶部打进来、
      底部收光，形成方向性的轮廓感（与浅色"近表面色 + 顶部高光"同理） */
   border: 1px solid transparent; /* 描边由外侧环带替代 */
   /* 暗色只提饱和（无 contrast/brightness），同样要随 --glass-t 回中性 */
@@ -237,7 +237,7 @@
 :root[data-theme="dark"] .dev-props-card {
   /* 底色取"更实"的一档：
      面板底面越透，背后滚动内容留下的 backdrop 背板残留（右缘 4~7px、外强内弱）
-     就越容易被看见；该底色是"白边能不能被看见"的开关，越实白边越不可见。 */
+     就越容易被看见；该底色控制白边的可见度，越实白边越不可见。 */
   background-color: color-mix(in srgb, var(--card) 78%, transparent);
   border-color: transparent; /* 描边由外侧环带替代 */
   backdrop-filter: blur(8px) saturate(1.1);
@@ -308,7 +308,7 @@
   box-sizing: border-box;
 }
 
-/* 语义视图组标识：有组卡不再骑边，组色只用于组名/开关/标签等元素 */
+/* 语义视图组标识：组色只用于组名/开关/标签等元素 */
 .sem-group {
 }
 
@@ -358,8 +358,8 @@
 
 
 /* 工具栏高光带跟随玻璃进度：基底不透明度由 --ring-op 承担（基础规则见 curve.css）。
-   必须写在文件末尾覆盖上面那条三合一规则里的 opacity: 0.8 —— 它会盖掉基础规则的
-   calc()，高光就不再跟 --glass-t 一起淡（表现为「canvas 淡了、默认高光还在」）。 */
+   必须写在文件末尾覆盖上面那条三合一规则里的 opacity: 0.8。它会盖掉基础规则的
+   calc()，高光就随 --glass-t 一起淡了（表现为「canvas 淡了、默认高光还在」）。 */
 :root[data-theme="dark"] .fx-toolbar::after {
   --ring-op: 0.8;
   opacity: calc(var(--ring-op) * var(--glass-t));
@@ -368,7 +368,7 @@
 /* 选色块选中环，深色下要再压深一档（覆盖基础规则给外圈用的 `--swatch-ring`，几何仍在 cards.css）：
    `--swatch-hover` 是 L 0.45 的加深变体，浅色下压亮底很清楚，但深色下它与填充（L 0.6）差得不够，
    那圈环读不出来。这里掺 32% 纯黑再往下压一档（≈L 0.35），靠与盘面的**深浅差**读选中
-   ——不引入亮色环。填充保持原色不动，浅色规则也不动（本文件只做深色覆盖）。 */
+   通过深浅差表达选中，不引入亮色环。填充保持原色，浅色规则也保持原样（本文件只做深色覆盖）。 */
 :root[data-theme="dark"] .preset-swatch.active {
   --swatch-ring: color-mix(in srgb, var(--swatch-hover, var(--text-primary)) 68%, #000);
 }

@@ -60,7 +60,7 @@
 }
 
 .preset-pill .p-group {
-  /* 字号 14px（`.adv-pill` 基础是 13px）。不要依赖全局的 `.p-group` 规则，那会让其他位置漏样式。 */
+  /* 字号 14px（`.adv-pill` 基础是 13px）。此处独立声明，避免依赖全局 `.p-group` 规则。 */
   font-size: 14px;
   color: var(--preset-accent, var(--brand-deep));
   font-weight: 700;

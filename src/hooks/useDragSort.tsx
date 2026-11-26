@@ -45,7 +45,7 @@ function scrollHost(): HTMLElement | null {
 
 /**
  * 内容区（`.content`，那个大圆角矩形）：拖拽悬浮层被夹在它里面。
- * 系统光标没法被网页锁住（pointer lock 是完全另一套体验），能限制的是跟着光标的这张卡片——
+ * 能限制的是跟着光标的这张卡片：系统光标由操作系统管理（pointer lock 是完全另一套体验），
  * 指针可以继续往外移，卡片到边界就停住。
  */
 function contentScope(): HTMLElement | null {
@@ -129,7 +129,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
 
   /**
    * 拖拽期间页面滚动：槽位矩形随内容整体平移同样的量，按滚动增量平移即可。
-   * 不能重新测量卡片——布局动画会给卡片挂内联 transform，量到的是动画中间态。
+   * 重新测量卡片会量到动画中间态：布局动画给卡片挂了内联 transform。
    */
   const shiftSlots = (d: DragSession, dx: number, dy: number) => {
     if (!dx && !dy) return;
@@ -156,11 +156,11 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     //
     // 位移走 `transform: translate()`（`left`/`top` 留在 CSS 的 0 作静态基准）：
     // 逐帧写 left/top 属于布局属性，每帧都要重新布局；transform 只改视觉位置。
-    // 刻意不用 translate3d / will-change —— 那是把悬浮层升成合成层，拖动停住时
-    // 文字栅格会与常规层不同（见 DragLayer 的「落地交接」注释），跟手过程中得不偿失。
+    // 刻意避开 translate3d / will-change：那会把悬浮层升成合成层，拖动停住时
+    // 文字栅格与常规层不同（见 DragLayer 的「落地交接」注释），跟手过程中得不偿失。
     //
     // 坐标就是**视口坐标**：悬浮层 portal 进 `.device-body`，而那个容器只用 clip-path 裁剪、
-    // 不带 transform，所以 fixed 仍相对视口定位、滚动时不位移——跟手锁定靠的就是这一点
+    // 不带 transform，所以 fixed 仍相对视口定位、滚动时不位移，跟手锁定靠的就是这一点。
     // 换成 transform 包含块、或挪进滚动容器，fixed 都会跟着内容滚。
     let left = d.originLeft + snapPx(x - d.startX);
     let top = d.originTop + snapPx(y - d.startY);
@@ -303,7 +303,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     }
     // ③ 再同步提交“隐藏原卡 + 起飞行副本”：同样不跨帧，避免中间出现既无悬浮层也无副本的空档。
     // 副本挂进滚动内容层，坐标要换成**内容坐标**：此刻量一次容器矩形与 scrollTop 就够，
-    // 之后内容怎么滚副本都跟着（浏览器在合成线程处理），无需逐帧补偿。
+    // 之后内容怎么滚副本都跟着（浏览器在合成线程处理），省去逐帧补偿。
     // from（悬浮层矩形）与 target（落点）用同一套换算，路径差值不受影响。
     const host = scrollHost();
     const hostRect = host ? host.getBoundingClientRect() : null;
@@ -498,7 +498,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
       hitTest();
     };
 
-    /** 拖拽期间页面滚动：槽位矩形按滚动增量平移（不重新测量——布局动画挂在卡片上）。 */
+    /** 拖拽期间页面滚动：槽位矩形按滚动增量平移（布局动画挂在卡片上，故不重新测量）。 */
     const syncScroll = (d: DragSession) => {
       const scope = scopeEl().getBoundingClientRect();
       const dx = scope.left - d.scopeLeft;
@@ -540,7 +540,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
 
     /**
      * 合帧结算：一帧内攒下的指针位置与滚动只处理一次。
-     * 顺序固定「先平移槽位、再定位与命中」——命中要按平移后的槽位算。
+     * 顺序固定「先平移槽位、再定位与命中」：命中按平移后的槽位算。
      */
     const flushFrame = () => {
       frameRef.current = undefined;
@@ -562,7 +562,7 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
     };
 
     const scheduleFrame = () => {
-      // 已有未决回调就不再排——它读的是"最后写入"的位置，天然合帧
+      // 已有未决回调就跳过：它读的是"最后写入"的位置，天然合帧
       if (frameRef.current === undefined) frameRef.current = requestAnimationFrame(flushFrame);
     };
 
@@ -592,9 +592,9 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
 
     /**
      * 拖拽期间页面滚动（滚轮/触控板/自动滚动的都算）：拖着的卡在视口里跟手不动，
-     * 但卡片区整体在动——槽位矩形必须同步平移，否则占位框与落点判定会按旧坐标算。
+     * 但卡片区整体在动，槽位矩形必须同步平移，否则占位框与落点判定会按旧坐标算。
      * 这里可以合帧：只影响「哪张卡让位」的判定，晚一帧肉眼看不出来。
-     * 飞行副本的滚动补偿则**不能**合帧——那是视觉补偿，晚一帧滚动那一下就偏了（见下方 effect）。
+     * 飞行副本的滚动补偿须逐帧处理：那是视觉补偿，晚一帧滚动那一下就偏了（见下方 effect）。
      */
     const onScroll = () => {
       if (!dragRef.current) return;
@@ -635,10 +635,10 @@ export function useDragSort({ group, markDirty, overlayContent, commitOrder }: U
         setTick((t) => t + 1);
         return;
       }
-      // 落点结算沿用**已生效的槽位**（`d.entered`），不再按松手瞬间的指针位置重算：
-      // 一按指针重算就等于给松手开了"零防抖"通道——占位框会在松手那一下突然跳到
-      // 尚未确认的槽位，紧接着还要等这记布局动画跑完才起飞行，串联起来就是松手卡一下。
-      // 现在占位框停在哪、卡片就落在哪（所见即所得），松手不再产生任何布局变更。
+      // 落点结算沿用**已生效的槽位**（`d.entered`）。按松手瞬间的指针位置重算等于
+      // 给松手开了"零防抖"通道：占位框会在松手那一下突然跳到尚未确认的槽位，
+      // 紧接着还要等这记布局动画跑完才起飞行，串联起来就是松手卡一下。
+      // 占位框停在哪、卡片就落在哪（所见即所得），松手不产生布局变更。
       // 松手到落地之间冻结徽标数字：让卡片先移动到目标位，数字再随到位一起更新
       settlingRef.current = true;
       const from = overlayRef.current?.getBoundingClientRect();

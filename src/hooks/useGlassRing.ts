@@ -69,7 +69,7 @@ export function useGlassRing(ref: RefObject<HTMLElement | null>): void {
       ro = new ResizeObserver(update);
       ro.observe(bound);
     };
-    // 拔插/安装后设备页是晚挂载的，不能只轮询几秒就放弃；
+    // 拔插/安装后设备页是晚挂载的，轮询需持续进行；
     // MutationObserver 监听节点出现，长驻 interval 兜底极慢枚举。
     const mo = new MutationObserver(() => {
       if (scheduled) return;

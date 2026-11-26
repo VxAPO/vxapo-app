@@ -10,7 +10,7 @@ import VxSelect from "./VxSelect";
 interface CurvePanelProps {
   /**
    * 要画的块：**已经**是目标声道的那一份（App 从曲线快照里给出，见 App 里 liveCurve 的注释）。
-   * 这里不再按声道过滤——快照按设计滞后一档，拿它跟当前声道现算比对，会在切声道的那一档把曲线滤空。
+   * 这里保持按声道不过滤：快照按设计滞后一档，拿它跟当前声道现算比对，会在切声道的那一档把曲线滤空。
    */
   blocks: Block[];
   /** 与 blocks 同档的评估频点（同一份快照里算好的）；缺省由绘制侧按 blocks 自行生成 */
@@ -62,9 +62,9 @@ function CurvePanel({
   const rafRef = useRef(0);
   const latestWRef = useRef(0);
   // 画什么由 App 决定：传进来的 `blocks` 已经是曲线快照里目标声道的那一份（通道模式=选中声道，
-  // 关闭选择器=首声道）。**不要**在这里按 channelOn/curveChannel 再过一遍：快照滞后一档，
+  // 关闭选择器=首声道）。这里跳过 channelOn/curveChannel 的二次过滤：快照滞后一档，
   // 与当前声道现算比对会在切声道那一档把整条曲线滤空。
-  // 选项列表**始终**是各声道：关闭选择器时不再有「全部声道」这一档（曲线目标始终是单个声道）
+  // 选项列表**始终**是各声道（曲线目标始终是单个声道）
   const channelOptions = useMemo(
     () => channelNames.map((c) => ({ value: c, label: channelLabel(c) })),
     [channelNames],

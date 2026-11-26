@@ -7,14 +7,14 @@ export const ENTER_DEBOUNCE_MS = 500;
 export const LAYOUT_ANIM_MS = 400;
 export const LAYOUT_ANIM_OUTSIDE_MS = 320;
 /** 避让/占位布局动画曲线：与视图收窄（viewMotion.COLLAPSE_EASE）同一条「先快后慢」，
-    单源在 lib/motionEase.ts —— 两处必须一致，改这里等于同时改两处手感 */
+    单源在 lib/motionEase.ts，两处必须一致，改这里等于同时改两处手感 */
 export const LAYOUT_EASE = EASE_OUT_SOFT;
 /** 松手时若布局动画未结束，多等这段缓冲再落地，避免动画被硬切。注意它与
     LAYOUT_ANIM_MS / LAYOUT_ANIM_OUTSIDE_MS 的配对由 applyLayout 按实际用到的时长记账 */
 export const ANIM_SETTLE_BUFFER_MS = 80;
 /** 距离所有槽位超过该值才算真正离开卡片区 */
 export const OUTSIDE_DIST = 48;
-/** 悬浮层夹取时距内容区边界的内缩：不要贴死边缘（阴影与圆角要留出余地） */
+/** 悬浮层夹取时距内容区边界的内缩：留出阴影与圆角的余地 */
 export const DRAG_BOUNDS_INSET_PX = 8;
 /** 悬浮层贴到内容区上下边缘时的自动滚动速度（px/s）。
     按帧时长换算成步长，所以 60Hz / 120Hz 观感一致，不会随刷新率翻倍。 */
@@ -65,7 +65,7 @@ export interface DragSession {
   lastX: number;
   lastY: number;
   /** 抓取时活动视图舞台的视口坐标：滚动增量由它相减得到
-      （卡片上可能挂着布局动画的 transform，不能直接拿卡片量） */
+      （卡片上可能挂着布局动画的 transform，须用槽位矩形量） */
   scopeLeft: number;
   scopeTop: number;
   /** 原始卡片位置（悬浮层对齐锚点，保证抓取时完全覆盖原卡片） */
@@ -75,13 +75,13 @@ export interface DragSession {
   cardW: number;
   cardH: number;
   /** 内容区矩形（`.content` 那个大圆角矩形）：悬浮层被夹在它里面（再内缩
-      `DRAG_BOUNDS_INSET_PX`），拖到边界就停住、不再跟着指针往外跑
+      `DRAG_BOUNDS_INSET_PX`），拖到边界就停住，保持在边界内
       （系统光标本身锁不住，能限制的是这张卡片） */
   bounds: { left: number; top: number; right: number; bottom: number };
   /** 悬浮层当前左上角（视口坐标，已夹取）：边缘自动滚动按它判断有没有贴住上下界 */
   curLeft: number;
   curTop: number;
-  /** 悬浮层当前中心（视口坐标，已夹取）：**占位命中按它算**，不按真实指针——
+  /** 悬浮层当前中心（视口坐标，已夹取）：**占位命中按它算**，与真实指针位置无关，
       指针可以跑到内容区外（卡片被夹在边上），那时按指针判会误判成「槽位外」、
       占位框跳到末尾，与眼睛看到的卡片位置对不上。 */
   curMidX: number;

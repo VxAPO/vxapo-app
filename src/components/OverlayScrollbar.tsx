@@ -4,7 +4,7 @@ import { collapseEase } from "../lib/viewMotion";
 
 /** 滚动停止多久后开始淡出（ms）。 */
 const IDLE_FADE_MS = 1200;
-/** 一次变化信号后继续逐帧核对几何的时长（ms）：覆盖进出场高度动画。静止后不再有任何 rAF。 */
+/** 一次变化信号后继续逐帧核对几何的时长（ms）：覆盖进出场高度动画。静止后无 rAF 运行。 */
 const SETTLE_MS = 1100;
 
 interface OverlayScrollbarProps {
@@ -14,7 +14,7 @@ interface OverlayScrollbarProps {
   target?: HTMLElement | null;
   /** 设备切换键：变化时先淡出，避免页面重挂载导致滚动条硬消失。 */
   deviceKey?: string | number;
-  /** 是否需要圆角避让（轨道上下内缩）；侧边栏/标签页内用，其余不需要。 */
+  /** 是否启用圆角避让（轨道上下内缩）；侧边栏/标签页内使用。 */
   rounded?: boolean;
   /** 轨道右缘相对容器右缘的偏移（CSS right 值，px），默认 -2 贴边。 */
   rightPx?: number;
@@ -26,7 +26,7 @@ interface OverlayScrollbarProps {
   zIndex?: number;
   /**
    * 视图切换时的「长度变形」指令：token 变化即从**当前显示几何**插值到突跳后的真实几何。
-   * 只用于变高方向——那一边内容高度是瞬时的，长度会硬跳（变矮方向由收窄动画逐帧带动）。
+   * 只用于变高方向：那一边内容高度是瞬时的，长度会硬跳（变矮方向由收窄动画逐帧带动）。
    */
   morph?: { token: number; ms: number } | null;
 }
@@ -62,7 +62,7 @@ function OverlayScrollbar({
   );
   /** 最近一次算出的**真实**几何（update 里写，插值读） */
   const realRef = useRef({ thumbH: 0, offset: 0, ok: false });
-  /** 最近一次**显示**的几何——变形的起点 */
+  /** 最近一次**显示**的几何，作为变形的起点 */
   const dispRef = useRef({ thumbH: 0, offset: 0 });
   const morphRef = useRef<{
     start: number;

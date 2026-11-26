@@ -9,7 +9,7 @@ interface PresetDeckProps {
   onApplyPreset: (p: PresetLibraryEntry) => void;
 }
 
-/** 预设列表 —— 与「高级」区一致的紧凑条目：flex+gap、hover 阴影、点击添加。 */
+/** 预设列表：与「高级」区一致的紧凑条目（flex+gap、hover 阴影、点击添加）。 */
 export default function PresetDeck({ library, usedPresets, onApplyPreset }: PresetDeckProps) {
   const lang = useI18n();
   return (

@@ -53,7 +53,7 @@ interface DeviceStore {
   setErrorSink(sink: ((msg: string) => void) | null): void;
   /** 拉列表：`first` 为首次加载（决定 loading 生命周期）。失败经 errorSink 上报，不抛。 */
   load(first: boolean): Promise<void>;
-  /** 低频兜底重拉 stale 残留列表（轮询不再每 5s 顺带拉 stale）。 */
+  /** 低频兜底重拉 stale 残留列表，与常规轮询解耦。 */
   loadStale(): Promise<void>;
   /** 安装/卸载后的强制刷新。失败经 errorSink 上报，不抛。 */
   refresh(): Promise<void>;
@@ -68,14 +68,14 @@ interface DeviceStore {
   ): Promise<MigrationReport | null>;
   /** 清理旧 GUID 残留；失败向上抛。 */
   cleanupStale(guid: string): Promise<void>;
-  /** 迁移残留并自行上报错误（失败返回 null，不抛）——原 App 侧包装回调的等价物。 */
+  /** 迁移残留并自行上报错误（失败返回 null，不抛）。 */
   migrateStaleSafe(
     from: string,
     to: string,
     configFrom?: string | null,
     snapshotFrom?: string | null,
   ): Promise<MigrationReport | null>;
-  /** 清理残留并自行上报错误（不抛）——原 App 侧包装回调的等价物。 */
+  /** 清理残留并自行上报错误（不抛）。 */
   cleanupStaleSafe(guid: string): Promise<void>;
   /** 卸载 uninstallTarget；成功回传设备名（调用方据此提示）。 */
   confirmUninstall(): Promise<string | null>;
@@ -105,7 +105,7 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
         const prev = get().devices;
         applyDevices(set, await listDevices());
         // 插拔必须当拍同步 stale：list_stale_installs 按活跃端点分类记录，
-        // enumerate_devices 也只收活跃端点——设备列表内容变化即插拔信号。
+        // enumerate_devices 也只收活跃端点，设备列表内容变化即插拔信号。
         // 只靠 60s 兜底会让横幅对着已拔出的端点停一分钟（实测反馈）。
         // 稳态（列表不变）仍是每轮单 spawn，只有变化那一拍多补一次。
         if (get().devices !== prev) void get().loadStale();
@@ -122,7 +122,7 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
       // **逐条独立**：GUID 迁移是按设备各自触发的，一次更新后可能同时有多台设备
       // 换了 GUID；旧实现「失败即 break」会让第一台的失败（端点正在重新枚举、
       // 该条记录已失效……）连带吞掉后面所有设备，表现就是「只迁移了一台」。
-      // 现在只在**提权类**失败时整轮停止——那种失败下每条记录都会再弹一次 UAC、
+      // 只在**提权类**失败时整轮停止：那种失败下每条记录都会再弹一次 UAC、
       // 再等满一次超时，连续弹窗比不自动更糟；其余失败只跳过这一条。
       if (first && staleRes.status === "fulfilled") {
         const targets = pickAutoRepairTargets(staleRes.value);
@@ -154,7 +154,7 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
             [devRes, staleRes] = await Promise.allSettled([listDevices(), listStaleInstalls()]);
             if (devRes.status === "rejected") throw devRes.reason;
           } else {
-            // 提权被拒 → 跳过提示；纯技术失败（端点重枚举等）不能说成「未获授权」。
+            // 提权被拒 → 跳过提示；纯技术失败（端点重枚举等）归为技术错误，与授权无关。
             useUiStore
               .getState()
               .notify(t(elevationBlocked ? "stale.auto.skipped" : "stale.auto.failed"));
