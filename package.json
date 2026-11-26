@@ -70,10 +70,6 @@
       {
         "from": "src-tauri/resources/vxapo-cli.exe",
         "to": "vxapo-cli.exe"
-      },
-      {
-        "from": "src-tauri/resources/vxapo_driver.dll",
-        "to": "vxapo_driver.dll"
       }
     ],
     "win": {
