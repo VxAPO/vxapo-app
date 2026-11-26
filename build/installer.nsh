@@ -7,16 +7,6 @@ Var vxapoHasOld
 !macro VXAPO_RESTART_AUDIO
   nsExec::Exec 'sc stop Audiosrv'
   Pop $R0
-  StrCpy $R1 0
-  vxapo_ra_wait:
-    Sleep 50
-    nsExec::Exec 'cmd /c sc query Audiosrv | findstr /C:"STOPPED"'
-    Pop $R0
-    StrCmp $R0 "0" vxapo_ra_go
-    IntCmp $R1 40 0 0 vxapo_ra_go
-    IntOp $R1 $R1 + 1
-    Goto vxapo_ra_wait
-  vxapo_ra_go:
   nsExec::Exec 'sc start Audiosrv'
   Pop $R0
 !macroend
